@@ -44,10 +44,10 @@ test = [
 file = "LICENSE.txt"
 
 [project.urls]
-Homepage = "https://gitlab.inria.fr/tanat/core/tanat"
-Source = "https://gitlab.inria.fr/tanat/core/tanat.git"
-Documentation = "https://tanat.gitlabpages.inria.fr/tanat"
-Issues = "https://gitlab.inria.fr/tanat/core/tanat/-/issues"
+Homepage = "https://github.com/TanaT-Lab/TanaT"
+Source = "https://github.com/TanaT-Lab/TanaT"
+Documentation = "https://tanat-lab.github.io/TanaT"
+Issues = "https://github.com/TanaT-Lab/TanaT/issues"
 
 [tool.hatch.version]
 source = "vcs"

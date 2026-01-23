@@ -23,7 +23,7 @@
       "givenName": "Thomas"
     }
   ],
-  "codeRepository": "https://gitlab.inria.fr/tanat/core/tanat.git",
+  "codeRepository": "https://github.com/TanaT-Lab/TanaT.git",
   "contributor": [
     {
       "@id": "https://orcid.org/0009-0002-8509-5506",
@@ -40,7 +40,7 @@
   ],
   "description": "A library for temporal sequence clustering.",
   "identifier": "tanat",
-  "issueTracker": "https://gitlab.inria.fr/tanat/core/tanat/-/issues",
+  "issueTracker": "https://github.com/TanaT-Lab/TanaT/issues",
   "license": "http://spdx.org/licenses/MIT",
   "maintainer": {
     "@id": "https://orcid.org/0009-0002-8509-5506",
@@ -52,7 +52,7 @@
   "name": "TanaT",
   "operatingSystem": "OS Independent",
   "programmingLanguage": "Python",
-  "readme": "https://gitlab.inria.fr/tanat/core/tanat/-/blob/main/README.md",
+  "readme": "https://github.com/TanaT-Lab/TanaT/blob/main/README.md",
   "runtimePlatform": "Python 3",
   "softwareHelp": "https://tanat.gitlabpages.inria.fr/tanat",
   "softwareRequirements": [
@@ -109,6 +109,6 @@
     "@type": "SoftwareLibrary",
     "name": "tanat"
   },
-  "url": "https://gitlab.inria.fr/tanat/core/tanat",
+  "url": "https://github.com/TanaT-Lab/TanaT",
   "version": "0.0.post1.dev23"
 }

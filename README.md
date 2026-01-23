@@ -55,9 +55,9 @@ TanaT provides a comprehensive suite of interconnected modules for end-to-end te
 
 ## Resources
 
-- **Documentation**: [Full Documentation](https://tanat.gitlabpages.inria.fr/core/tanat/)
-- **Source Code**: [GitLab Repository](https://gitlab.inria.fr/tanat/core/tanat.git)
-- **Issues & Support**: [Issue Tracker](https://gitlab.inria.fr/tanat/core/tanat/-/issues)
+- **Documentation**: [Full Documentation](https://tanat-lab.github.io/TanaT/)
+- **Source Code**: [GitHub Repository](https://github.com/TanaT-Lab/TanaT)
+- **Issues & Support**: [Issue Tracker](https://github.com/TanaT-Lab/TanaT/issues)
 
 ## Citation
 
