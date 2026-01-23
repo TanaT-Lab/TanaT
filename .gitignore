@@ -1,0 +1,18 @@
+*.pyc
+__pycache__/
+
+version.py
+
+tmp/
+venv/
+
+public/*
+doc/build/*
+doc/source/tanat.*.rst
+doc/source/tanat.rst
+doc/source/modules.rst
+doc/source/user-guide/auto_examples/*
+
+# Ignore all auto-generated API documentation except index
+doc/source/reference/api/*
+!doc/source/reference/api/index.rst

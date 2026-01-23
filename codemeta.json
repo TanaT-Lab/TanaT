@@ -1,0 +1,114 @@
+{
+  "@context": [
+    "https://doi.org/10.5063/schema/codemeta-2.0",
+    "https://w3id.org/software-iodata",
+    "https://raw.githubusercontent.com/jantman/repostatus.org/master/badges/latest/ontology.jsonld",
+    "https://schema.org",
+    "https://w3id.org/software-types"
+  ],
+  "@type": "SoftwareSourceCode",
+  "author": [
+    {
+      "@id": "https://orcid.org/0009-0002-8509-5506",
+      "@type": "Person",
+      "email": "arnaud.duvermy@inria.fr",
+      "familyName": "Duvermy",
+      "givenName": "Arnaud"
+    },
+    {
+      "@id": "https://orcid.org/0000-0002-4909-5843",
+      "@type": "Person",
+      "email": "thomas.guyet@inria.fr",
+      "familyName": "Guyet",
+      "givenName": "Thomas"
+    }
+  ],
+  "codeRepository": "https://gitlab.inria.fr/tanat/core/tanat.git",
+  "contributor": [
+    {
+      "@id": "https://orcid.org/0009-0002-8509-5506",
+      "@type": "Person",
+      "familyName": "Duvermy",
+      "givenName": "Arnaud"
+    },
+    {
+      "@id": "https://orcid.org/0000-0002-4909-5843",
+      "@type": "Person",
+      "familyName": "Guyet",
+      "givenName": "Thomas"
+    }
+  ],
+  "description": "A library for temporal sequence clustering.",
+  "identifier": "tanat",
+  "issueTracker": "https://gitlab.inria.fr/tanat/core/tanat/-/issues",
+  "license": "http://spdx.org/licenses/MIT",
+  "maintainer": {
+    "@id": "https://orcid.org/0009-0002-8509-5506",
+    "@type": "Person",
+    "email": "arnaud.duvermy@inria.fr",
+    "familyName": "Duvermy",
+    "givenName": "Arnaud"
+  },
+  "name": "TanaT",
+  "operatingSystem": "OS Independent",
+  "programmingLanguage": "Python",
+  "readme": "https://gitlab.inria.fr/tanat/core/tanat/-/blob/main/README.md",
+  "runtimePlatform": "Python 3",
+  "softwareHelp": "https://tanat.gitlabpages.inria.fr/tanat",
+  "softwareRequirements": [
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "pandas",
+      "name": "pandas",
+      "runtimePlatform": "Python 3"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "scikit-learn",
+      "name": "scikit-learn",
+      "runtimePlatform": "Python 3"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "matplotlib",
+      "name": "matplotlib",
+      "runtimePlatform": "Python 3"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "tseqmock",
+      "name": "tseqmock",
+      "runtimePlatform": "Python 3"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "scikit-survival",
+      "name": "scikit-survival",
+      "runtimePlatform": "Python 3"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "tqdm",
+      "name": "tqdm",
+      "runtimePlatform": "Python 3"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "sqlalchemy",
+      "name": "sqlalchemy",
+      "runtimePlatform": "Python 3"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "numba",
+      "name": "numba",
+      "runtimePlatform": "Python 3"
+    }
+  ],
+  "targetProduct": {
+    "@type": "SoftwareLibrary",
+    "name": "tanat"
+  },
+  "url": "https://gitlab.inria.fr/tanat/core/tanat",
+  "version": "0.0.post1.dev23"
+}
