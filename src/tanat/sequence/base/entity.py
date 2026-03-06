@@ -1,0 +1,247 @@
+#!/usr/bin/env python3
+"""
+Entity: Flyweight object representing a single row in a Sequence (Event, State, etc.).
+"""
+
+from __future__ import annotations
+
+from abc import ABC
+from typing import TYPE_CHECKING, Any
+
+from tanat_utils import Registrable
+
+from ...core.path import resolve_path
+from ...metadata.feature import FeatureInfo, build_feature_metadata
+from ...store.common.utils import apply_casts
+from ...store.sequence.store import SequenceStore
+from .cast import SequenceCastRecipe
+
+if TYPE_CHECKING:
+    from ...metadata.sequence import SequenceMetadata
+    from pathlib import Path
+
+
+class Entity(Registrable, ABC):
+    """
+    Abstract Flyweight object acting as a proxy to a specific row in a Sequence.
+    """
+
+    _REGISTER = {}
+
+    @staticmethod
+    def _resolve_store(store: str | Path | SequenceStore) -> SequenceStore:
+        """Resolve a store argument to a :class:`SequenceStore` instance."""
+        if isinstance(store, SequenceStore):
+            return store
+        if isinstance(store, (str, Path)):
+            return SequenceStore(root_path=resolve_path(store))
+        raise TypeError(
+            f"'store' must be a store name, Path, or SequenceStore instance, "
+            f"got {type(store).__name__}"
+        )
+
+    def __init__(
+        self,
+        id_value,
+        rank: int,
+        store: str | Path | SequenceStore,
+        features: list[str] | None = None,
+    ) -> None:
+        """Create an entity proxy for row *rank* of sequence *id_value*.
+
+        Args:
+            id_value: Sequence identifier this entity belongs to.
+            rank: 0-based row index within the sequence.
+            store: Store path, name, or :class:`SequenceStore` instance.
+            features: Visible feature names propagated from the parent
+                :class:`Sequence`.  ``None`` → all store features.
+        """
+        self._id_value = id_value
+        self._rank = rank
+        self._store = self._resolve_store(store)
+        self._features = features
+        self._virtual_id: str | None = None
+        self._casts: SequenceCastRecipe = SequenceCastRecipe()
+        self._parent_metadata: SequenceMetadata | None = None
+
+    def _inject(
+        self,
+        *,
+        cast_recipe: SequenceCastRecipe | dict | None = None,
+        virtual_id: str | None = None,
+        parent_metadata: SequenceMetadata | None = None,
+    ) -> Entity:
+        """Inject sequence-managed context into this entity.
+
+        **Not part of the public API**.
+
+        Args:
+            cast_recipe: Cast recipe propagated from the parent sequence.
+                Normalised via :meth:`SequenceCastRecipe.coerce`.
+            virtual_id: Virtual context UUID from the parent sequence.
+            parent_metadata: Pre-computed metadata from the parent sequence.
+
+        Returns:
+            ``self``: enables fluent construction:
+            ``entity_cls(...)._inject(...)``.
+        """
+        if cast_recipe is not None:
+            self._casts = SequenceCastRecipe.coerce(cast_recipe)
+        self._virtual_id = virtual_id
+        self._parent_metadata = parent_metadata
+        return self
+
+    # ------------------------------------------------------------------
+    # Public helpers
+    # ------------------------------------------------------------------
+
+    @property
+    def id_value(self):
+        """The sequence identifier this entity belongs to."""
+        return self._id_value
+
+    @property
+    def rank(self) -> int:
+        """The 0-based position of this entity in its sequence."""
+        return self._rank
+
+    @property
+    def feature_names(self) -> list[str] | None:
+        """Visible feature names (``None`` means all store features)."""
+        return list(self._features) if self._features is not None else None
+
+    @property
+    def metadata(self) -> dict[str, FeatureInfo]:
+        """
+        Feature metadata for this entity.
+
+        Returns a dictionary mapping each visible feature name to its
+        ``FeatureInfo`` descriptor (type, stats, …).
+        When created from a Sequence (which itself comes from a Pool),
+        the pool-level metadata is reused directly. Stats are consistent
+        across all entities in the pool, no extra I/O.
+        """
+        if self._parent_metadata is not None:
+            infos = self._parent_metadata.entity_features
+            if self._features is not None:
+                allowed = set(self._features)
+                infos = [f for f in infos if f.name in allowed]
+            return {f.name: f for f in infos}
+
+        # Fallback for standalone Entity: infer directly from store
+        entity_lf = self._store.entity(virtual_id=self._virtual_id)
+        if self._casts.entity:
+            entity_lf = apply_casts(entity_lf, self._casts.entity)
+        if self._features is not None:
+            entity_lf = entity_lf.select(self._features)
+        infos = build_feature_metadata(entity_lf)
+        return {f.name: f for f in infos}
+
+    @property
+    def temporal_extent(self) -> Any:
+        """
+        The temporal extent of this entity.
+
+        Returns:
+            A ``list`` of two values ``[start, end]`` for interval-based
+            sequences, or a single scalar for event sequences.
+        """
+        return self._store.get_temporal_at(
+            self._id_value,
+            self._rank,
+            temporal_cast=self._casts.temporal,
+            id_cast=self._casts.id,
+        )
+
+    def data(
+        self,
+        features: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """
+        Access the feature values for this entity as a dictionary.
+
+        Only feature columns are returned; the sequence identifier and
+        temporal columns are excluded (use :pyattr:`sequence_id` and
+        :pyattr:`temporal_extent` instead).
+
+        Args:
+            features: Feature name(s) to include (``None`` → all visible
+                entity features).
+
+        Returns:
+            A ``dict`` mapping feature names to their scalar values.
+        """
+        row = self._store.get_entity_row(
+            self._id_value,
+            self._rank,
+            self._virtual_id,
+            feature_casts=self._casts.entity or None,
+            id_cast=self._casts.id,
+        )
+        # Resolve + validate feature scope
+        effective = self._resolve_features(features, available=list(row.keys()))
+        if effective is not None:
+            row = {k: v for k, v in row.items() if k in set(effective)}
+        return row
+
+    # ------------------------------------------------------------------
+    # Internal
+    # ------------------------------------------------------------------
+
+    def _resolve_features(
+        self,
+        features: list[str] | None,
+        available: list[str] | None = None,
+    ) -> list[str] | None:
+        """
+        Resolve the effective feature list and validate names.
+
+        * ``features=None`` and no scope → ``None`` (all store features).
+        * ``features=None`` with scope   → ``self._features``.
+        * ``features`` provided          → intersected with scope.
+
+        Args:
+            features: User-requested feature names (``None`` → all visible).
+            available: Known feature names (e.g. row keys) used to
+                validate the resolved list.  When provided, a
+                ``KeyError`` is raised for any unknown name.
+
+        Raises:
+            KeyError: If a resolved feature is not in *available*.
+        """
+        if isinstance(features, str):
+            features = [features]
+
+        # No explicit request → use scope or all available
+        if features is None:
+            return self._features or available
+
+        # Validate requested features against available keys
+        if available is not None:
+            available_set = set(available)
+            for f in features:
+                if f not in available_set:
+                    raise KeyError(
+                        f"Feature '{f}' not found in entity features. "
+                        f"Available: {sorted(available_set)}"
+                    )
+
+        return features
+
+    def __getitem__(self, name: str) -> Any:
+        """
+        Access a single feature value by name.
+
+        Args:
+            name: The feature name.
+
+        Returns:
+            The scalar value for this entity / feature.
+
+        Raises:
+            KeyError: If the feature does not exist.
+        """
+        row = self.data(features=[name])
+        if name not in row:
+            raise KeyError(f"Feature '{name}' not found in {type(self).__name__}.")
+        return row[name]
