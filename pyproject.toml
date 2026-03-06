@@ -13,6 +13,7 @@ dependencies = [
     "matplotlib",
     "numba",
     "pandas",
+    "polars",
     "scikit-learn",
     "scikit-survival",
 ]
@@ -31,6 +32,10 @@ authors = [
     { name = "Thomas Guyet", email = "thomas.guyet@inria.fr" },
 ]
 
+[project.optional-dependencies]
+sql = [
+    "connectorx",
+]
 test = [
     "pytest",
     "syrupy",
