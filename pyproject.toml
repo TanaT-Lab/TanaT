@@ -15,9 +15,6 @@ dependencies = [
     "pandas",
     "scikit-learn",
     "scikit-survival",
-    "sqlalchemy",
-    "tqdm",
-    "tseqmock",
 ]
 requires-python = ">=3.9"
 classifiers = [
