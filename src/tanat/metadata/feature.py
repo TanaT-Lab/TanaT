@@ -260,7 +260,7 @@ class ArrayInfo(FeatureInfo):
 
 def get_feature_info_class(dtype: pl.DataType) -> type[FeatureInfo]:
     """Returns the appropriate FeatureInfo class for a given Polars DataType."""
-    if dtype in pl.INTEGER_DTYPES or dtype in pl.FLOAT_DTYPES:
+    if dtype.is_integer() or dtype.is_float():
         return NumericalInfo
     # pl.Categorical is a parameter-free singleton so equality works.
     # pl.Enum is parameterised (Enum(categories=[...])); use isinstance.
@@ -270,7 +270,7 @@ def get_feature_info_class(dtype: pl.DataType) -> type[FeatureInfo]:
         return BooleanInfo
     if dtype == pl.String:
         return StringInfo
-    if dtype in pl.TEMPORAL_DTYPES:
+    if isinstance(dtype, (pl.Date, pl.Time, pl.Datetime, pl.Duration)):
         return TemporalInfo
     if isinstance(dtype, (pl.List, pl.Array)):
         return ArrayInfo

@@ -56,8 +56,8 @@ class TemporalIndexInfo:
         for col_name, dtype in schema.items():
             if not (
                 isinstance(dtype, (pl.Datetime, pl.Date))
-                or dtype in pl.INTEGER_DTYPES
-                or dtype in pl.FLOAT_DTYPES
+                or dtype.is_integer()
+                or dtype.is_float()
             ):
                 raise TypeError(
                     f"Unsupported temporal index type for column '{col_name}': {dtype}. "
