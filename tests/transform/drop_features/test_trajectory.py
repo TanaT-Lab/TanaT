@@ -44,3 +44,39 @@ class TestTrajectoryPoolDropFeatures:
         pool = traj_pool.copy()
         pool.drop_static_features(["age"])
         assert snapshot == pool.settings.static_features
+
+    def test_drop_static_feature_absent_from_metadata(
+        self, traj_pool: TrajectoryPool
+    ) -> None:
+        """After drop_static_features, dropped name absent from traj_pool.metadata.static_features."""
+        pool = traj_pool.copy()
+        pool.drop_static_features(["age"])
+        names = {f.name for f in pool.metadata.static_features}
+        assert "age" not in names
+
+
+class TestTrajectoryPoolDropFeaturesPropagation:
+    """Dropped static features at trajectory level are absent from Trajectory children.
+
+    A soft drop removes the column from ``settings``, which is passed as
+    ``parent_metadata`` to each ``traj_pool[id]`` call — so the column is
+    invisible on individual Trajectory objects immediately.
+    """
+
+    def test_static_drop_absent_on_trajectory(self, traj_pool: TrajectoryPool) -> None:
+        """Dropped static feature is absent from static_data() on a child Trajectory."""
+        pool = traj_pool.copy()
+        pool.drop_static_features(["age"])
+        traj = pool[pool.unique_ids[0]]
+        sd = traj.static_data(output_format="polars")
+        assert "age" not in sd.columns
+
+    def test_drop_static_feature_absent_from_trajectory_metadata(
+        self, traj_pool: TrajectoryPool
+    ) -> None:
+        """After drop_static_features, dropped name absent from traj.metadata.static_features."""
+        pool = traj_pool.copy()
+        pool.drop_static_features(["age"])
+        traj = pool[pool.unique_ids[0]]
+        names = {f.name for f in traj.metadata.static_features}
+        assert "age" not in names
