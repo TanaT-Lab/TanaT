@@ -1,0 +1,31 @@
+# serializer version: 1
+# name: TestTrajectoryPoolToGrid.test_output_columns_snapshot[datetime]
+  list([
+    'id',
+    'intervals_value_0',
+    'intervals_value_1',
+    'intervals_value_2',
+    'intervals_value_3',
+    'intervals_value_4',
+    'events_value_0',
+    'events_value_1',
+    'events_value_2',
+    'events_value_3',
+    'events_value_4',
+  ])
+# ---
+# name: TestTrajectoryPoolToGrid.test_output_columns_snapshot[timestep]
+  list([
+    'id',
+    'intervals_value_0',
+    'intervals_value_1',
+    'intervals_value_2',
+    'intervals_value_3',
+    'intervals_value_4',
+    'events_value_0',
+    'events_value_1',
+    'events_value_2',
+    'events_value_3',
+    'events_value_4',
+  ])
+# ---
