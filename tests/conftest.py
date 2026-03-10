@@ -197,13 +197,20 @@ def trajectory_pool_dt(
     interval_pool: IntervalSequencePool,
     event_pool: EventSequencePool,
     state_pool: StateSequencePool,
+    data_dir: Path,
 ) -> TrajectoryPool:
-    """TrajectoryPool built from the datetime sequence pools."""
+    """TrajectoryPool built from the datetime sequence pools, with trajectory-level static features."""
+    sta = data_dir / "static"
     store_path = (
         TrajectoryPool.builder()
         .add("intervals", interval_pool)
         .add("events", event_pool)
         .add("states", state_pool)
+        .add_csv(
+            sta / "static.csv",
+            id_column="id",
+            features=["age", "group", "is_active"],
+        )
         .build("trajectory_pool_dt")
     )
     return TrajectoryPool(store=store_path)
@@ -214,13 +221,20 @@ def trajectory_pool_ts(
     interval_pool_ts: IntervalSequencePool,
     event_pool_ts: EventSequencePool,
     state_pool_ts: StateSequencePool,
+    data_dir: Path,
 ) -> TrajectoryPool:
-    """TrajectoryPool built from the timestep sequence pools."""
+    """TrajectoryPool built from the timestep sequence pools, with trajectory-level static features."""
+    sta = data_dir / "static"
     store_path = (
         TrajectoryPool.builder()
         .add("intervals", interval_pool_ts)
         .add("events", event_pool_ts)
         .add("states", state_pool_ts)
+        .add_csv(
+            sta / "static.csv",
+            id_column="id",
+            features=["age", "group", "is_active"],
+        )
         .build("trajectory_pool_ts")
     )
     return TrajectoryPool(store=store_path)
