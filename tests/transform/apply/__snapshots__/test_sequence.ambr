@@ -1,0 +1,37 @@
+# serializer version: 1
+# name: TestSequencePoolApply.test_by_id_result_schema[datetime-event]
+  dict({
+    'id': Int64,
+    'value_mean': Float64,
+  })
+# ---
+# name: TestSequencePoolApply.test_by_id_result_schema[datetime-interval]
+  dict({
+    'id': Int64,
+    'value_mean': Float64,
+  })
+# ---
+# name: TestSequencePoolApply.test_by_id_result_schema[datetime-state]
+  dict({
+    'id': Int64,
+    'value_mean': Float64,
+  })
+# ---
+# name: TestSequencePoolApply.test_by_id_result_schema[timestep-event]
+  dict({
+    'id': Int64,
+    'value_mean': Float64,
+  })
+# ---
+# name: TestSequencePoolApply.test_by_id_result_schema[timestep-interval]
+  dict({
+    'id': Int64,
+    'value_mean': Float64,
+  })
+# ---
+# name: TestSequencePoolApply.test_by_id_result_schema[timestep-state]
+  dict({
+    'id': Int64,
+    'value_mean': Float64,
+  })
+# ---
