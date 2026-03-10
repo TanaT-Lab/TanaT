@@ -1,0 +1,13 @@
+# serializer version: 1
+# name: TestTrajectoryPoolDropFeatures.test_static_features_snapshot_after_drop[datetime]
+  list([
+    'group',
+    'is_active',
+  ])
+# ---
+# name: TestTrajectoryPoolDropFeatures.test_static_features_snapshot_after_drop[timestep]
+  list([
+    'group',
+    'is_active',
+  ])
+# ---
