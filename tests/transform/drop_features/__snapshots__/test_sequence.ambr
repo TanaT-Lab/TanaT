@@ -1,0 +1,58 @@
+# serializer version: 1
+# name: TestSequencePoolDropFeatures.test_entity_features_snapshot_after_drop[datetime-event]
+  list([
+    'duration',
+    'observed_at',
+    'response_time',
+    'status',
+    'token_emb',
+    'value',
+  ])
+# ---
+# name: TestSequencePoolDropFeatures.test_entity_features_snapshot_after_drop[datetime-interval]
+  list([
+    'duration',
+    'observed_at',
+    'response_time',
+    'status',
+    'token_emb',
+    'value',
+  ])
+# ---
+# name: TestSequencePoolDropFeatures.test_entity_features_snapshot_after_drop[datetime-state]
+  list([
+    'duration',
+    'observed_at',
+    'response_time',
+    'status',
+    'token_emb',
+    'value',
+  ])
+# ---
+# name: TestSequencePoolDropFeatures.test_entity_features_snapshot_after_drop[timestep-event]
+  list([
+    'duration',
+    'response_time',
+    'status',
+    'token_emb',
+    'value',
+  ])
+# ---
+# name: TestSequencePoolDropFeatures.test_entity_features_snapshot_after_drop[timestep-interval]
+  list([
+    'duration',
+    'response_time',
+    'status',
+    'token_emb',
+    'value',
+  ])
+# ---
+# name: TestSequencePoolDropFeatures.test_entity_features_snapshot_after_drop[timestep-state]
+  list([
+    'duration',
+    'response_time',
+    'status',
+    'token_emb',
+    'value',
+  ])
+# ---
