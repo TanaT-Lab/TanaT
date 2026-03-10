@@ -306,5 +306,5 @@ def build_feature_metadata(lf: pl.LazyFrame) -> list[FeatureInfo]:
 
     return [
         info_classes[col].from_stats(col_name=col, dtype=schema[col], stats=stats)
-        for col in schema.names()
+        for col in sorted(schema.names())
     ]
