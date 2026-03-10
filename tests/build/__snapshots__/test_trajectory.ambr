@@ -1,0 +1,34 @@
+# serializer version: 1
+# name: TestTrajectoryPoolFromFixtures.test_len[datetime]
+  60
+# ---
+# name: TestTrajectoryPoolFromFixtures.test_len[timestep]
+  60
+# ---
+# name: TestTrajectoryStaticFromDataFrame.test_with_static[pandas_df]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+  })
+# ---
+# name: TestTrajectoryStaticFromDataFrame.test_with_static[polars_df]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+  })
+# ---
+# name: TestTrajectoryStaticFromDataFrame.test_with_static[polars_lf]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+  })
+# ---
+# name: TestTrajectoryStaticFromSQL.test_with_static
+  dict({
+    'age': Int64,
+    'id': Int64,
+  })
+# ---

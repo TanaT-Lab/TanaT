@@ -1,0 +1,437 @@
+# serializer version: 1
+# name: TestBuildFromDataFrame.test_event_pool[pandas_df]
+  35
+# ---
+# name: TestBuildFromDataFrame.test_event_pool[pandas_df].1
+  dict({
+    'duration': Float64,
+    'flag_valid': Boolean,
+    'id': Int64,
+    'status': String,
+    'time': Float64,
+    'value': Float64,
+  })
+# ---
+# name: TestBuildFromDataFrame.test_event_pool[polars_df]
+  35
+# ---
+# name: TestBuildFromDataFrame.test_event_pool[polars_df].1
+  dict({
+    'duration': Float64,
+    'flag_valid': Boolean,
+    'id': Int64,
+    'status': String,
+    'time': Float64,
+    'value': Float64,
+  })
+# ---
+# name: TestBuildFromDataFrame.test_event_pool[polars_lf]
+  35
+# ---
+# name: TestBuildFromDataFrame.test_event_pool[polars_lf].1
+  dict({
+    'duration': Float64,
+    'flag_valid': Boolean,
+    'id': Int64,
+    'status': String,
+    'time': Float64,
+    'value': Float64,
+  })
+# ---
+# name: TestBuildFromDataFrame.test_interval_pool[pandas_df]
+  35
+# ---
+# name: TestBuildFromDataFrame.test_interval_pool[pandas_df].1
+  dict({
+    'duration': Float64,
+    'end': Float64,
+    'flag_valid': Boolean,
+    'id': Int64,
+    'start': Float64,
+    'status': String,
+    'value': Float64,
+  })
+# ---
+# name: TestBuildFromDataFrame.test_interval_pool[polars_df]
+  35
+# ---
+# name: TestBuildFromDataFrame.test_interval_pool[polars_df].1
+  dict({
+    'duration': Float64,
+    'end': Float64,
+    'flag_valid': Boolean,
+    'id': Int64,
+    'start': Float64,
+    'status': String,
+    'value': Float64,
+  })
+# ---
+# name: TestBuildFromDataFrame.test_interval_pool[polars_lf]
+  35
+# ---
+# name: TestBuildFromDataFrame.test_interval_pool[polars_lf].1
+  dict({
+    'duration': Float64,
+    'end': Float64,
+    'flag_valid': Boolean,
+    'id': Int64,
+    'start': Float64,
+    'status': String,
+    'value': Float64,
+  })
+# ---
+# name: TestBuildFromDataFrame.test_state_pool[pandas_df]
+  35
+# ---
+# name: TestBuildFromDataFrame.test_state_pool[pandas_df].1
+  dict({
+    'duration': Float64,
+    'end': Float64,
+    'flag_valid': Boolean,
+    'id': Int64,
+    'start': Float64,
+    'status': String,
+    'value': Float64,
+  })
+# ---
+# name: TestBuildFromDataFrame.test_state_pool[polars_df]
+  35
+# ---
+# name: TestBuildFromDataFrame.test_state_pool[polars_df].1
+  dict({
+    'duration': Float64,
+    'end': Float64,
+    'flag_valid': Boolean,
+    'id': Int64,
+    'start': Float64,
+    'status': String,
+    'value': Float64,
+  })
+# ---
+# name: TestBuildFromDataFrame.test_state_pool[polars_lf]
+  35
+# ---
+# name: TestBuildFromDataFrame.test_state_pool[polars_lf].1
+  dict({
+    'duration': Float64,
+    'end': Float64,
+    'flag_valid': Boolean,
+    'id': Int64,
+    'start': Float64,
+    'status': String,
+    'value': Float64,
+  })
+# ---
+# name: TestBuildFromDataFrame.test_with_static[pandas_df]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+  })
+# ---
+# name: TestBuildFromDataFrame.test_with_static[polars_df]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+  })
+# ---
+# name: TestBuildFromDataFrame.test_with_static[polars_lf]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+  })
+# ---
+# name: TestBuildFromSQL.test_event_pool
+  35
+# ---
+# name: TestBuildFromSQL.test_event_pool.1
+  dict({
+    'id': Int64,
+    'time': Float64,
+    'value': Float64,
+  })
+# ---
+# name: TestBuildFromSQL.test_interval_pool
+  35
+# ---
+# name: TestBuildFromSQL.test_interval_pool.1
+  dict({
+    'end': Float64,
+    'id': Int64,
+    'start': Float64,
+    'status': String,
+    'value': Float64,
+  })
+# ---
+# name: TestBuildFromSQL.test_state_pool
+  35
+# ---
+# name: TestBuildFromSQL.test_state_pool.1
+  dict({
+    'end': Float64,
+    'id': Int64,
+    'start': Float64,
+    'value': Float64,
+  })
+# ---
+# name: TestBuildFromSQL.test_with_static
+  dict({
+    'age': Int64,
+    'id': Int64,
+  })
+# ---
+# name: TestBuilderOptions.test_interval_sort_anchor[end]
+  shape: (198, 4)
+  ┌─────┬───────┬────────────┬───────────┐
+  │ id  ┆ start ┆ end        ┆ value     │
+  │ --- ┆ ---   ┆ ---        ┆ ---       │
+  │ i64 ┆ f64   ┆ f64        ┆ f64       │
+  ╞═════╪═══════╪════════════╪═══════════╡
+  │ 1   ┆ 278.0 ┆ 295.999988 ┆ -1.463386 │
+  │ 1   ┆ 286.0 ┆ 311.999988 ┆ 1.645544  │
+  │ 1   ┆ 298.0 ┆ 321.999988 ┆ -0.569401 │
+  │ 1   ┆ 304.0 ┆ 331.999988 ┆ 0.199385  │
+  │ 1   ┆ 333.0 ┆ 356.999988 ┆ 0.248016  │
+  │ …   ┆ …     ┆ …          ┆ …         │
+  │ 34  ┆ 240.0 ┆ 261.999988 ┆ 0.340278  │
+  │ 34  ┆ 247.0 ┆ 265.999988 ┆ 1.87163   │
+  │ 35  ┆ 262.0 ┆ 287.999988 ┆ 1.612176  │
+  │ 35  ┆ 272.0 ┆ 288.999988 ┆ 1.208962  │
+  │ 35  ┆ 291.0 ┆ 306.999988 ┆ -0.085921 │
+  └─────┴───────┴────────────┴───────────┘
+# ---
+# name: TestBuilderOptions.test_interval_sort_anchor[middle]
+  shape: (198, 4)
+  ┌─────┬───────┬────────────┬───────────┐
+  │ id  ┆ start ┆ end        ┆ value     │
+  │ --- ┆ ---   ┆ ---        ┆ ---       │
+  │ i64 ┆ f64   ┆ f64        ┆ f64       │
+  ╞═════╪═══════╪════════════╪═══════════╡
+  │ 1   ┆ 278.0 ┆ 295.999988 ┆ -1.463386 │
+  │ 1   ┆ 286.0 ┆ 311.999988 ┆ 1.645544  │
+  │ 1   ┆ 298.0 ┆ 321.999988 ┆ -0.569401 │
+  │ 1   ┆ 304.0 ┆ 331.999988 ┆ 0.199385  │
+  │ 1   ┆ 333.0 ┆ 356.999988 ┆ 0.248016  │
+  │ …   ┆ …     ┆ …          ┆ …         │
+  │ 34  ┆ 240.0 ┆ 261.999988 ┆ 0.340278  │
+  │ 34  ┆ 247.0 ┆ 265.999988 ┆ 1.87163   │
+  │ 35  ┆ 262.0 ┆ 287.999988 ┆ 1.612176  │
+  │ 35  ┆ 272.0 ┆ 288.999988 ┆ 1.208962  │
+  │ 35  ┆ 291.0 ┆ 306.999988 ┆ -0.085921 │
+  └─────┴───────┴────────────┴───────────┘
+# ---
+# name: TestBuilderOptions.test_interval_sort_anchor[start]
+  shape: (198, 4)
+  ┌─────┬───────┬────────────┬───────────┐
+  │ id  ┆ start ┆ end        ┆ value     │
+  │ --- ┆ ---   ┆ ---        ┆ ---       │
+  │ i64 ┆ f64   ┆ f64        ┆ f64       │
+  ╞═════╪═══════╪════════════╪═══════════╡
+  │ 1   ┆ 278.0 ┆ 295.999988 ┆ -1.463386 │
+  │ 1   ┆ 286.0 ┆ 311.999988 ┆ 1.645544  │
+  │ 1   ┆ 298.0 ┆ 321.999988 ┆ -0.569401 │
+  │ 1   ┆ 304.0 ┆ 331.999988 ┆ 0.199385  │
+  │ 1   ┆ 333.0 ┆ 356.999988 ┆ 0.248016  │
+  │ …   ┆ …     ┆ …          ┆ …         │
+  │ 34  ┆ 240.0 ┆ 261.999988 ┆ 0.340278  │
+  │ 34  ┆ 247.0 ┆ 265.999988 ┆ 1.87163   │
+  │ 35  ┆ 262.0 ┆ 287.999988 ┆ 1.612176  │
+  │ 35  ┆ 272.0 ┆ 288.999988 ┆ 1.208962  │
+  │ 35  ┆ 291.0 ┆ 306.999988 ┆ -0.085921 │
+  └─────┴───────┴────────────┴───────────┘
+# ---
+# name: TestBuilderOptions.test_state_continuity_skip_builds
+  shape: (3, 4)
+  ┌─────┬───────┬─────┬───────┐
+  │ id  ┆ start ┆ end ┆ value │
+  │ --- ┆ ---   ┆ --- ┆ ---   │
+  │ i64 ┆ f64   ┆ f64 ┆ str   │
+  ╞═════╪═══════╪═════╪═══════╡
+  │ 1   ┆ 0.0   ┆ 1.5 ┆ a     │
+  │ 1   ┆ 1.0   ┆ 2.5 ┆ b     │
+  │ 1   ┆ 3.0   ┆ 4.0 ┆ c     │
+  └─────┴───────┴─────┴───────┘
+# ---
+# name: TestBuilderOptions.test_state_end_value_fills_last_end
+  shape: (3, 4)
+  ┌─────┬───────┬──────┬───────┐
+  │ id  ┆ start ┆ end  ┆ value │
+  │ --- ┆ ---   ┆ ---  ┆ ---   │
+  │ i64 ┆ f64   ┆ f64  ┆ str   │
+  ╞═════╪═══════╪══════╪═══════╡
+  │ 1   ┆ 0.0   ┆ 1.0  ┆ a     │
+  │ 1   ┆ 1.0   ┆ 99.0 ┆ b     │
+  │ 2   ┆ 0.0   ┆ 99.0 ┆ x     │
+  └─────┴───────┴──────┴───────┘
+# ---
+# name: TestBuilderOptions.test_state_without_end_column_last_null
+  shape: (3, 4)
+  ┌─────┬───────┬──────┬───────┐
+  │ id  ┆ start ┆ end  ┆ value │
+  │ --- ┆ ---   ┆ ---  ┆ ---   │
+  │ i64 ┆ f64   ┆ f64  ┆ str   │
+  ╞═════╪═══════╪══════╪═══════╡
+  │ 1   ┆ 0.0   ┆ 1.0  ┆ a     │
+  │ 1   ┆ 1.0   ┆ null ┆ b     │
+  │ 2   ┆ 0.0   ┆ null ┆ x     │
+  └─────┴───────┴──────┴───────┘
+# ---
+# name: TestSequencePoolFromFixtures.test_len[datetime-event]
+  60
+# ---
+# name: TestSequencePoolFromFixtures.test_len[datetime-interval]
+  60
+# ---
+# name: TestSequencePoolFromFixtures.test_len[datetime-state]
+  60
+# ---
+# name: TestSequencePoolFromFixtures.test_len[timestep-event]
+  60
+# ---
+# name: TestSequencePoolFromFixtures.test_len[timestep-interval]
+  60
+# ---
+# name: TestSequencePoolFromFixtures.test_len[timestep-state]
+  60
+# ---
+# name: TestSequencePoolFromFixtures.test_sequence_data_schema[datetime-event]
+  dict({
+    'duration': Int64,
+    'flag_valid': Boolean,
+    'id': Int64,
+    'observed_at': Datetime(time_unit='us', time_zone=None),
+    'response_time': Int64,
+    'status': String,
+    'time': Datetime(time_unit='us', time_zone=None),
+    'token_emb': Array(Float32, shape=(32,)),
+    'value': Float64,
+  })
+# ---
+# name: TestSequencePoolFromFixtures.test_sequence_data_schema[datetime-interval]
+  dict({
+    'duration': Int64,
+    'end': Datetime(time_unit='us', time_zone=None),
+    'flag_valid': Boolean,
+    'id': Int64,
+    'observed_at': Datetime(time_unit='us', time_zone=None),
+    'response_time': Int64,
+    'start': Datetime(time_unit='us', time_zone=None),
+    'status': String,
+    'token_emb': Array(Float32, shape=(32,)),
+    'value': Float64,
+  })
+# ---
+# name: TestSequencePoolFromFixtures.test_sequence_data_schema[datetime-state]
+  dict({
+    'duration': Int64,
+    'end': Datetime(time_unit='us', time_zone=None),
+    'flag_valid': Boolean,
+    'id': Int64,
+    'observed_at': Datetime(time_unit='us', time_zone=None),
+    'response_time': Int64,
+    'start': Datetime(time_unit='us', time_zone=None),
+    'status': String,
+    'token_emb': Array(Float32, shape=(32,)),
+    'value': Float64,
+  })
+# ---
+# name: TestSequencePoolFromFixtures.test_sequence_data_schema[timestep-event]
+  dict({
+    'duration': Float64,
+    'flag_valid': Boolean,
+    'id': Int64,
+    'response_time': Int64,
+    'status': String,
+    'time': Float64,
+    'token_emb': Array(Float32, shape=(32,)),
+    'value': Float64,
+  })
+# ---
+# name: TestSequencePoolFromFixtures.test_sequence_data_schema[timestep-interval]
+  dict({
+    'duration': Float64,
+    'end': Float64,
+    'flag_valid': Boolean,
+    'id': Int64,
+    'response_time': Int64,
+    'start': Float64,
+    'status': String,
+    'token_emb': Array(Float32, shape=(32,)),
+    'value': Float64,
+  })
+# ---
+# name: TestSequencePoolFromFixtures.test_sequence_data_schema[timestep-state]
+  dict({
+    'duration': Float64,
+    'end': Float64,
+    'flag_valid': Boolean,
+    'id': Int64,
+    'response_time': Int64,
+    'start': Float64,
+    'status': String,
+    'token_emb': Array(Float32, shape=(32,)),
+    'value': Float64,
+  })
+# ---
+# name: TestSequencePoolFromFixtures.test_static_data_schema[datetime-event]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+    'is_active': Boolean,
+    'membership_duration': Int64,
+    'summary_embedding': Array(Float32, shape=(128,)),
+  })
+# ---
+# name: TestSequencePoolFromFixtures.test_static_data_schema[datetime-interval]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+    'is_active': Boolean,
+    'membership_duration': Int64,
+    'summary_embedding': Array(Float32, shape=(128,)),
+  })
+# ---
+# name: TestSequencePoolFromFixtures.test_static_data_schema[datetime-state]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+    'is_active': Boolean,
+    'membership_duration': Int64,
+    'summary_embedding': Array(Float32, shape=(128,)),
+  })
+# ---
+# name: TestSequencePoolFromFixtures.test_static_data_schema[timestep-event]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+    'is_active': Boolean,
+    'membership_duration': Int64,
+    'summary_embedding': Array(Float32, shape=(128,)),
+  })
+# ---
+# name: TestSequencePoolFromFixtures.test_static_data_schema[timestep-interval]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+    'is_active': Boolean,
+    'membership_duration': Int64,
+    'summary_embedding': Array(Float32, shape=(128,)),
+  })
+# ---
+# name: TestSequencePoolFromFixtures.test_static_data_schema[timestep-state]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+    'is_active': Boolean,
+    'membership_duration': Int64,
+    'summary_embedding': Array(Float32, shape=(128,)),
+  })
+# ---
