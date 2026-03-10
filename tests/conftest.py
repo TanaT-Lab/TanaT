@@ -55,11 +55,11 @@ def workspace(tmp_path_factory: pytest.TempPathFactory) -> Workspace:
 
 
 @pytest.fixture(scope="session")
-def interval_pool(data_dir: Path) -> IntervalSequencePool:
-    """IntervalSequencePool built from datetime/ (two sequence sources + shared static)."""
+def interval_store(data_dir: Path) -> Path:
+    """Store path for the datetime IntervalSequencePool (two entity sources + shared static)."""
     seq = data_dir / "datetime"
     sta = data_dir / "static"
-    store_path = (
+    return (
         IntervalSequencePool.builder()
         # Entity sources (non-overlapping IDs: main=1-35, extra=36-50)
         .add_parquet(
@@ -98,15 +98,20 @@ def interval_pool(data_dir: Path) -> IntervalSequencePool:
         )
         .build("interval_pool")
     )
-    return IntervalSequencePool(store=store_path)
 
 
 @pytest.fixture(scope="session")
-def event_pool(data_dir: Path) -> EventSequencePool:
-    """EventSequencePool built from datetime/ (uses start as event time)."""
+def interval_pool(interval_store: Path) -> IntervalSequencePool:
+    """IntervalSequencePool built from datetime/ (two sequence sources + shared static)."""
+    return IntervalSequencePool(store=interval_store)
+
+
+@pytest.fixture(scope="session")
+def event_store(data_dir: Path) -> Path:
+    """Store path for the datetime EventSequencePool (uses start as event time)."""
     seq = data_dir / "datetime"
     sta = data_dir / "static"
-    store_path = (
+    return (
         EventSequencePool.builder()
         .add_parquet(
             seq / "sequence_main.parquet",
@@ -141,15 +146,20 @@ def event_pool(data_dir: Path) -> EventSequencePool:
         )
         .build("event_pool")
     )
-    return EventSequencePool(store=store_path)
 
 
 @pytest.fixture(scope="session")
-def state_pool(data_dir: Path) -> StateSequencePool:
-    """StateSequencePool built from datetime/ (contiguous non-overlapping states)."""
+def event_pool(event_store: Path) -> EventSequencePool:
+    """EventSequencePool built from datetime/ (uses start as event time)."""
+    return EventSequencePool(store=event_store)
+
+
+@pytest.fixture(scope="session")
+def state_store(data_dir: Path) -> Path:
+    """Store path for the datetime StateSequencePool (contiguous non-overlapping states)."""
     seq = data_dir / "datetime"
     sta = data_dir / "static"
-    store_path = (
+    return (
         StateSequencePool.builder()
         .add_parquet(
             seq / "sequence_main.parquet",
@@ -184,7 +194,12 @@ def state_pool(data_dir: Path) -> StateSequencePool:
         )
         .build("state_pool")
     )
-    return StateSequencePool(store=store_path)
+
+
+@pytest.fixture(scope="session")
+def state_pool(state_store: Path) -> StateSequencePool:
+    """StateSequencePool built from datetime/ (contiguous non-overlapping states)."""
+    return StateSequencePool(store=state_store)
 
 
 # ---------------------------------------------------------------------------
@@ -193,15 +208,15 @@ def state_pool(data_dir: Path) -> StateSequencePool:
 
 
 @pytest.fixture(scope="session")
-def trajectory_pool_dt(
+def trajectory_store_dt(
     interval_pool: IntervalSequencePool,
     event_pool: EventSequencePool,
     state_pool: StateSequencePool,
     data_dir: Path,
-) -> TrajectoryPool:
-    """TrajectoryPool built from the datetime sequence pools, with trajectory-level static features."""
+) -> Path:
+    """Store path for the datetime TrajectoryPool (three datetime sequence pools + static)."""
     sta = data_dir / "static"
-    store_path = (
+    return (
         TrajectoryPool.builder()
         .add("intervals", interval_pool)
         .add("events", event_pool)
@@ -213,19 +228,24 @@ def trajectory_pool_dt(
         )
         .build("trajectory_pool_dt")
     )
-    return TrajectoryPool(store=store_path)
 
 
 @pytest.fixture(scope="session")
-def trajectory_pool_ts(
+def trajectory_pool_dt(trajectory_store_dt: Path) -> TrajectoryPool:
+    """TrajectoryPool built from the datetime sequence pools, with trajectory-level static features."""
+    return TrajectoryPool(store=trajectory_store_dt)
+
+
+@pytest.fixture(scope="session")
+def trajectory_store_ts(
     interval_pool_ts: IntervalSequencePool,
     event_pool_ts: EventSequencePool,
     state_pool_ts: StateSequencePool,
     data_dir: Path,
-) -> TrajectoryPool:
-    """TrajectoryPool built from the timestep sequence pools, with trajectory-level static features."""
+) -> Path:
+    """Store path for the timestep TrajectoryPool (three timestep sequence pools + static)."""
     sta = data_dir / "static"
-    store_path = (
+    return (
         TrajectoryPool.builder()
         .add("intervals", interval_pool_ts)
         .add("events", event_pool_ts)
@@ -237,7 +257,12 @@ def trajectory_pool_ts(
         )
         .build("trajectory_pool_ts")
     )
-    return TrajectoryPool(store=store_path)
+
+
+@pytest.fixture(scope="session")
+def trajectory_pool_ts(trajectory_store_ts: Path) -> TrajectoryPool:
+    """TrajectoryPool built from the timestep sequence pools, with trajectory-level static features."""
+    return TrajectoryPool(store=trajectory_store_ts)
 
 
 # ---------------------------------------------------------------------------
@@ -246,11 +271,11 @@ def trajectory_pool_ts(
 
 
 @pytest.fixture(scope="session")
-def interval_pool_ts(data_dir: Path) -> IntervalSequencePool:
-    """IntervalSequencePool built from timestep/ (float timestamps, no observed_at)."""
+def interval_store_ts(data_dir: Path) -> Path:
+    """Store path for the timestep IntervalSequencePool (float timestamps, no observed_at)."""
     seq = data_dir / "timestep"
     sta = data_dir / "static"
-    store_path = (
+    return (
         IntervalSequencePool.builder()
         .add_parquet(
             seq / "sequence_main.parquet",
@@ -280,15 +305,20 @@ def interval_pool_ts(data_dir: Path) -> IntervalSequencePool:
         )
         .build("interval_pool_ts")
     )
-    return IntervalSequencePool(store=store_path)
 
 
 @pytest.fixture(scope="session")
-def event_pool_ts(data_dir: Path) -> EventSequencePool:
-    """EventSequencePool built from timestep/."""
+def interval_pool_ts(interval_store_ts: Path) -> IntervalSequencePool:
+    """IntervalSequencePool built from timestep/ (float timestamps, no observed_at)."""
+    return IntervalSequencePool(store=interval_store_ts)
+
+
+@pytest.fixture(scope="session")
+def event_store_ts(data_dir: Path) -> Path:
+    """Store path for the timestep EventSequencePool."""
     seq = data_dir / "timestep"
     sta = data_dir / "static"
-    store_path = (
+    return (
         EventSequencePool.builder()
         .add_parquet(
             seq / "sequence_main.parquet",
@@ -316,15 +346,20 @@ def event_pool_ts(data_dir: Path) -> EventSequencePool:
         )
         .build("event_pool_ts")
     )
-    return EventSequencePool(store=store_path)
 
 
 @pytest.fixture(scope="session")
-def state_pool_ts(data_dir: Path) -> StateSequencePool:
-    """StateSequencePool built from timestep/."""
+def event_pool_ts(event_store_ts: Path) -> EventSequencePool:
+    """EventSequencePool built from timestep/."""
+    return EventSequencePool(store=event_store_ts)
+
+
+@pytest.fixture(scope="session")
+def state_store_ts(data_dir: Path) -> Path:
+    """Store path for the timestep StateSequencePool."""
     seq = data_dir / "timestep"
     sta = data_dir / "static"
-    store_path = (
+    return (
         StateSequencePool.builder()
         .add_parquet(
             seq / "sequence_main.parquet",
@@ -352,7 +387,12 @@ def state_pool_ts(data_dir: Path) -> StateSequencePool:
         )
         .build("state_pool_ts")
     )
-    return StateSequencePool(store=store_path)
+
+
+@pytest.fixture(scope="session")
+def state_pool_ts(state_store_ts: Path) -> StateSequencePool:
+    """StateSequencePool built from timestep/."""
+    return StateSequencePool(store=state_store_ts)
 
 
 # ---------------------------------------------------------------------------
@@ -388,6 +428,34 @@ def sequence_pools_ts(
     }
 
 
+@pytest.fixture(scope="session")
+def sequence_stores_dt(
+    interval_store: Path,
+    event_store: Path,
+    state_store: Path,
+) -> dict:
+    """Dict of the three datetime-variant sequence store paths."""
+    return {
+        "interval": interval_store,
+        "event": event_store,
+        "state": state_store,
+    }
+
+
+@pytest.fixture(scope="session")
+def sequence_stores_ts(
+    interval_store_ts: Path,
+    event_store_ts: Path,
+    state_store_ts: Path,
+) -> dict:
+    """Dict of the three timestep-variant sequence store paths."""
+    return {
+        "interval": interval_store_ts,
+        "event": event_store_ts,
+        "state": state_store_ts,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Parametrized convenience fixtures (usable anywhere in tests/)
 # ---------------------------------------------------------------------------
@@ -400,6 +468,18 @@ def pools_dict(request: pytest.FixtureRequest) -> dict:
 
 
 @pytest.fixture(params=["dt", "ts"], ids=["datetime", "timestep"])
+def stores_dict(request: pytest.FixtureRequest) -> dict:
+    """Parametrized over datetime/timestep; yields the matching sequence_stores_* dict."""
+    return request.getfixturevalue(f"sequence_stores_{request.param}")
+
+
+@pytest.fixture(params=["dt", "ts"], ids=["datetime", "timestep"])
 def traj_pool(request: pytest.FixtureRequest) -> TrajectoryPool:
     """Parametrized over datetime/timestep; yields the matching trajectory_pool_*."""
     return request.getfixturevalue(f"trajectory_pool_{request.param}")
+
+
+@pytest.fixture(params=["dt", "ts"], ids=["datetime", "timestep"])
+def traj_store(request: pytest.FixtureRequest) -> Path:
+    """Parametrized over datetime/timestep; yields the matching trajectory_store_*."""
+    return request.getfixturevalue(f"trajectory_store_{request.param}")
