@@ -1,0 +1,130 @@
+# serializer version: 1
+# name: TestSequencePoolAddFeatures.test_add_entity_feature_visible[datetime-event]
+  list([
+    'duration',
+    'flag_valid',
+    'noise',
+    'observed_at',
+    'response_time',
+    'status',
+    'token_emb',
+    'value',
+  ])
+# ---
+# name: TestSequencePoolAddFeatures.test_add_entity_feature_visible[datetime-interval]
+  list([
+    'duration',
+    'flag_valid',
+    'noise',
+    'observed_at',
+    'response_time',
+    'status',
+    'token_emb',
+    'value',
+  ])
+# ---
+# name: TestSequencePoolAddFeatures.test_add_entity_feature_visible[datetime-state]
+  list([
+    'duration',
+    'flag_valid',
+    'noise',
+    'observed_at',
+    'response_time',
+    'status',
+    'token_emb',
+    'value',
+  ])
+# ---
+# name: TestSequencePoolAddFeatures.test_add_entity_feature_visible[timestep-event]
+  list([
+    'duration',
+    'flag_valid',
+    'noise',
+    'response_time',
+    'status',
+    'token_emb',
+    'value',
+  ])
+# ---
+# name: TestSequencePoolAddFeatures.test_add_entity_feature_visible[timestep-interval]
+  list([
+    'duration',
+    'flag_valid',
+    'noise',
+    'response_time',
+    'status',
+    'token_emb',
+    'value',
+  ])
+# ---
+# name: TestSequencePoolAddFeatures.test_add_entity_feature_visible[timestep-state]
+  list([
+    'duration',
+    'flag_valid',
+    'noise',
+    'response_time',
+    'status',
+    'token_emb',
+    'value',
+  ])
+# ---
+# name: TestSequencePoolAddFeatures.test_add_static_feature_visible[datetime-event]
+  list([
+    'age',
+    'group',
+    'is_active',
+    'membership_duration',
+    'summary_embedding',
+    'value_mean',
+  ])
+# ---
+# name: TestSequencePoolAddFeatures.test_add_static_feature_visible[datetime-interval]
+  list([
+    'age',
+    'group',
+    'is_active',
+    'membership_duration',
+    'summary_embedding',
+    'value_mean',
+  ])
+# ---
+# name: TestSequencePoolAddFeatures.test_add_static_feature_visible[datetime-state]
+  list([
+    'age',
+    'group',
+    'is_active',
+    'membership_duration',
+    'summary_embedding',
+    'value_mean',
+  ])
+# ---
+# name: TestSequencePoolAddFeatures.test_add_static_feature_visible[timestep-event]
+  list([
+    'age',
+    'group',
+    'is_active',
+    'membership_duration',
+    'summary_embedding',
+    'value_mean',
+  ])
+# ---
+# name: TestSequencePoolAddFeatures.test_add_static_feature_visible[timestep-interval]
+  list([
+    'age',
+    'group',
+    'is_active',
+    'membership_duration',
+    'summary_embedding',
+    'value_mean',
+  ])
+# ---
+# name: TestSequencePoolAddFeatures.test_add_static_feature_visible[timestep-state]
+  list([
+    'age',
+    'group',
+    'is_active',
+    'membership_duration',
+    'summary_embedding',
+    'value_mean',
+  ])
+# ---
