@@ -2,6 +2,9 @@
 
 This page contains the complete changelog for TanaT, documenting all notable changes, new features, bug fixes, and improvements across versions.
 
+--- 
+*For historical versions bellow, please refer to the [Inria GitLab archive](https://gitlab.inria.fr/tanat/core/tanat).*
+
 ## [v0.9.0] - December 2025
 **Performance & Scalability** - JIT parallel computing and memory-mapped storage
 
