@@ -126,3 +126,98 @@ class TestSequencePoolAddFeatures:
         pool.add_static_features(df)
         with pytest.raises(ValueError, match="collision"):
             pool.add_static_features(df)
+
+    def test_add_entity_feature_in_metadata(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """After add_entity_features, new name appears in pool.metadata.entity_features."""
+        pool = pools_dict[pool_type].copy()
+        n_rows = pool.sequence_data(output_format="polars").height
+        pool.add_entity_features(pl.DataFrame({"meta_e": [1.0] * n_rows}))
+        names = {f.name for f in pool.metadata.entity_features}
+        assert "meta_e" in names
+
+    def test_add_static_feature_in_metadata(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """After add_static_features, new name appears in pool.metadata.static_features."""
+        pool = pools_dict[pool_type].copy()
+        df = pl.DataFrame({"id": pool.unique_ids, "meta_s": [2.0] * len(pool)})
+        pool.add_static_features(df)
+        assert pool.metadata.static_features is not None
+        names = {f.name for f in pool.metadata.static_features}
+        assert "meta_s" in names
+
+
+@pytest.mark.parametrize("pool_type", ["interval", "event", "state"])
+class TestSequencePoolAddFeaturesPropagation:
+    """Features added at pool level propagate all the way down to Entity children.
+
+    pool.settings → Sequence.parent_metadata → Entity._parent_metadata
+    so virtual entity features are immediately visible in entity.metadata,
+    entity.feature_names and entity.data() without any extra step.
+    """
+
+    def test_entity_feature_visible_on_entity(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """Entity feature added to pool appears in entity.metadata on a child Entity."""
+        pool = pools_dict[pool_type].copy()
+        n_rows = pool.sequence_data(output_format="polars").height
+        pool.add_entity_features(pl.DataFrame({"propagated_e": [7.0] * n_rows}))
+        entity = pool[pool.unique_ids[0]][0]
+        assert "propagated_e" in entity.metadata
+
+    def test_entity_feature_in_feature_names(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """Added entity feature is visible in entity.feature_names on a child Entity."""
+        pool = pools_dict[pool_type].copy()
+        n_rows = pool.sequence_data(output_format="polars").height
+        pool.add_entity_features(pl.DataFrame({"propagated_e": [7.0] * n_rows}))
+        entity = pool[pool.unique_ids[0]][0]
+        assert entity.feature_names is not None
+        assert "propagated_e" in entity.feature_names
+
+    def test_entity_feature_in_data(self, pools_dict: dict, pool_type: str) -> None:
+        """Added entity feature key is present in entity.data() on a child Entity."""
+        pool = pools_dict[pool_type].copy()
+        n_rows = pool.sequence_data(output_format="polars").height
+        pool.add_entity_features(pl.DataFrame({"propagated_e": [7.0] * n_rows}))
+        entity = pool[pool.unique_ids[0]][0]
+        assert "propagated_e" in entity.data()
+
+    def test_static_feature_visible_on_sequence(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """Static feature added to pool is present in static_data() on a child Sequence."""
+        pool = pools_dict[pool_type].copy()
+        df = pl.DataFrame({"id": pool.unique_ids, "propagated_s": [3.0] * len(pool)})
+        pool.add_static_features(df)
+        seq = pool[pool.unique_ids[0]]
+        sd = seq.static_data(output_format="polars")
+        assert sd is not None
+        assert "propagated_s" in sd.columns
+
+    def test_entity_feature_in_sequence_metadata(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """After add_entity_features, new name is in seq.metadata.entity_features."""
+        pool = pools_dict[pool_type].copy()
+        n_rows = pool.sequence_data(output_format="polars").height
+        pool.add_entity_features(pl.DataFrame({"meta_e": [1.0] * n_rows}))
+        seq = pool[pool.unique_ids[0]]
+        names = {f.name for f in seq.metadata.entity_features}
+        assert "meta_e" in names
+
+    def test_static_feature_in_sequence_metadata(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """After add_static_features, new name is in seq.metadata.static_features."""
+        pool = pools_dict[pool_type].copy()
+        df = pl.DataFrame({"id": pool.unique_ids, "meta_s": [2.0] * len(pool)})
+        pool.add_static_features(df)
+        seq = pool[pool.unique_ids[0]]
+        assert seq.metadata.static_features is not None
+        names = {f.name for f in seq.metadata.static_features}
+        assert "meta_s" in names
