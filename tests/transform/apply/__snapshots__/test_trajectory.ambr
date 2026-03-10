@@ -1,0 +1,11 @@
+# serializer version: 1
+# name: TestTrajectoryPoolApply.test_result_schema[datetime]
+  dict({
+    'age_f': Float64,
+  })
+# ---
+# name: TestTrajectoryPoolApply.test_result_schema[timestep]
+  dict({
+    'age_f': Float64,
+  })
+# ---
