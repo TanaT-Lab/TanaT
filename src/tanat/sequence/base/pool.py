@@ -1897,14 +1897,22 @@ class SequencePool(
         Returns:
             A new pool of *target_pool_cls* pointing to the same store.
         """
+        # The temporal schema is fully materialized on disk after a type conversion (e.g.
+        # _t_event → _t_start/_t_end).  A temporal cast no longer meaningful.
+        cast_for_new = (
+            self._casts.with_fields(temporal=None)
+            if self._casts.temporal is not None
+            else self._casts
+        )
         new_pool = object.__new__(target_pool_cls)
-        SequencePool.__init__(new_pool, self._store, settings, cast_recipe=self._casts)
+        SequencePool.__init__(new_pool, self._store, settings)
         # pylint: disable=protected-access
         new_pool._inject(
             virtual_id=virtual_id,
             id_mask=self._id_mask,
             row_mask=self._row_mask,
             has_soft_drops=self._has_soft_drops,
+            cast_recipe=cast_for_new,
         )
         return new_pool
 
@@ -1973,7 +1981,9 @@ class SequencePool(
             raise ValueError(
                 f"anchor must be 'start', 'end', or 'middle', got {anchor!r}"
             )
-        new_uuid = self._store._fork_period_to_event(self._virtual_id, anchor)
+        new_uuid = self._store._fork_period_to_event(
+            self._virtual_id, anchor, temporal_cast=self._casts.temporal
+        )
         new_settings = {
             "id_column": self.settings.id_column,
             "time_column": time_column,
