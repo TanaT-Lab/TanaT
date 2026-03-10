@@ -1,0 +1,1495 @@
+# serializer version: 1
+# name: TestSequencePoolMetadata.test_metadata[datetime-event]
+  dict({
+    'entity_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': 2591999000000,
+        'min': 863999000000,
+        'name': 'duration',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 25,
+        'name': 'flag_valid',
+        'true_count': 173,
+      }),
+      dict({
+        'dtype': "Datetime(time_unit='us', time_zone=None)",
+        'max': '2018-12-31 14:39:19',
+        'min': '2018-01-01 06:55:27',
+        'name': 'observed_at',
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': 44741,
+        'min': 303,
+        'name': 'response_time',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 7,
+        'min_length': 2,
+        'name': 'status',
+      }),
+      dict({
+        'dimension': 32,
+        'dtype': 'Array(Float32, shape=(32,))',
+        'name': 'token_emb',
+      }),
+      dict({
+        'dtype': 'Float64',
+        'max': 2.451281517803502,
+        'min': -3.9193563674218397,
+        'name': 'value',
+      }),
+    ]),
+    'seq_id': 'Int64',
+    'static_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': 90,
+        'min': 18,
+        'name': 'age',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 1,
+        'min_length': 1,
+        'name': 'group',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 10,
+        'name': 'is_active',
+        'true_count': 40,
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': 1474,
+        'min': 51,
+        'name': 'membership_duration',
+      }),
+      dict({
+        'dimension': 128,
+        'dtype': 'Array(Float32, shape=(128,))',
+        'name': 'summary_embedding',
+      }),
+    ]),
+    'temporal': dict({
+      'is_datetime': True,
+      'max': '2001-03-18 00:00:00',
+      'min': '2000-01-18 00:00:00',
+      'time_zone': None,
+      'unit': 'us',
+    }),
+  })
+# ---
+# name: TestSequencePoolMetadata.test_metadata[datetime-interval]
+  dict({
+    'entity_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': 2591999000000,
+        'min': 863999000000,
+        'name': 'duration',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 25,
+        'name': 'flag_valid',
+        'true_count': 173,
+      }),
+      dict({
+        'dtype': "Datetime(time_unit='us', time_zone=None)",
+        'max': '2018-12-31 14:39:19',
+        'min': '2018-01-01 06:55:27',
+        'name': 'observed_at',
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': 44741,
+        'min': 303,
+        'name': 'response_time',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 7,
+        'min_length': 2,
+        'name': 'status',
+      }),
+      dict({
+        'dimension': 32,
+        'dtype': 'Array(Float32, shape=(32,))',
+        'name': 'token_emb',
+      }),
+      dict({
+        'dtype': 'Float64',
+        'max': 2.451281517803502,
+        'min': -3.9193563674218397,
+        'name': 'value',
+      }),
+    ]),
+    'seq_id': 'Int64',
+    'static_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': 90,
+        'min': 18,
+        'name': 'age',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 1,
+        'min_length': 1,
+        'name': 'group',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 10,
+        'name': 'is_active',
+        'true_count': 40,
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': 1474,
+        'min': 51,
+        'name': 'membership_duration',
+      }),
+      dict({
+        'dimension': 128,
+        'dtype': 'Array(Float32, shape=(128,))',
+        'name': 'summary_embedding',
+      }),
+    ]),
+    'temporal': dict({
+      'is_datetime': True,
+      'max': '2001-04-15 23:59:59',
+      'min': '2000-01-18 00:00:00',
+      'time_zone': None,
+      'unit': 'us',
+    }),
+  })
+# ---
+# name: TestSequencePoolMetadata.test_metadata[datetime-state]
+  dict({
+    'entity_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': 2591999000000,
+        'min': 863999000000,
+        'name': 'duration',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 25,
+        'name': 'flag_valid',
+        'true_count': 173,
+      }),
+      dict({
+        'dtype': "Datetime(time_unit='us', time_zone=None)",
+        'max': '2018-12-31 14:39:19',
+        'min': '2018-01-01 06:55:27',
+        'name': 'observed_at',
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': 44741,
+        'min': 303,
+        'name': 'response_time',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 7,
+        'min_length': 2,
+        'name': 'status',
+      }),
+      dict({
+        'dimension': 32,
+        'dtype': 'Array(Float32, shape=(32,))',
+        'name': 'token_emb',
+      }),
+      dict({
+        'dtype': 'Float64',
+        'max': 2.451281517803502,
+        'min': -3.9193563674218397,
+        'name': 'value',
+      }),
+    ]),
+    'seq_id': 'Int64',
+    'static_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': 90,
+        'min': 18,
+        'name': 'age',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 1,
+        'min_length': 1,
+        'name': 'group',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 10,
+        'name': 'is_active',
+        'true_count': 40,
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': 1474,
+        'min': 51,
+        'name': 'membership_duration',
+      }),
+      dict({
+        'dimension': 128,
+        'dtype': 'Array(Float32, shape=(128,))',
+        'name': 'summary_embedding',
+      }),
+    ]),
+    'temporal': dict({
+      'is_datetime': True,
+      'max': '2001-03-18 00:00:00',
+      'min': '2000-01-18 00:00:00',
+      'time_zone': None,
+      'unit': 'us',
+    }),
+  })
+# ---
+# name: TestSequencePoolMetadata.test_metadata[timestep-event]
+  dict({
+    'entity_features': list([
+      dict({
+        'dtype': 'Float64',
+        'max': 29.99998842592595,
+        'min': 9.99998842592592,
+        'name': 'duration',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 29,
+        'name': 'flag_valid',
+        'true_count': 169,
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': 49903,
+        'min': 821,
+        'name': 'response_time',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 7,
+        'min_length': 2,
+        'name': 'status',
+      }),
+      dict({
+        'dimension': 32,
+        'dtype': 'Array(Float32, shape=(32,))',
+        'name': 'token_emb',
+      }),
+      dict({
+        'dtype': 'Float64',
+        'max': 2.6205253375886515,
+        'min': -2.61296618749759,
+        'name': 'value',
+      }),
+    ]),
+    'seq_id': 'Int64',
+    'static_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': 90,
+        'min': 18,
+        'name': 'age',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 1,
+        'min_length': 1,
+        'name': 'group',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 10,
+        'name': 'is_active',
+        'true_count': 40,
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': 1474,
+        'min': 51,
+        'name': 'membership_duration',
+      }),
+      dict({
+        'dimension': 128,
+        'dtype': 'Array(Float32, shape=(128,))',
+        'name': 'summary_embedding',
+      }),
+    ]),
+    'temporal': dict({
+      'is_datetime': False,
+      'max': '442.0',
+      'min': '17.0',
+      'time_zone': None,
+      'unit': None,
+    }),
+  })
+# ---
+# name: TestSequencePoolMetadata.test_metadata[timestep-interval]
+  dict({
+    'entity_features': list([
+      dict({
+        'dtype': 'Float64',
+        'max': 29.99998842592595,
+        'min': 9.99998842592592,
+        'name': 'duration',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 29,
+        'name': 'flag_valid',
+        'true_count': 169,
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': 49903,
+        'min': 821,
+        'name': 'response_time',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 7,
+        'min_length': 2,
+        'name': 'status',
+      }),
+      dict({
+        'dimension': 32,
+        'dtype': 'Array(Float32, shape=(32,))',
+        'name': 'token_emb',
+      }),
+      dict({
+        'dtype': 'Float64',
+        'max': 2.6205253375886515,
+        'min': -2.61296618749759,
+        'name': 'value',
+      }),
+    ]),
+    'seq_id': 'Int64',
+    'static_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': 90,
+        'min': 18,
+        'name': 'age',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 1,
+        'min_length': 1,
+        'name': 'group',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 10,
+        'name': 'is_active',
+        'true_count': 40,
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': 1474,
+        'min': 51,
+        'name': 'membership_duration',
+      }),
+      dict({
+        'dimension': 128,
+        'dtype': 'Array(Float32, shape=(128,))',
+        'name': 'summary_embedding',
+      }),
+    ]),
+    'temporal': dict({
+      'is_datetime': False,
+      'max': '470.99998842592595',
+      'min': '17.0',
+      'time_zone': None,
+      'unit': None,
+    }),
+  })
+# ---
+# name: TestSequencePoolMetadata.test_metadata[timestep-state]
+  dict({
+    'entity_features': list([
+      dict({
+        'dtype': 'Float64',
+        'max': 29.99998842592595,
+        'min': 9.99998842592592,
+        'name': 'duration',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 29,
+        'name': 'flag_valid',
+        'true_count': 169,
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': 49903,
+        'min': 821,
+        'name': 'response_time',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 7,
+        'min_length': 2,
+        'name': 'status',
+      }),
+      dict({
+        'dimension': 32,
+        'dtype': 'Array(Float32, shape=(32,))',
+        'name': 'token_emb',
+      }),
+      dict({
+        'dtype': 'Float64',
+        'max': 2.6205253375886515,
+        'min': -2.61296618749759,
+        'name': 'value',
+      }),
+    ]),
+    'seq_id': 'Int64',
+    'static_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': 90,
+        'min': 18,
+        'name': 'age',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 1,
+        'min_length': 1,
+        'name': 'group',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 10,
+        'name': 'is_active',
+        'true_count': 40,
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': 1474,
+        'min': 51,
+        'name': 'membership_duration',
+      }),
+      dict({
+        'dimension': 128,
+        'dtype': 'Array(Float32, shape=(128,))',
+        'name': 'summary_embedding',
+      }),
+    ]),
+    'temporal': dict({
+      'is_datetime': False,
+      'max': '442.0',
+      'min': '17.0',
+      'time_zone': None,
+      'unit': None,
+    }),
+  })
+# ---
+# name: TestStandaloneSequenceMetadata.test_metadata[datetime-event-complete]
+  dict({
+    'entity_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': 2505599000000,
+        'min': 1036799000000,
+        'name': 'duration',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 2,
+        'name': 'flag_valid',
+        'true_count': 4,
+      }),
+      dict({
+        'dtype': "Datetime(time_unit='us', time_zone=None)",
+        'max': '2018-12-31 12:56:05',
+        'min': '2018-03-10 12:50:25',
+        'name': 'observed_at',
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': None,
+        'min': None,
+        'name': 'response_time',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 7,
+        'min_length': 2,
+        'name': 'status',
+      }),
+      dict({
+        'dimension': 32,
+        'dtype': 'Array(Float32, shape=(32,))',
+        'name': 'token_emb',
+      }),
+      dict({
+        'dtype': 'Float64',
+        'max': 1.5007932404423028,
+        'min': -1.112413517661479,
+        'name': 'value',
+      }),
+    ]),
+    'seq_id': 'Int64',
+    'static_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': 84,
+        'min': 84,
+        'name': 'age',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 1,
+        'min_length': 1,
+        'name': 'group',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 0,
+        'name': 'is_active',
+        'true_count': 1,
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': 784,
+        'min': 784,
+        'name': 'membership_duration',
+      }),
+      dict({
+        'dimension': 128,
+        'dtype': 'Array(Float32, shape=(128,))',
+        'name': 'summary_embedding',
+      }),
+    ]),
+    'temporal': dict({
+      'is_datetime': True,
+      'max': '2001-02-16 00:00:00',
+      'min': '2000-11-02 00:00:00',
+      'time_zone': None,
+      'unit': 'us',
+    }),
+  })
+# ---
+# name: TestStandaloneSequenceMetadata.test_metadata[datetime-event-partial]
+  dict({
+    'entity_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': 2505599000000,
+        'min': 1555199000000,
+        'name': 'duration',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 1,
+        'name': 'flag_valid',
+        'true_count': 7,
+      }),
+      dict({
+        'dtype': "Datetime(time_unit='us', time_zone=None)",
+        'max': '2018-11-08 15:56:10',
+        'min': '2018-01-10 03:01:13',
+        'name': 'observed_at',
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': None,
+        'min': None,
+        'name': 'response_time',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 7,
+        'min_length': 2,
+        'name': 'status',
+      }),
+      dict({
+        'dimension': 32,
+        'dtype': 'Array(Float32, shape=(32,))',
+        'name': 'token_emb',
+      }),
+      dict({
+        'dtype': 'Float64',
+        'max': 0.6764041259011262,
+        'min': -1.317822794978491,
+        'name': 'value',
+      }),
+    ]),
+    'seq_id': 'Int64',
+    'static_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': None,
+        'min': None,
+        'name': 'age',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': None,
+        'min_length': None,
+        'name': 'group',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 0,
+        'name': 'is_active',
+        'true_count': 0,
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': None,
+        'min': None,
+        'name': 'membership_duration',
+      }),
+      dict({
+        'dimension': 128,
+        'dtype': 'Array(Float32, shape=(128,))',
+        'name': 'summary_embedding',
+      }),
+    ]),
+    'temporal': dict({
+      'is_datetime': True,
+      'max': '2001-01-08 00:00:00',
+      'min': '2000-10-05 00:00:00',
+      'time_zone': None,
+      'unit': 'us',
+    }),
+  })
+# ---
+# name: TestStandaloneSequenceMetadata.test_metadata[datetime-interval-complete]
+  dict({
+    'entity_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': 2505599000000,
+        'min': 1036799000000,
+        'name': 'duration',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 2,
+        'name': 'flag_valid',
+        'true_count': 4,
+      }),
+      dict({
+        'dtype': "Datetime(time_unit='us', time_zone=None)",
+        'max': '2018-12-31 12:56:05',
+        'min': '2018-03-10 12:50:25',
+        'name': 'observed_at',
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': None,
+        'min': None,
+        'name': 'response_time',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 7,
+        'min_length': 2,
+        'name': 'status',
+      }),
+      dict({
+        'dimension': 32,
+        'dtype': 'Array(Float32, shape=(32,))',
+        'name': 'token_emb',
+      }),
+      dict({
+        'dtype': 'Float64',
+        'max': 1.5007932404423028,
+        'min': -1.112413517661479,
+        'name': 'value',
+      }),
+    ]),
+    'seq_id': 'Int64',
+    'static_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': 84,
+        'min': 84,
+        'name': 'age',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 1,
+        'min_length': 1,
+        'name': 'group',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 0,
+        'name': 'is_active',
+        'true_count': 1,
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': 784,
+        'min': 784,
+        'name': 'membership_duration',
+      }),
+      dict({
+        'dimension': 128,
+        'dtype': 'Array(Float32, shape=(128,))',
+        'name': 'summary_embedding',
+      }),
+    ]),
+    'temporal': dict({
+      'is_datetime': True,
+      'max': '2001-03-10 23:59:59',
+      'min': '2000-11-02 00:00:00',
+      'time_zone': None,
+      'unit': 'us',
+    }),
+  })
+# ---
+# name: TestStandaloneSequenceMetadata.test_metadata[datetime-interval-partial]
+  dict({
+    'entity_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': 2505599000000,
+        'min': 1555199000000,
+        'name': 'duration',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 1,
+        'name': 'flag_valid',
+        'true_count': 7,
+      }),
+      dict({
+        'dtype': "Datetime(time_unit='us', time_zone=None)",
+        'max': '2018-11-08 15:56:10',
+        'min': '2018-01-10 03:01:13',
+        'name': 'observed_at',
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': None,
+        'min': None,
+        'name': 'response_time',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 7,
+        'min_length': 2,
+        'name': 'status',
+      }),
+      dict({
+        'dimension': 32,
+        'dtype': 'Array(Float32, shape=(32,))',
+        'name': 'token_emb',
+      }),
+      dict({
+        'dtype': 'Float64',
+        'max': 0.6764041259011262,
+        'min': -1.317822794978491,
+        'name': 'value',
+      }),
+    ]),
+    'seq_id': 'Int64',
+    'static_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': None,
+        'min': None,
+        'name': 'age',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': None,
+        'min_length': None,
+        'name': 'group',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 0,
+        'name': 'is_active',
+        'true_count': 0,
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': None,
+        'min': None,
+        'name': 'membership_duration',
+      }),
+      dict({
+        'dimension': 128,
+        'dtype': 'Array(Float32, shape=(128,))',
+        'name': 'summary_embedding',
+      }),
+    ]),
+    'temporal': dict({
+      'is_datetime': True,
+      'max': '2001-02-04 23:59:59',
+      'min': '2000-10-05 00:00:00',
+      'time_zone': None,
+      'unit': 'us',
+    }),
+  })
+# ---
+# name: TestStandaloneSequenceMetadata.test_metadata[datetime-state-complete]
+  dict({
+    'entity_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': 2505599000000,
+        'min': 1036799000000,
+        'name': 'duration',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 2,
+        'name': 'flag_valid',
+        'true_count': 4,
+      }),
+      dict({
+        'dtype': "Datetime(time_unit='us', time_zone=None)",
+        'max': '2018-12-31 12:56:05',
+        'min': '2018-03-10 12:50:25',
+        'name': 'observed_at',
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': None,
+        'min': None,
+        'name': 'response_time',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 7,
+        'min_length': 2,
+        'name': 'status',
+      }),
+      dict({
+        'dimension': 32,
+        'dtype': 'Array(Float32, shape=(32,))',
+        'name': 'token_emb',
+      }),
+      dict({
+        'dtype': 'Float64',
+        'max': 1.5007932404423028,
+        'min': -1.112413517661479,
+        'name': 'value',
+      }),
+    ]),
+    'seq_id': 'Int64',
+    'static_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': 84,
+        'min': 84,
+        'name': 'age',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 1,
+        'min_length': 1,
+        'name': 'group',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 0,
+        'name': 'is_active',
+        'true_count': 1,
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': 784,
+        'min': 784,
+        'name': 'membership_duration',
+      }),
+      dict({
+        'dimension': 128,
+        'dtype': 'Array(Float32, shape=(128,))',
+        'name': 'summary_embedding',
+      }),
+    ]),
+    'temporal': dict({
+      'is_datetime': True,
+      'max': '2001-02-16 00:00:00',
+      'min': '2000-11-02 00:00:00',
+      'time_zone': None,
+      'unit': 'us',
+    }),
+  })
+# ---
+# name: TestStandaloneSequenceMetadata.test_metadata[datetime-state-partial]
+  dict({
+    'entity_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': 2505599000000,
+        'min': 1555199000000,
+        'name': 'duration',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 1,
+        'name': 'flag_valid',
+        'true_count': 7,
+      }),
+      dict({
+        'dtype': "Datetime(time_unit='us', time_zone=None)",
+        'max': '2018-11-08 15:56:10',
+        'min': '2018-01-10 03:01:13',
+        'name': 'observed_at',
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': None,
+        'min': None,
+        'name': 'response_time',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 7,
+        'min_length': 2,
+        'name': 'status',
+      }),
+      dict({
+        'dimension': 32,
+        'dtype': 'Array(Float32, shape=(32,))',
+        'name': 'token_emb',
+      }),
+      dict({
+        'dtype': 'Float64',
+        'max': 0.6764041259011262,
+        'min': -1.317822794978491,
+        'name': 'value',
+      }),
+    ]),
+    'seq_id': 'Int64',
+    'static_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': None,
+        'min': None,
+        'name': 'age',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': None,
+        'min_length': None,
+        'name': 'group',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 0,
+        'name': 'is_active',
+        'true_count': 0,
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': None,
+        'min': None,
+        'name': 'membership_duration',
+      }),
+      dict({
+        'dimension': 128,
+        'dtype': 'Array(Float32, shape=(128,))',
+        'name': 'summary_embedding',
+      }),
+    ]),
+    'temporal': dict({
+      'is_datetime': True,
+      'max': '2001-01-08 00:00:00',
+      'min': '2000-10-05 00:00:00',
+      'time_zone': None,
+      'unit': 'us',
+    }),
+  })
+# ---
+# name: TestStandaloneSequenceMetadata.test_metadata[timestep-event-complete]
+  dict({
+    'entity_features': list([
+      dict({
+        'dtype': 'Float64',
+        'max': 28.99998842592595,
+        'min': 11.999988425925949,
+        'name': 'duration',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 1,
+        'name': 'flag_valid',
+        'true_count': 5,
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': None,
+        'min': None,
+        'name': 'response_time',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 7,
+        'min_length': 2,
+        'name': 'status',
+      }),
+      dict({
+        'dimension': 32,
+        'dtype': 'Array(Float32, shape=(32,))',
+        'name': 'token_emb',
+      }),
+      dict({
+        'dtype': 'Float64',
+        'max': 0.9136254962331698,
+        'min': -2.2128574453768173,
+        'name': 'value',
+      }),
+    ]),
+    'seq_id': 'Int64',
+    'static_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': 84,
+        'min': 84,
+        'name': 'age',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 1,
+        'min_length': 1,
+        'name': 'group',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 0,
+        'name': 'is_active',
+        'true_count': 1,
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': 784,
+        'min': 784,
+        'name': 'membership_duration',
+      }),
+      dict({
+        'dimension': 128,
+        'dtype': 'Array(Float32, shape=(128,))',
+        'name': 'summary_embedding',
+      }),
+    ]),
+    'temporal': dict({
+      'is_datetime': False,
+      'max': '412.0',
+      'min': '306.0',
+      'time_zone': None,
+      'unit': None,
+    }),
+  })
+# ---
+# name: TestStandaloneSequenceMetadata.test_metadata[timestep-event-partial]
+  dict({
+    'entity_features': list([
+      dict({
+        'dtype': 'Float64',
+        'max': 28.99998842592595,
+        'min': 17.99998842592595,
+        'name': 'duration',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 2,
+        'name': 'flag_valid',
+        'true_count': 6,
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': None,
+        'min': None,
+        'name': 'response_time',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 7,
+        'min_length': 2,
+        'name': 'status',
+      }),
+      dict({
+        'dimension': 32,
+        'dtype': 'Array(Float32, shape=(32,))',
+        'name': 'token_emb',
+      }),
+      dict({
+        'dtype': 'Float64',
+        'max': 1.645544213126533,
+        'min': -1.463385798550521,
+        'name': 'value',
+      }),
+    ]),
+    'seq_id': 'Int64',
+    'static_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': None,
+        'min': None,
+        'name': 'age',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': None,
+        'min_length': None,
+        'name': 'group',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 0,
+        'name': 'is_active',
+        'true_count': 0,
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': None,
+        'min': None,
+        'name': 'membership_duration',
+      }),
+      dict({
+        'dimension': 128,
+        'dtype': 'Array(Float32, shape=(128,))',
+        'name': 'summary_embedding',
+      }),
+    ]),
+    'temporal': dict({
+      'is_datetime': False,
+      'max': '373.0',
+      'min': '278.0',
+      'time_zone': None,
+      'unit': None,
+    }),
+  })
+# ---
+# name: TestStandaloneSequenceMetadata.test_metadata[timestep-interval-complete]
+  dict({
+    'entity_features': list([
+      dict({
+        'dtype': 'Float64',
+        'max': 28.99998842592595,
+        'min': 11.999988425925949,
+        'name': 'duration',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 1,
+        'name': 'flag_valid',
+        'true_count': 5,
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': None,
+        'min': None,
+        'name': 'response_time',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 7,
+        'min_length': 2,
+        'name': 'status',
+      }),
+      dict({
+        'dimension': 32,
+        'dtype': 'Array(Float32, shape=(32,))',
+        'name': 'token_emb',
+      }),
+      dict({
+        'dtype': 'Float64',
+        'max': 0.9136254962331698,
+        'min': -2.2128574453768173,
+        'name': 'value',
+      }),
+    ]),
+    'seq_id': 'Int64',
+    'static_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': 84,
+        'min': 84,
+        'name': 'age',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 1,
+        'min_length': 1,
+        'name': 'group',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 0,
+        'name': 'is_active',
+        'true_count': 1,
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': 784,
+        'min': 784,
+        'name': 'membership_duration',
+      }),
+      dict({
+        'dimension': 128,
+        'dtype': 'Array(Float32, shape=(128,))',
+        'name': 'summary_embedding',
+      }),
+    ]),
+    'temporal': dict({
+      'is_datetime': False,
+      'max': '434.99998842592595',
+      'min': '306.0',
+      'time_zone': None,
+      'unit': None,
+    }),
+  })
+# ---
+# name: TestStandaloneSequenceMetadata.test_metadata[timestep-interval-partial]
+  dict({
+    'entity_features': list([
+      dict({
+        'dtype': 'Float64',
+        'max': 28.99998842592595,
+        'min': 17.99998842592595,
+        'name': 'duration',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 2,
+        'name': 'flag_valid',
+        'true_count': 6,
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': None,
+        'min': None,
+        'name': 'response_time',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 7,
+        'min_length': 2,
+        'name': 'status',
+      }),
+      dict({
+        'dimension': 32,
+        'dtype': 'Array(Float32, shape=(32,))',
+        'name': 'token_emb',
+      }),
+      dict({
+        'dtype': 'Float64',
+        'max': 1.645544213126533,
+        'min': -1.463385798550521,
+        'name': 'value',
+      }),
+    ]),
+    'seq_id': 'Int64',
+    'static_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': None,
+        'min': None,
+        'name': 'age',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': None,
+        'min_length': None,
+        'name': 'group',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 0,
+        'name': 'is_active',
+        'true_count': 0,
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': None,
+        'min': None,
+        'name': 'membership_duration',
+      }),
+      dict({
+        'dimension': 128,
+        'dtype': 'Array(Float32, shape=(128,))',
+        'name': 'summary_embedding',
+      }),
+    ]),
+    'temporal': dict({
+      'is_datetime': False,
+      'max': '400.99998842592595',
+      'min': '278.0',
+      'time_zone': None,
+      'unit': None,
+    }),
+  })
+# ---
+# name: TestStandaloneSequenceMetadata.test_metadata[timestep-state-complete]
+  dict({
+    'entity_features': list([
+      dict({
+        'dtype': 'Float64',
+        'max': 28.99998842592595,
+        'min': 11.999988425925949,
+        'name': 'duration',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 1,
+        'name': 'flag_valid',
+        'true_count': 5,
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': None,
+        'min': None,
+        'name': 'response_time',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 7,
+        'min_length': 2,
+        'name': 'status',
+      }),
+      dict({
+        'dimension': 32,
+        'dtype': 'Array(Float32, shape=(32,))',
+        'name': 'token_emb',
+      }),
+      dict({
+        'dtype': 'Float64',
+        'max': 0.9136254962331698,
+        'min': -2.2128574453768173,
+        'name': 'value',
+      }),
+    ]),
+    'seq_id': 'Int64',
+    'static_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': 84,
+        'min': 84,
+        'name': 'age',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 1,
+        'min_length': 1,
+        'name': 'group',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 0,
+        'name': 'is_active',
+        'true_count': 1,
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': 784,
+        'min': 784,
+        'name': 'membership_duration',
+      }),
+      dict({
+        'dimension': 128,
+        'dtype': 'Array(Float32, shape=(128,))',
+        'name': 'summary_embedding',
+      }),
+    ]),
+    'temporal': dict({
+      'is_datetime': False,
+      'max': '412.0',
+      'min': '306.0',
+      'time_zone': None,
+      'unit': None,
+    }),
+  })
+# ---
+# name: TestStandaloneSequenceMetadata.test_metadata[timestep-state-partial]
+  dict({
+    'entity_features': list([
+      dict({
+        'dtype': 'Float64',
+        'max': 28.99998842592595,
+        'min': 17.99998842592595,
+        'name': 'duration',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 2,
+        'name': 'flag_valid',
+        'true_count': 6,
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': None,
+        'min': None,
+        'name': 'response_time',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 7,
+        'min_length': 2,
+        'name': 'status',
+      }),
+      dict({
+        'dimension': 32,
+        'dtype': 'Array(Float32, shape=(32,))',
+        'name': 'token_emb',
+      }),
+      dict({
+        'dtype': 'Float64',
+        'max': 1.645544213126533,
+        'min': -1.463385798550521,
+        'name': 'value',
+      }),
+    ]),
+    'seq_id': 'Int64',
+    'static_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': None,
+        'min': None,
+        'name': 'age',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': None,
+        'min_length': None,
+        'name': 'group',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 0,
+        'name': 'is_active',
+        'true_count': 0,
+      }),
+      dict({
+        'dtype': 'Int64',
+        'max': None,
+        'min': None,
+        'name': 'membership_duration',
+      }),
+      dict({
+        'dimension': 128,
+        'dtype': 'Array(Float32, shape=(128,))',
+        'name': 'summary_embedding',
+      }),
+    ]),
+    'temporal': dict({
+      'is_datetime': False,
+      'max': '373.0',
+      'min': '278.0',
+      'time_zone': None,
+      'unit': None,
+    }),
+  })
+# ---

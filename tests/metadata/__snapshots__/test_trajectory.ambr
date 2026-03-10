@@ -1,0 +1,193 @@
+# serializer version: 1
+# name: TestStandaloneTrajectoryMetadata.test_metadata[datetime-complete]
+  dict({
+    'static_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': 84,
+        'min': 84,
+        'name': 'age',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 1,
+        'min_length': 1,
+        'name': 'group',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 0,
+        'name': 'is_active',
+        'true_count': 1,
+      }),
+    ]),
+    'temporal': dict({
+      'is_datetime': True,
+      'max': '2001-04-15 23:59:59',
+      'min': '2000-01-18 00:00:00',
+      'time_zone': None,
+      'unit': 'us',
+    }),
+    'traj_id': 'Int64',
+  })
+# ---
+# name: TestStandaloneTrajectoryMetadata.test_metadata[datetime-partial]
+  dict({
+    'static_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': None,
+        'min': None,
+        'name': 'age',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': None,
+        'min_length': None,
+        'name': 'group',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 0,
+        'name': 'is_active',
+        'true_count': 0,
+      }),
+    ]),
+    'temporal': dict({
+      'is_datetime': True,
+      'max': '2001-04-15 23:59:59',
+      'min': '2000-01-18 00:00:00',
+      'time_zone': None,
+      'unit': 'us',
+    }),
+    'traj_id': 'Int64',
+  })
+# ---
+# name: TestStandaloneTrajectoryMetadata.test_metadata[timestep-complete]
+  dict({
+    'static_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': 84,
+        'min': 84,
+        'name': 'age',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 1,
+        'min_length': 1,
+        'name': 'group',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 0,
+        'name': 'is_active',
+        'true_count': 1,
+      }),
+    ]),
+    'temporal': dict({
+      'is_datetime': False,
+      'max': '470.99998842592595',
+      'min': '17.0',
+      'time_zone': None,
+      'unit': None,
+    }),
+    'traj_id': 'Int64',
+  })
+# ---
+# name: TestStandaloneTrajectoryMetadata.test_metadata[timestep-partial]
+  dict({
+    'static_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': None,
+        'min': None,
+        'name': 'age',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': None,
+        'min_length': None,
+        'name': 'group',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 0,
+        'name': 'is_active',
+        'true_count': 0,
+      }),
+    ]),
+    'temporal': dict({
+      'is_datetime': False,
+      'max': '470.99998842592595',
+      'min': '17.0',
+      'time_zone': None,
+      'unit': None,
+    }),
+    'traj_id': 'Int64',
+  })
+# ---
+# name: TestTrajectoryMetadata.test_metadata[datetime]
+  dict({
+    'static_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': 90,
+        'min': 18,
+        'name': 'age',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 1,
+        'min_length': 1,
+        'name': 'group',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 10,
+        'name': 'is_active',
+        'true_count': 40,
+      }),
+    ]),
+    'temporal': dict({
+      'is_datetime': True,
+      'max': '2001-04-15 23:59:59',
+      'min': '2000-01-18 00:00:00',
+      'time_zone': None,
+      'unit': 'us',
+    }),
+    'traj_id': 'Int64',
+  })
+# ---
+# name: TestTrajectoryMetadata.test_metadata[timestep]
+  dict({
+    'static_features': list([
+      dict({
+        'dtype': 'Int64',
+        'max': 90,
+        'min': 18,
+        'name': 'age',
+      }),
+      dict({
+        'dtype': 'String',
+        'max_length': 1,
+        'min_length': 1,
+        'name': 'group',
+      }),
+      dict({
+        'dtype': 'Boolean',
+        'false_count': 10,
+        'name': 'is_active',
+        'true_count': 40,
+      }),
+    ]),
+    'temporal': dict({
+      'is_datetime': False,
+      'max': '470.99998842592595',
+      'min': '17.0',
+      'time_zone': None,
+      'unit': None,
+    }),
+    'traj_id': 'Int64',
+  })
+# ---
