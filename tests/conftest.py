@@ -203,69 +203,6 @@ def state_pool(state_store: Path) -> StateSequencePool:
 
 
 # ---------------------------------------------------------------------------
-# Trajectory pool
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture(scope="session")
-def trajectory_store_dt(
-    interval_pool: IntervalSequencePool,
-    event_pool: EventSequencePool,
-    state_pool: StateSequencePool,
-    data_dir: Path,
-) -> Path:
-    """Store path for the datetime TrajectoryPool (three datetime sequence pools + static)."""
-    sta = data_dir / "static"
-    return (
-        TrajectoryPool.builder()
-        .add("intervals", interval_pool)
-        .add("events", event_pool)
-        .add("states", state_pool)
-        .add_csv(
-            sta / "static.csv",
-            id_column="id",
-            features=["age", "group", "is_active"],
-        )
-        .build("trajectory_pool_dt")
-    )
-
-
-@pytest.fixture(scope="session")
-def trajectory_pool_dt(trajectory_store_dt: Path) -> TrajectoryPool:
-    """TrajectoryPool built from the datetime sequence pools, with trajectory-level static features."""
-    return TrajectoryPool(store=trajectory_store_dt)
-
-
-@pytest.fixture(scope="session")
-def trajectory_store_ts(
-    interval_pool_ts: IntervalSequencePool,
-    event_pool_ts: EventSequencePool,
-    state_pool_ts: StateSequencePool,
-    data_dir: Path,
-) -> Path:
-    """Store path for the timestep TrajectoryPool (three timestep sequence pools + static)."""
-    sta = data_dir / "static"
-    return (
-        TrajectoryPool.builder()
-        .add("intervals", interval_pool_ts)
-        .add("events", event_pool_ts)
-        .add("states", state_pool_ts)
-        .add_csv(
-            sta / "static.csv",
-            id_column="id",
-            features=["age", "group", "is_active"],
-        )
-        .build("trajectory_pool_ts")
-    )
-
-
-@pytest.fixture(scope="session")
-def trajectory_pool_ts(trajectory_store_ts: Path) -> TrajectoryPool:
-    """TrajectoryPool built from the timestep sequence pools, with trajectory-level static features."""
-    return TrajectoryPool(store=trajectory_store_ts)
-
-
-# ---------------------------------------------------------------------------
 # Sequence pools: timestep variant (float day-offset T_START / T_END)
 # ---------------------------------------------------------------------------
 
@@ -393,6 +330,69 @@ def state_store_ts(data_dir: Path) -> Path:
 def state_pool_ts(state_store_ts: Path) -> StateSequencePool:
     """StateSequencePool built from timestep/."""
     return StateSequencePool(store=state_store_ts)
+
+
+# ---------------------------------------------------------------------------
+# Trajectory pools (dt + ts) — declared after all sequence pool dependencies
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def trajectory_store_dt(
+    interval_pool: IntervalSequencePool,
+    event_pool: EventSequencePool,
+    state_pool: StateSequencePool,
+    data_dir: Path,
+) -> Path:
+    """Store path for the datetime TrajectoryPool (three datetime sequence pools + static)."""
+    sta = data_dir / "static"
+    return (
+        TrajectoryPool.builder()
+        .add("intervals", interval_pool)
+        .add("events", event_pool)
+        .add("states", state_pool)
+        .add_csv(
+            sta / "static.csv",
+            id_column="id",
+            features=["age", "group", "is_active"],
+        )
+        .build("trajectory_pool_dt")
+    )
+
+
+@pytest.fixture(scope="session")
+def trajectory_pool_dt(trajectory_store_dt: Path) -> TrajectoryPool:
+    """TrajectoryPool built from the datetime sequence pools, with trajectory-level static features."""
+    return TrajectoryPool(store=trajectory_store_dt)
+
+
+@pytest.fixture(scope="session")
+def trajectory_store_ts(
+    interval_pool_ts: IntervalSequencePool,
+    event_pool_ts: EventSequencePool,
+    state_pool_ts: StateSequencePool,
+    data_dir: Path,
+) -> Path:
+    """Store path for the timestep TrajectoryPool (three timestep sequence pools + static)."""
+    sta = data_dir / "static"
+    return (
+        TrajectoryPool.builder()
+        .add("intervals", interval_pool_ts)
+        .add("events", event_pool_ts)
+        .add("states", state_pool_ts)
+        .add_csv(
+            sta / "static.csv",
+            id_column="id",
+            features=["age", "group", "is_active"],
+        )
+        .build("trajectory_pool_ts")
+    )
+
+
+@pytest.fixture(scope="session")
+def trajectory_pool_ts(trajectory_store_ts: Path) -> TrajectoryPool:
+    """TrajectoryPool built from the timestep sequence pools, with trajectory-level static features."""
+    return TrajectoryPool(store=trajectory_store_ts)
 
 
 # ---------------------------------------------------------------------------
