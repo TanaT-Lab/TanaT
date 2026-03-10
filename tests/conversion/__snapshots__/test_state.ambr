@@ -1,0 +1,28 @@
+# serializer version: 1
+# name: TestStatePoolAsInterval.test_columns_snapshot[datetime]
+  list([
+    'duration',
+    'end',
+    'flag_valid',
+    'id',
+    'observed_at',
+    'response_time',
+    'start',
+    'status',
+    'token_emb',
+    'value',
+  ])
+# ---
+# name: TestStatePoolAsInterval.test_columns_snapshot[timestep]
+  list([
+    'duration',
+    'end',
+    'flag_valid',
+    'id',
+    'response_time',
+    'start',
+    'status',
+    'token_emb',
+    'value',
+  ])
+# ---
