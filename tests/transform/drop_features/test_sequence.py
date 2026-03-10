@@ -64,3 +64,93 @@ class TestSequencePoolDropFeatures:
         pool = pools_dict[pool_type].copy()
         pool.drop_features(["flag_valid"], is_static=False)
         assert snapshot == sorted(pool.settings.entity_features)
+
+    def test_drop_entity_feature_absent_from_metadata(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """After drop_features, dropped name is absent from pool.metadata.entity_features."""
+        pool = pools_dict[pool_type].copy()
+        pool.drop_features(["flag_valid"], is_static=False)
+        names = {f.name for f in pool.metadata.entity_features}
+        assert "flag_valid" not in names
+
+    def test_drop_static_feature_absent_from_metadata(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """After drop_features(is_static=True), dropped name absent from pool.metadata.static_features."""
+        pool = pools_dict[pool_type].copy()
+        pool.drop_features(["age"], is_static=True)
+        if pool.metadata.static_features is not None:
+            names = {f.name for f in pool.metadata.static_features}
+            assert "age" not in names
+
+
+@pytest.mark.parametrize("pool_type", ["interval", "event", "state"])
+class TestSequencePoolDropFeaturesPropagation:
+    """Dropped features at pool level are absent from Entity children.
+
+    A soft drop removes the column from settings, which flows down as
+    Sequence.parent_metadata → Entity._parent_metadata, so the column
+    is invisible in entity.metadata, entity.feature_names and entity.data()
+    immediately.
+    """
+
+    def test_entity_drop_absent_on_entity(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """Dropped entity feature is absent from entity.metadata on a child Entity."""
+        pool = pools_dict[pool_type].copy()
+        pool.drop_features(["flag_valid"], is_static=False)
+        entity = pool[pool.unique_ids[0]][0]
+        assert "flag_valid" not in entity.metadata
+
+    def test_entity_drop_absent_from_feature_names(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """Dropped entity feature is absent from entity.feature_names on a child Entity."""
+        pool = pools_dict[pool_type].copy()
+        pool.drop_features(["flag_valid"], is_static=False)
+        entity = pool[pool.unique_ids[0]][0]
+        assert entity.feature_names is not None
+        assert "flag_valid" not in entity.feature_names
+
+    def test_entity_drop_absent_from_data(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """Dropped entity feature is absent from entity.data() keys on a child Entity."""
+        pool = pools_dict[pool_type].copy()
+        pool.drop_features(["flag_valid"], is_static=False)
+        entity = pool[pool.unique_ids[0]][0]
+        assert "flag_valid" not in entity.data()
+
+    def test_static_drop_absent_on_sequence(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """Dropped static feature is absent from static_data() on a child Sequence."""
+        pool = pools_dict[pool_type].copy()
+        pool.drop_features(["age"], is_static=True)
+        seq = pool[pool.unique_ids[0]]
+        sd = seq.static_data(output_format="polars")
+        if sd is not None:
+            assert "age" not in sd.columns
+
+    def test_drop_entity_feature_absent_from_sequence_metadata(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """After drop_features, dropped name is absent from seq.metadata.entity_features."""
+        pool = pools_dict[pool_type].copy()
+        pool.drop_features(["flag_valid"], is_static=False)
+        seq = pool[pool.unique_ids[0]]
+        names = {f.name for f in seq.metadata.entity_features}
+        assert "flag_valid" not in names
+
+    def test_drop_static_feature_absent_from_sequence_metadata(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """After drop_features(is_static=True), dropped name absent from seq.metadata.static_features."""
+        pool = pools_dict[pool_type].copy()
+        pool.drop_features(["age"], is_static=True)
+        seq = pool[pool.unique_ids[0]]
+        if seq.metadata.static_features is not None:
+            names = {f.name for f in seq.metadata.static_features}
+            assert "age" not in names
