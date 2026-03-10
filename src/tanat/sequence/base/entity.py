@@ -6,6 +6,7 @@ Entity: Flyweight object representing a single row in a Sequence (Event, State, 
 from __future__ import annotations
 
 from abc import ABC
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from tanat_utils import Registrable
@@ -18,7 +19,6 @@ from .cast import SequenceCastRecipe
 
 if TYPE_CHECKING:
     from ...metadata.sequence import SequenceMetadata
-    from pathlib import Path
 
 
 class Entity(Registrable, ABC):
