@@ -229,6 +229,7 @@ class TrajectoryStore(StaticStoreMixin):
         id_mask: set | None,
         cast_recipe: TrajectoryCastRecipe | None,
         virtual_id: str | None,
+        features: list[str] | None = None,
     ) -> tuple[pl.LazyFrame, pl.LazyFrame | None]:
         """Prepare trajectory-level frames ready to be handed to the builder.
 
@@ -241,6 +242,10 @@ class TrajectoryStore(StaticStoreMixin):
                 whose ``id`` and ``static`` fields are applied.
             virtual_id: Virtual context UUID for merged static features
                 (``None`` if no virtual features).
+            features: Static feature names to materialise.  ``None`` keeps all
+                available columns.  Pass ``settings.static_features`` to
+                materialise soft drops (columns absent from the list are
+                excluded from the written frame).
 
         Returns:
             ``(traj_idx, static_lf)`` where:
@@ -270,6 +275,11 @@ class TrajectoryStore(StaticStoreMixin):
                 static_lf = apply_casts(static_lf, {TSCH.TRAJ_ID: cast_recipe.id})
             if has_casts and cast_recipe.static:
                 static_lf = apply_casts(static_lf, cast_recipe.static)
+            # Materialise soft drops: keep only requested feature columns.
+            if features is not None:
+                keep = [TSCH.TRAJ_ID] + [f for f in features if f != TSCH.TRAJ_ID]
+                available = set(static_lf.collect_schema().names())
+                static_lf = static_lf.select([c for c in keep if c in available])
             # Discard frame entirely when there are no feature columns
             feat_cols = [
                 c for c in static_lf.collect_schema().names() if c != TSCH.TRAJ_ID

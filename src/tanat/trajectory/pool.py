@@ -1736,6 +1736,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             self._id_mask,
             self._casts if not self._casts.is_empty() else None,
             self._virtual_id,
+            features=self.settings.static_features or None,
         )
 
         builder = TrajectoryStoreBuilder()
