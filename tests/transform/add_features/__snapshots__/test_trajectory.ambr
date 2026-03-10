@@ -1,0 +1,17 @@
+# serializer version: 1
+# name: TestTrajectoryPoolAddFeatures.test_add_static_visible[datetime]
+  list([
+    'age',
+    'group',
+    'is_active',
+    'score',
+  ])
+# ---
+# name: TestTrajectoryPoolAddFeatures.test_add_static_visible[timestep]
+  list([
+    'age',
+    'group',
+    'is_active',
+    'score',
+  ])
+# ---
