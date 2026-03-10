@@ -565,6 +565,8 @@ class SequenceStore(StaticStoreMixin):
         self,
         virtual_id: str | None,
         duration: timedelta | int | float | str,
+        feature_cast: pl.DataType | None = None,
+        temporal_cast: pl.DataType | None = None,
     ) -> str:
         """Fork a virtual context with ``(_t_start, _t_end)`` computed from an event index.
 
@@ -576,6 +578,12 @@ class SequenceStore(StaticStoreMixin):
         Args:
             virtual_id: Active virtual context to inherit from (``None`` → physical only).
             duration: Scalar offset or entity feature column name.
+            feature_cast: Resolved dtype for the duration column (``str`` case only).
+                Applied to that column before the arithmetic so that, e.g., an
+                ``Int64`` column can be promoted to ``Duration`` on the fly.
+            temporal_cast: Resolved dtype for the temporal column.  Applied to
+                ``_t_event`` before the arithmetic so the forked virtual temporal
+                is written in the user-declared dtype.
 
         Returns:
             UUID of the new forked context.
@@ -584,12 +592,17 @@ class SequenceStore(StaticStoreMixin):
             "Fork event -> interval (virtual_id=%r, duration=%r)", virtual_id, duration
         )
         active_temporal = self.temporal(virtual_id)
+        if temporal_cast is not None:
+            active_temporal = apply_casts(active_temporal, {SCH.T_EVENT: temporal_cast})
         if isinstance(duration, str):
+            entity_col = self.entity(virtual_id).select(pl.col(duration))
+            if feature_cast is not None:
+                entity_col = apply_casts(entity_col, {duration: feature_cast})
             combined = pl.concat(
                 [
                     self._ids_col(),
                     active_temporal,
-                    self.entity(virtual_id).select(pl.col(duration)),
+                    entity_col,
                 ],
                 how="horizontal",
             )
@@ -610,6 +623,7 @@ class SequenceStore(StaticStoreMixin):
         self,
         virtual_id: str | None,
         end_value: datetime | int | float | None,
+        temporal_cast: pl.DataType | None = None,
     ) -> str:
         """Fork a virtual context with ``(_t_start, _t_end)`` where ``_t_end`` is the next event start.
 
@@ -620,6 +634,9 @@ class SequenceStore(StaticStoreMixin):
         Args:
             virtual_id: Active virtual context to inherit from (``None`` → physical only).
             end_value: Fill value for the last row's ``_t_end``, or ``None``.
+            temporal_cast: Resolved dtype for the temporal column.  Applied to
+                ``_t_event`` before the shift so the forked virtual temporal is
+                written in the user-declared dtype.
 
         Returns:
             UUID of the new forked context.
@@ -627,9 +644,10 @@ class SequenceStore(StaticStoreMixin):
         LOGGER.debug(
             "Fork event -> state (virtual_id=%r, end_value=%r)", virtual_id, end_value
         )
-        combined = pl.concat(
-            [self._ids_col(), self.temporal(virtual_id)], how="horizontal"
-        )
+        active_temporal = self.temporal(virtual_id)
+        if temporal_cast is not None:
+            active_temporal = apply_casts(active_temporal, {SCH.T_EVENT: temporal_cast})
+        combined = pl.concat([self._ids_col(), active_temporal], how="horizontal")
         temporal_lf = combined.select(
             pl.col(SCH.T_EVENT).alias(SCH.T_START),
             pl.col(SCH.T_EVENT).shift(-1).over(SCH.SEQ_ID).alias(SCH.T_END),
@@ -646,6 +664,7 @@ class SequenceStore(StaticStoreMixin):
         self,
         virtual_id: str | None,
         anchor: str,
+        temporal_cast: pl.DataType | None = None,
     ) -> str:
         """Fork a virtual context with ``_t_event`` projected from a period temporal index.
 
@@ -657,6 +676,9 @@ class SequenceStore(StaticStoreMixin):
         Args:
             virtual_id: Active virtual context to inherit from (``None`` → physical only).
             anchor: One of ``'start'``, ``'end'``, ``'middle'``.
+            temporal_cast: Resolved dtype for the temporal columns.  Applied to
+                ``_t_start`` and ``_t_end`` before projection so the forked
+                virtual temporal is written in the user-declared dtype.
 
         Returns:
             UUID of the new forked context.
@@ -665,13 +687,26 @@ class SequenceStore(StaticStoreMixin):
             "Fork period -> event (virtual_id=%r, anchor=%r)", virtual_id, anchor
         )
         active_temporal = self.temporal(virtual_id)
+        if temporal_cast is not None:
+            active_temporal = apply_casts(
+                active_temporal,
+                {SCH.T_START: temporal_cast, SCH.T_END: temporal_cast},
+            )
         if anchor == "start":
             temporal_lf = active_temporal.select(pl.col(SCH.T_START).alias(SCH.T_EVENT))
         elif anchor == "end":
             temporal_lf = active_temporal.select(pl.col(SCH.T_END).alias(SCH.T_EVENT))
         else:  # middle
-            col_type = active_temporal.collect_schema()[SCH.T_START]
+            # Use temporal_cast when provided (avoids a schema collect on the lazy frame).
+            col_type = (
+                temporal_cast
+                if temporal_cast is not None
+                else active_temporal.collect_schema()[SCH.T_START]
+            )
             if isinstance(col_type, (pl.Datetime, pl.Date)):
+                # Polars forbids adding two absolute timestamps (`start + end`),
+                # so the midpoint must be expressed as `start + (end - start) / 2`
+                # where `(end - start)` produces a Duration that can be added back.
                 temporal_lf = active_temporal.select(
                     (
                         pl.col(SCH.T_START)
@@ -679,9 +714,12 @@ class SequenceStore(StaticStoreMixin):
                     ).alias(SCH.T_EVENT)
                 )
             else:
-                temporal_lf = active_temporal.select(
-                    ((pl.col(SCH.T_START) + pl.col(SCH.T_END)) / 2).alias(SCH.T_EVENT)
-                )
+                # Numeric path: `(start + end) / 2` is the natural form.
+                # Polars promotes integer `/` to Float64; cast back to preserve dtype.
+                midpoint = (pl.col(SCH.T_START) + pl.col(SCH.T_END)) / 2
+                if not isinstance(col_type, (pl.Float32, pl.Float64)):
+                    midpoint = midpoint.cast(col_type)
+                temporal_lf = active_temporal.select(midpoint.alias(SCH.T_EVENT))
         new_uuid = self.fork_virtual_context(virtual_id) or self._virtual.new_context()
         self.write_virtual_temporal(new_uuid, temporal_lf)
         return new_uuid
