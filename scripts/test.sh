@@ -26,8 +26,8 @@ source ./venv/bin/activate
 # Handle optional --update flag
 if [[ "${1:-}" == "--update" ]]; then
   echo "Running tests with snapshot update..."
-  pytest --snapshot-update --import-mode=importlib --cov=. --cov-report=xml --cov-report=term test/
+  pytest --snapshot-update --import-mode=importlib --cov=. --cov-report=xml --cov-report=term tests/
 else
   echo "Running tests..."
-  pytest -vv --import-mode=importlib --cov=. --cov-report=xml --cov-report=term test/
+  pytest -vv --import-mode=importlib --cov=. --cov-report=xml --cov-report=term tests/
 fi
