@@ -1,0 +1,65 @@
+# serializer version: 1
+# name: TestSequencePoolToDummies.test_column_names_snapshot[datetime-event]
+  list([
+    'id',
+    'time',
+    'status_error',
+    'status_ok',
+    'status_pending',
+    'status_warn',
+  ])
+# ---
+# name: TestSequencePoolToDummies.test_column_names_snapshot[datetime-interval]
+  list([
+    'id',
+    'start',
+    'end',
+    'status_error',
+    'status_ok',
+    'status_pending',
+    'status_warn',
+  ])
+# ---
+# name: TestSequencePoolToDummies.test_column_names_snapshot[datetime-state]
+  list([
+    'id',
+    'start',
+    'end',
+    'status_error',
+    'status_ok',
+    'status_pending',
+    'status_warn',
+  ])
+# ---
+# name: TestSequencePoolToDummies.test_column_names_snapshot[timestep-event]
+  list([
+    'id',
+    'time',
+    'status_error',
+    'status_ok',
+    'status_pending',
+    'status_warn',
+  ])
+# ---
+# name: TestSequencePoolToDummies.test_column_names_snapshot[timestep-interval]
+  list([
+    'id',
+    'start',
+    'end',
+    'status_error',
+    'status_ok',
+    'status_pending',
+    'status_warn',
+  ])
+# ---
+# name: TestSequencePoolToDummies.test_column_names_snapshot[timestep-state]
+  list([
+    'id',
+    'start',
+    'end',
+    'status_error',
+    'status_ok',
+    'status_pending',
+    'status_warn',
+  ])
+# ---
