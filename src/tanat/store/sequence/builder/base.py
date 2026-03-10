@@ -442,11 +442,18 @@ class SequenceStoreBuilder(ABC, Registrable, DisplayMixin):
         Returns the aligned static features frame without the SEQ_ID column.
         """
         static_cols = [c for c in static_lf.collect_schema().names() if c != SCH.SEQ_ID]
-        static_features_lf = master_ids.join(
-            static_lf.select([SCH.SEQ_ID] + static_cols),
-            on=SCH.SEQ_ID,
-            how="left",
-        ).select(static_cols)
+        static_features_lf = (
+            master_ids.collect()  # materialise sorted IDs: streaming engine does
+            .lazy()  # not preserve JOIN row order from lazy left sides
+            .join(
+                static_lf.select([SCH.SEQ_ID] + static_cols),
+                on=SCH.SEQ_ID,
+                how="left",
+            )
+            .select(static_cols)
+            .collect()  # materialise before sink_ipc to guarantee row order
+            .lazy()
+        )
 
         static_features_lf.sink_ipc(store_path / SCH.Files.STATIC_FEATURES)
 
