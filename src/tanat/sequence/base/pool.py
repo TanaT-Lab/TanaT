@@ -181,6 +181,7 @@ class SequencePool(
         id_mask: set | None,
         row_mask: pl.Series | None,
         has_soft_drops: bool,
+        cast_recipe: SequenceCastRecipe,
     ) -> SequencePool:
         """Inject pool-level view state post-``__init__``, bypassing cast probes.
 
@@ -191,12 +192,15 @@ class SequencePool(
             id_mask: Set of sequence IDs to expose (or ``None`` for all).
             row_mask: Row-level boolean mask (or ``None``).
             has_soft_drops: Whether soft-dropped sequences exist.
+            cast_recipe: Cast recipe to apply directly, bypassing the probe
+                executed in ``__init__``.
         """
         self._virtual_id = virtual_id
         self._gc_state[1] = virtual_id
         self._id_mask = id_mask
         self._row_mask = row_mask
         self._has_soft_drops = has_soft_drops
+        self._casts = cast_recipe
         return self
 
     # ------------------------------------------------------------------
@@ -877,12 +881,12 @@ class SequencePool(
         return self.__class__(
             store=self._store,
             **asdict(self.settings),
-            cast_recipe=self._casts,
         )._inject(
             virtual_id=self._store.fork_virtual_context(self._virtual_id),
             id_mask=set(self._id_mask) if self._id_mask is not None else None,
             row_mask=self._row_mask.clone() if self._row_mask is not None else None,
             has_soft_drops=self._has_soft_drops,
+            cast_recipe=self._casts,
         )
 
     def subset(self, ids, *, inplace=False) -> SequencePool:
