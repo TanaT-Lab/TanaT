@@ -3,7 +3,6 @@
 
 from .builder import TimelineVizBuilder
 from .settings import (
-    StackingMode,
     TimelineAesthetics,
     TimelineMarkerSettings,
     TimelineSettings,
@@ -12,7 +11,6 @@ from .settings import (
 
 __all__ = [
     "TimelineVizBuilder",
-    "StackingMode",
     "TimeMode",
     "TimelineAesthetics",
     "TimelineMarkerSettings",
