@@ -10,34 +10,44 @@ from typing import Literal
 
 from tanat_utils import settings_dataclass as dataclass
 
+from ...base.literals import DisplayUnit, Orientation, SortOrder
 from ....style.base import BaseVizSettings
 from ....style.legend import LegendSettings
 
-DisplayUnit = Literal["days", "hours", "minutes", "seconds"]
 ShowAs = Literal["count", "rate", "duration"]
-SortOrder = Literal["alphabetic", "ascending", "descending"]
-Orientation = Literal["vertical", "horizontal"]
 
 
 @dataclass
 class BarAesthetics:
-    """Visual aesthetics for the barplot."""
+    """Visual aesthetics for the barplot.
+
+    Attributes:
+        show_as: What each bar represents. ``"count"`` (default), ``"rate"``, or ``"duration"``.
+        sort: Bar sort order. ``"alphabetic"`` (default), ``"ascending"``, or ``"descending"``.
+        orientation: ``"vertical"`` (default) or ``"horizontal"``.
+        display_unit: Output unit for datetime-based pools when ``show_as="duration"``.
+            ``None`` keeps raw timestep values (required for numeric timestep pools).
+    """
 
     show_as: ShowAs = "count"
     sort: SortOrder = "alphabetic"
     orientation: Orientation = "vertical"
     display_unit: DisplayUnit | None = None
-    # display_unit: only meaningful when show_as=duration + datetime pool.
-    # None -> raw ms for datetime, raw value for numeric timestep.
 
 
 @dataclass
 class BarMarkerSettings:
-    """Bar marker visual properties."""
+    """Bar marker visual properties.
+
+    Attributes:
+        alpha: Opacity (0.0 to 1.0).
+        edge_color: Bar border color. ``None`` means no border.
+        bar_width: Width fraction of the available slot (0 to 1).
+    """
 
     alpha: float = 0.85
     edge_color: str | None = None
-    bar_width: float = 0.8  # fraction of available slot (0-1)
+    bar_width: float = 0.8
 
 
 @dataclass
