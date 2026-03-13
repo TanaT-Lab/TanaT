@@ -6,7 +6,7 @@ BaseSequenceVizBuilder: abstract base for all sequence visualization builders.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 import matplotlib.pyplot as plt
 import polars as pl
@@ -17,6 +17,9 @@ from ....sequence.base.sequence import Sequence
 from ...utils.color_manager import ColorManager
 from ...utils.result import VisualizationResult
 
+if TYPE_CHECKING:
+    from ...style.base import BaseVizSettings
+
 
 class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
     """Abstract base class for sequence visualization builders.
@@ -26,13 +29,22 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
     """
 
     _REGISTER: dict = {}
-    SETTINGS_CLASS: type | None = None
+    SETTINGS_CLASS: type[BaseVizSettings] | None = (
+        None  # must be overridden by subclass
+    )
 
-    def __init__(self, settings: Any | None = None) -> None:
+    def __init__(
+        self,
+        settings: dict | BaseVizSettings | None = None,
+        *,
+        allow_large: bool = False,
+    ) -> None:
         CachableSettings.__init__(self, settings=settings)
         self._facet_by: str | None = None
         self._facet_cols: int = 3
         self._facet_share_y: bool = True
+        self.allow_large: bool = allow_large
+
 
     # ------------------------------------------------------------------
     # Chainable configuration
