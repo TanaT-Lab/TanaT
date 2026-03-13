@@ -1,41 +1,14 @@
 #!/usr/bin/env python3
 """
 Pure Polars data-preparation functions for the barplot builder.
-
-All functions operate on LazyFrames (or DataFrames for post-collect steps)
-and have no matplotlib dependency. The builder calls them in sequence;
-tests can call them directly.
 """
 
 from __future__ import annotations
 
-from typing import Literal
-
 import polars as pl
 
-DisplayUnit = Literal["days", "hours", "minutes", "seconds"]
-SortOrder = Literal["alphabetic", "ascending", "descending"]
-
-# Milliseconds per display unit -- used by aggregate_duration.
-MS_PER_DISPLAY_UNIT: dict[str, int] = {
-    "days": 86_400_000,
-    "hours": 3_600_000,
-    "minutes": 60_000,
-    "seconds": 1_000,
-}
-
-
-def resolve_label(
-    lf: pl.LazyFrame,
-    feature: str,
-) -> tuple[pl.LazyFrame, str]:
-    """Rename *feature* to the internal ``__LABEL__`` column."""
-    return lf.rename({feature: "__LABEL__"}), "__LABEL__"
-
-
-def drop_null_labels(lf: pl.LazyFrame, label_col: str) -> pl.LazyFrame:
-    """Drop rows where *label_col* is null (called before aggregation)."""
-    return lf.filter(pl.col(label_col).is_not_null())
+from ...base.literals import DisplayUnit, SortOrder
+from ...base.utils import MS_PER_DISPLAY_UNIT
 
 
 def aggregate_count(
