@@ -41,6 +41,101 @@ class BarplotVizBuilder(BaseSequenceVizBuilder, register_name="barplot"):
     SETTINGS_CLASS = BarplotSettings
 
     # ------------------------------------------------------------------
+    # Chainable configuration: axes
+    # ------------------------------------------------------------------
+
+    def x_axis(
+        self,
+        *,
+        show: bool | None = None,
+        label: str | None = None,
+        rotation: int | None = None,
+        limit_min: float | None = None,
+        limit_max: float | None = None,
+    ) -> BarplotVizBuilder:
+        """Configure the x (horizontal) axis. Chainable.
+
+        Role depends on orientation:
+
+        - ``"vertical"`` (default): categories on x, values on y → ``limit_min``/``limit_max``
+          are not meaningful here.
+        - ``"horizontal"``: values on x, categories on y → use ``limit_min``/``limit_max``
+          to constrain the value range.
+
+        Args:
+            show: Hide the axis entirely when ``False``.
+            label: Axis label text.
+            rotation: Tick label rotation in degrees.
+            limit_min: Minimum x value (meaningful in horizontal orientation only).
+            limit_max: Maximum x value (meaningful in horizontal orientation only).
+        """
+        self._axis_patch(
+            "x_axis",
+            show=show,
+            label=label,
+            rotation=rotation,
+            limit_min=limit_min,
+            limit_max=limit_max,
+        )
+        return self
+
+    def y_axis(
+        self,
+        *,
+        show: bool | None = None,
+        label: str | None = None,
+        rotation: int | None = None,
+        limit_min: float | None = None,
+        limit_max: float | None = None,
+    ) -> BarplotVizBuilder:
+        """Configure the y (vertical) axis. Chainable.
+
+        Role depends on orientation:
+
+        - ``"vertical"`` (default): values on y, categories on x → use ``limit_min``/``limit_max``
+          to constrain the value range (e.g. ``limit_max=1.0`` for rates).
+        - ``"horizontal"``: categories on y, values on x → ``limit_min``/``limit_max``
+          are not meaningful here.
+
+        Args:
+            show: Hide the axis entirely when ``False``.
+            label: Axis label text.
+            rotation: Tick label rotation in degrees.
+            limit_min: Minimum y value (meaningful in vertical orientation only).
+            limit_max: Maximum y value (meaningful in vertical orientation only).
+        """
+        self._axis_patch(
+            "y_axis",
+            show=show,
+            label=label,
+            rotation=rotation,
+            limit_min=limit_min,
+            limit_max=limit_max,
+        )
+        return self
+
+    # ------------------------------------------------------------------
+    # Chainable configuration: markers
+    # ------------------------------------------------------------------
+
+    def marker(
+        self,
+        *,
+        alpha: float | None = None,
+        edge_color: str | None = None,
+        bar_width: float | None = None,
+    ) -> BarplotVizBuilder:
+        """Configure bar visual properties. Chainable.
+
+        Args:
+            alpha: Opacity (0–1).
+            edge_color: Bar border color. ``None`` means no border.
+            bar_width: Width fraction of available slot, 0–1 (default 0.8).
+        """
+        self._marker_patch(alpha=alpha, edge_color=edge_color, bar_width=bar_width)
+        return self
+
+    # ------------------------------------------------------------------
     # Data preparation
     # ------------------------------------------------------------------
 
@@ -51,6 +146,16 @@ class BarplotVizBuilder(BaseSequenceVizBuilder, register_name="barplot"):
         entity_feature: str,
         drop_na: bool,
     ) -> pl.DataFrame:
+        """Aggregate sequence data into a barplot-ready DataFrame (see ``data.py``).
+
+        Raises:
+            TypeError: If *entity_feature* is not a categorical feature.
+            UnsupportedShowAsError: If ``show_as="duration"`` on an event pool.
+            IncompatibleDisplayUnitError: If *display_unit* is inconsistent with the
+                pool's time representation.
+            ValueError: If :attr:`~BaseSequenceVizBuilder.MAX_CATEGORY` is exceeded
+                and ``allow_large=False``.
+        """
         if not sequence_or_pool.metadata.is_categorical_feature(entity_feature):
             raise TypeError(
                 f"'{entity_feature}' is not a categorical feature. "
