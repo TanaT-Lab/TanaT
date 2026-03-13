@@ -9,9 +9,12 @@ from typing import TYPE_CHECKING
 
 from .type.barplot.builder import BarplotVizBuilder
 from .type.barplot.settings import BarplotSettings
+from .type.timeline.builder import TimelineVizBuilder
+from .type.timeline.settings import TimelineSettings
 
 if TYPE_CHECKING:
     from .type.barplot.settings import DisplayUnit, Orientation, ShowAs, SortOrder
+    from .type.timeline.settings import StackingMode, TimeMode
 
 
 class SequenceVisualizer:
@@ -35,6 +38,7 @@ class SequenceVisualizer:
         sort: SortOrder = "alphabetic",
         orientation: Orientation = "vertical",
         display_unit: DisplayUnit | None = None,
+        allow_large: bool = False,
     ) -> BarplotVizBuilder:
         """Create a barplot builder.
 
@@ -45,6 +49,7 @@ class SequenceVisualizer:
             display_unit: Output unit for DURATION mode ("days", "hours",
                           "minutes", "seconds"). None keeps raw ms / raw timestep.
                           Only meaningful when show_as="duration" and the pool is datetime-based.
+            allow_large: Bypass the :attr:`~BaseSequenceVizBuilder.MAX_CATEGORY` safety guard.
 
         Returns:
             A configured :class:`~tanat.visualization.sequence.type.barplot.builder.BarplotVizBuilder`.
@@ -57,4 +62,35 @@ class SequenceVisualizer:
                 "display_unit": display_unit,
             }
         )
-        return BarplotVizBuilder(settings=settings)
+        return BarplotVizBuilder(settings=settings, allow_large=allow_large)
+
+    @classmethod
+    def timeline(
+        cls,
+        *,
+        stacking: StackingMode = "flat",
+        time_mode: TimeMode = "absolute",
+        allow_large: bool = False,
+    ) -> TimelineVizBuilder:
+        """Create a timeline builder.
+
+        Args:
+            stacking: Row organisation: ``"flat"`` (one row per sequence ID) or
+                ``"by_category"`` (one row per unique label value).
+            time_mode: ``"absolute"`` (real timestamps as-is) or ``"relative"``
+                (all sequences aligned to t=0). Note: ``"relative"`` is accepted
+                by the settings layer but raises :exc:`NotImplementedError` at
+                ``prepare_data`` time until the alignment logic is implemented.
+            allow_large: Bypass the :attr:`~TimelineVizBuilder.MAX_MARKERS` and
+                :attr:`~TimelineVizBuilder.MAX_SEQUENCES_FLAT` safety guards.
+
+        Returns:
+            A configured :class:`~tanat.visualization.sequence.type.timeline.builder.TimelineVizBuilder`.
+        """
+        settings = TimelineSettings(
+            aesthetics={
+                "stacking": stacking,
+                "time_mode": time_mode,
+            }
+        )
+        return TimelineVizBuilder(settings=settings, allow_large=allow_large)
