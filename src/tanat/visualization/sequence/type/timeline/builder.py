@@ -10,13 +10,11 @@ from typing import TYPE_CHECKING, Any
 import polars as pl
 
 from ...base.builder import BaseSequenceVizBuilder
+from ...base.utils import rename_id_column, resolve_label, drop_null_labels
 from .data import (
     assign_y_positions,
     build_y_tick_map,
-    drop_null_labels,
-    rename_id_column,
     rename_temporal_columns,
-    resolve_label,
 )
 from .settings import TimelineSettings
 
@@ -38,10 +36,10 @@ class TimelineVizBuilder(BaseSequenceVizBuilder, register_name="timeline"):
 
     SETTINGS_CLASS = TimelineSettings
     MAX_MARKERS: int = 1000
-    # In flat mode each unique ID gets its own row: beyond ~30 rows the y-axis
-    # labels start overlapping at the default figsize=(10, 5). Raise this per-
-    # instance (builder.MAX_SEQUENCES_FLAT = 80) or set allow_large=True.
-    MAX_SEQUENCES_FLAT: int = 30
+    # In group_by='id' mode each unique ID gets its own row: beyond ~30 rows the
+    # y-axis labels start overlapping at the default figsize=(10, 5). Raise this
+    # per-instance (builder.MAX_IDS = 80) or set allow_large=True.
+    MAX_IDS: int = 30
 
     def __init__(
         self, settings: Any | None = None, *, allow_large: bool = False
@@ -97,8 +95,8 @@ class TimelineVizBuilder(BaseSequenceVizBuilder, register_name="timeline"):
         string labels or constraining numeric limits is not meaningful here.
 
         Args:
-            show: Hide the axis entirely when ``False``  (useful when flat-mode
-                labels are too dense to read).
+            show: Hide the axis entirely when ``False`` (useful when y-axis labels
+                are too dense to read).
             label: Axis label text.
         """
         self._axis_patch("y_axis", show=show, label=label)
@@ -177,7 +175,7 @@ class TimelineVizBuilder(BaseSequenceVizBuilder, register_name="timeline"):
         if drop_na:
             lf = drop_null_labels(lf)
 
-        lf = assign_y_positions(lf, mode=self.settings.aesthetics.stacking)
+        lf = assign_y_positions(lf, mode=self.settings.aesthetics.group_by)
 
         df = lf.collect()
         df = df.with_columns(pl.col("__LABEL__").cast(pl.Utf8).fill_null("null"))
@@ -192,15 +190,15 @@ class TimelineVizBuilder(BaseSequenceVizBuilder, register_name="timeline"):
                 "or pass allow_large=True to bypass this guard."
             )
 
-        # Safety guard: flat mode row count (y-axis readability)
-        if self.settings.aesthetics.stacking == "flat" and not allow_large:
+        # Safety guard: id mode row count (y-axis readability)
+        if self.settings.aesthetics.group_by == "id" and not allow_large:
             n_ids = df["__ID__"].n_unique()
-            if n_ids > self.MAX_SEQUENCES_FLAT:
+            if n_ids > self.MAX_IDS:
                 raise ValueError(
-                    f"Flat stacking would draw {n_ids} y-axis rows, which exceeds "
-                    f"MAX_SEQUENCES_FLAT={self.MAX_SEQUENCES_FLAT}. "
+                    f"group_by='id' would draw {n_ids} y-axis rows, which exceeds "
+                    f"MAX_IDS={self.MAX_IDS}. "
                     "Reduce the input data (subset or filter), switch to "
-                    "stacking='by_category', increase builder.MAX_SEQUENCES_FLAT, "
+                    "group_by='category', increase builder.MAX_IDS, "
                     "or pass allow_large=True to bypass this guard."
                 )
 
@@ -212,7 +210,7 @@ class TimelineVizBuilder(BaseSequenceVizBuilder, register_name="timeline"):
             )
 
         # Build y-tick map for use in _apply_styling
-        self._y_tick_map = build_y_tick_map(df, self.settings.aesthetics.stacking)
+        self._y_tick_map = build_y_tick_map(df, self.settings.aesthetics.group_by)
 
         return df
 
