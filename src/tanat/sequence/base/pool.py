@@ -430,19 +430,6 @@ class SequencePool(
     # Data access
     # ------------------------------------------------------------------
 
-    @CachableSettings.cached_method()
-    def _sequence_data_raw(
-        self,
-        features: list[str] | str | None = None,
-    ) -> pl.DataFrame:
-        """Cached data layer. Always returns a Polars DataFrame."""
-        valid_features = self._resolve_valid_features(features, is_static=False)
-        lf = self._get_data_from_store(is_static=False)
-        lf = self._apply_masks(lf, is_static=False)
-        lf = self._select_columns(lf, valid_features, is_static=False)
-        lf = self._rename_columns(lf, is_static=False)
-        return lf.collect()
-
     def sequence_data(
         self,
         features: list[str] | str | None = None,
@@ -468,7 +455,7 @@ class SequencePool(
             # Restrict to a subset of IDs:
             df = pool.subset([1, 2, 3]).sequence_data()
         """
-        df = self._sequence_data_raw(features)
+        df = self._sequence_data_df(features)
         if output_format == "polars":
             return df
         if output_format == "pandas":
@@ -477,23 +464,6 @@ class SequencePool(
             f"Invalid output_format {output_format!r}. "
             "Expected one of: 'pandas', 'polars'."
         )
-
-    @CachableSettings.cached_method()
-    def _static_data_raw(
-        self,
-        features: list[str] | str | None = None,
-    ) -> pl.DataFrame | None:
-        """Cached data layer. Always returns a Polars DataFrame or None."""
-        valid_features = self._resolve_valid_features(features, is_static=True)
-        if not valid_features:
-            return None
-        lf = self._get_data_from_store(is_static=True)
-        if lf is None:
-            return None
-        lf = self._apply_masks(lf, is_static=True)
-        lf = self._select_columns(lf, valid_features, is_static=True)
-        lf = self._rename_columns(lf, is_static=True)
-        return lf.collect()
 
     def static_data(
         self,
@@ -518,7 +488,7 @@ class SequencePool(
             df = pool.static_data(["age", "sex"]) # subset
             df = pool.subset([1, 2, 3]).static_data()
         """
-        df = self._static_data_raw(features)
+        df = self._static_data_df(features)
         if df is None:
             return None
         if output_format == "polars":

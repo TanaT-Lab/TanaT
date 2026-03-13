@@ -22,6 +22,8 @@ class SequenceViewMixin:
     """
     Mixin providing the view-layer helpers shared by
     ``SequencePool`` and ``Sequence``.
+
+    Note: ``SequencePool`` and ``Sequence`` inherit from CachableSettings, not this mixin.
     """
 
     # ------------------------------------------------------------------
@@ -176,6 +178,37 @@ class SequenceViewMixin:
         lf = self._apply_masks(lf, is_static=True)
         lf = self._select_columns(lf, valid_features, is_static=True)
         return self._rename_columns(lf, is_static=True)
+
+    # ------------------------------------------------------------------
+    # Collected data (cached)
+    # ------------------------------------------------------------------
+
+    @CachableSettings.cached_method()
+    def _sequence_data_df(
+        self,
+        features: list[str] | str | None = None,
+    ) -> pl.DataFrame:
+        """Collect and cache sequence data as a Polars DataFrame.
+
+        Wraps :meth:`_sequence_data_lf` with a final ``.collect()`` and
+        caches the result.  Use :meth:`_sequence_data_lf` when further
+        lazy operations are needed (e.g. in the visualization layer).
+        """
+        return self._sequence_data_lf(features).collect()
+
+    @CachableSettings.cached_method()
+    def _static_data_df(
+        self,
+        features: list[str] | str | None = None,
+    ) -> pl.DataFrame | None:
+        """Collect and cache static data as a Polars DataFrame.
+
+        Wraps :meth:`_static_data_lf` with a final ``.collect()`` and
+        caches the result.  Returns ``None`` when no static features are
+        visible.
+        """
+        lf = self._static_data_lf(features)
+        return lf.collect() if lf is not None else None
 
     # ------------------------------------------------------------------
     # Column renaming
