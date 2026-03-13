@@ -24,8 +24,8 @@ if TYPE_CHECKING:
 class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
     """Abstract base class for sequence visualization builders.
 
-    The ``draw`` method orchestrates the full pipeline:
-    prepare data -> create figure -> render -> apply styling.
+    The :meth:`draw` method orchestrates the full pipeline:
+    prepare data → create figure → render → apply styling.
     """
 
     _REGISTER: dict = {}
