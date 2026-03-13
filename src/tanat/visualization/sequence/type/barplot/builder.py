@@ -30,11 +30,11 @@ if TYPE_CHECKING:
 class BarplotVizBuilder(BaseSequenceVizBuilder, register_name="barplot"):
     """Builds bar charts from a SequencePool or an individual Sequence.
 
-    Typical usage via SequenceVisualizer::
+    Typical usage via :class:`~tanat.visualization.sequence.core.SequenceVisualizer`::
 
         SequenceVisualizer.barplot(show_as="count") \\
             .title("Event counts") \\
-            .draw(pool) \\
+            .draw(pool, entity_feature="status") \\
             .show()
     """
 
