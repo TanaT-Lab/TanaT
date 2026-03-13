@@ -10,18 +10,25 @@ from typing import Literal
 
 from tanat_utils import settings_dataclass as dataclass
 
+from ...base.literals import GroupBy
 from ....style.axis import XAxisSettings, YAxisSettings
 from ....style.base import BaseVizSettings
 
-StackingMode = Literal["flat", "by_category"]
 TimeMode = Literal["absolute", "relative"]
 
 
 @dataclass
 class TimelineAesthetics:
-    """Visual aesthetics for the timeline."""
+    """Visual aesthetics for the timeline.
 
-    stacking: StackingMode = "flat"
+    Attributes:
+        group_by: Row organisation. ``"id"`` (default) for one row per sequence ID,
+            or ``"category"`` for one row per unique label value.
+        time_mode: ``"absolute"`` (default) displays real timestamps.
+            ``"relative"`` would align all sequences to t=0 (not yet implemented).
+    """
+
+    group_by: GroupBy = "id"
     time_mode: TimeMode = "absolute"
 
 
@@ -33,7 +40,7 @@ class TimelineMarkerSettings:
         size: Scatter point size (event pools).
         bar_height: Height fraction of each row slot (interval/state pools).
         alpha: Opacity of markers.
-        edge_color: Marker edge color. None means no edge.
+        edge_color: Marker edge color. ``None`` means no edge.
         shape: Any matplotlib marker string (e.g. "o", "s", "^").
             Validated by matplotlib at render time.
     """
