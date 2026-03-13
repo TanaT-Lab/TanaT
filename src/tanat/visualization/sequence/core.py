@@ -13,8 +13,9 @@ from .type.timeline.builder import TimelineVizBuilder
 from .type.timeline.settings import TimelineSettings
 
 if TYPE_CHECKING:
-    from .type.barplot.settings import DisplayUnit, Orientation, ShowAs, SortOrder
-    from .type.timeline.settings import StackingMode, TimeMode
+    from .base.literals import DisplayUnit, GroupBy, Orientation, SortOrder
+    from .type.barplot.settings import ShowAs
+    from .type.timeline.settings import TimeMode
 
 
 class SequenceVisualizer:
@@ -68,28 +69,31 @@ class SequenceVisualizer:
     def timeline(
         cls,
         *,
-        stacking: StackingMode = "flat",
+        group_by: GroupBy = "id",
         time_mode: TimeMode = "absolute",
         allow_large: bool = False,
     ) -> TimelineVizBuilder:
         """Create a timeline builder.
 
         Args:
-            stacking: Row organisation: ``"flat"`` (one row per sequence ID) or
-                ``"by_category"`` (one row per unique label value).
+            group_by: Row organisation:
+
+                * ``"id"``: one row per sequence ID (default).
+                * ``"category"``: one row per unique label value.
+
             time_mode: ``"absolute"`` (real timestamps as-is) or ``"relative"``
                 (all sequences aligned to t=0). Note: ``"relative"`` is accepted
                 by the settings layer but raises :exc:`NotImplementedError` at
                 ``prepare_data`` time until the alignment logic is implemented.
             allow_large: Bypass the :attr:`~TimelineVizBuilder.MAX_MARKERS` and
-                :attr:`~TimelineVizBuilder.MAX_SEQUENCES_FLAT` safety guards.
+                :attr:`~TimelineVizBuilder.MAX_IDS` safety guards.
 
         Returns:
             A configured :class:`~tanat.visualization.sequence.type.timeline.builder.TimelineVizBuilder`.
         """
         settings = TimelineSettings(
             aesthetics={
-                "stacking": stacking,
+                "group_by": group_by,
                 "time_mode": time_mode,
             }
         )
