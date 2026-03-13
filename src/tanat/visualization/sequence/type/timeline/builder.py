@@ -1,0 +1,294 @@
+#!/usr/bin/env python3
+"""
+TimelineVizBuilder: timeline visualizer for a SequencePool or individual Sequence.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+import polars as pl
+
+from ...base.builder import BaseSequenceVizBuilder
+from .data import (
+    assign_y_positions,
+    build_y_tick_map,
+    drop_null_labels,
+    rename_id_column,
+    rename_temporal_columns,
+    resolve_label,
+)
+from .settings import TimelineSettings
+
+if TYPE_CHECKING:
+    from tanat.sequence.base.pool import SequencePool
+    from tanat.sequence.base.sequence import Sequence
+
+
+class TimelineVizBuilder(BaseSequenceVizBuilder, register_name="timeline"):
+    """Builds timeline charts from a SequencePool or an individual Sequence.
+
+    Typical usage via :class:`~tanat.visualization.sequence.core.SequenceVisualizer`::
+
+        SequenceVisualizer.timeline() \\
+            .title("Status over time") \\
+            .draw(pool, entity_feature="status") \\
+            .show()
+    """
+
+    SETTINGS_CLASS = TimelineSettings
+    MAX_MARKERS: int = 1000
+    # In flat mode each unique ID gets its own row: beyond ~30 rows the y-axis
+    # labels start overlapping at the default figsize=(10, 5). Raise this per-
+    # instance (builder.MAX_SEQUENCES_FLAT = 80) or set allow_large=True.
+    MAX_SEQUENCES_FLAT: int = 30
+
+    def __init__(
+        self, settings: Any | None = None, *, allow_large: bool = False
+    ) -> None:
+        super().__init__(settings=settings, allow_large=allow_large)
+        self._y_tick_map: dict[int, str] = {}
+
+    # ------------------------------------------------------------------
+    # Chainable configuration: axes
+    # ------------------------------------------------------------------
+
+    def x_axis(
+        self,
+        *,
+        show: bool | None = None,
+        label: str | None = None,
+        rotation: int | None = None,
+        limit_min: float | None = None,
+        limit_max: float | None = None,
+        autofmt_xdate: bool | None = None,
+    ) -> TimelineVizBuilder:
+        """Configure the time (x) axis. Chainable.
+
+        Args:
+            show: Hide the axis entirely when ``False``.
+            label: Axis label text.
+            rotation: Tick label rotation in degrees.
+            limit_min: Left bound (zooms into a time window).
+            limit_max: Right bound (zooms into a time window).
+            autofmt_xdate: Auto-rotate date tick labels (useful for dense datetime scales).
+        """
+        self._axis_patch(
+            "x_axis",
+            show=show,
+            label=label,
+            rotation=rotation,
+            limit_min=limit_min,
+            limit_max=limit_max,
+            autofmt_xdate=autofmt_xdate,
+        )
+        return self
+
+    def y_axis(
+        self,
+        *,
+        show: bool | None = None,
+        label: str | None = None,
+    ) -> TimelineVizBuilder:
+        """Configure the sequence / category (y) axis. Chainable.
+
+        ``rotation`` and ``limit_min``/``limit_max`` are intentionally not
+        exposed: y-positions are integer ranks managed internally, so rotating
+        string labels or constraining numeric limits is not meaningful here.
+
+        Args:
+            show: Hide the axis entirely when ``False``  (useful when flat-mode
+                labels are too dense to read).
+            label: Axis label text.
+        """
+        self._axis_patch("y_axis", show=show, label=label)
+        return self
+
+    # ------------------------------------------------------------------
+    # Chainable configuration: markers
+    # ------------------------------------------------------------------
+
+    def marker(
+        self,
+        *,
+        alpha: float | None = None,
+        edge_color: str | None = None,
+        size: float | None = None,
+        bar_height: float | None = None,
+        shape: str | None = None,
+    ) -> TimelineVizBuilder:
+        """Configure marker visual properties. Chainable.
+
+        Args:
+            alpha: Opacity (0–1).
+            edge_color: Marker border color. ``None`` means no border.
+            size: Scatter point size (event sequence only).
+            bar_height: Height fraction of each row slot, 0–1 (interval/state pools only).
+            shape: Matplotlib marker string, e.g. ``"o"``, ``"s"``, ``"^"`` (event sequence only).
+        """
+        self._marker_patch(
+            alpha=alpha,
+            edge_color=edge_color,
+            size=size,
+            bar_height=bar_height,
+            shape=shape,
+        )
+        return self
+
+    # ------------------------------------------------------------------
+    # Data preparation
+    # ------------------------------------------------------------------
+
+    def _prepare_data(
+        self,
+        sequence_or_pool: SequencePool | Sequence,
+        *,
+        entity_feature: str,
+        drop_na: bool,
+    ) -> pl.DataFrame:
+        """Orchestrate data transformations for the timeline (see ``data.py``).
+
+        Raises:
+            TypeError: If *entity_feature* is not a categorical feature.
+            NotImplementedError: If ``time_mode="relative"`` (not yet implemented).
+            ValueError: If safety guards are exceeded and ``allow_large=False``.
+        """
+        if not sequence_or_pool.metadata.is_categorical_feature(entity_feature):
+            raise TypeError(
+                f"'{entity_feature}' is not a categorical feature. "
+                "Timeline requires a Categorical or Enum feature."
+            )
+
+        allow_large = self.allow_large
+
+        if self.settings.aesthetics.time_mode == "relative":
+            raise NotImplementedError(
+                "time_mode='relative' is not yet implemented. Use time_mode='absolute'."
+            )
+
+        id_col = sequence_or_pool.settings.id_column
+        temporal_cols = sequence_or_pool.settings.get_temporal_columns()
+
+        lf = sequence_or_pool._sequence_data_lf(features=[entity_feature])
+        lf = rename_id_column(lf, id_col)
+        lf = rename_temporal_columns(lf, temporal_cols)
+        lf = resolve_label(lf, entity_feature)
+
+        if drop_na:
+            lf = drop_null_labels(lf)
+
+        lf = assign_y_positions(lf, mode=self.settings.aesthetics.stacking)
+
+        df = lf.collect()
+        df = df.with_columns(pl.col("__LABEL__").cast(pl.Utf8).fill_null("null"))
+
+        # Safety guard: total markers
+        n = len(df)
+        if n > self.MAX_MARKERS and not allow_large:
+            raise ValueError(
+                f"Timeline would render {n:,} markers, which exceeds "
+                f"MAX_MARKERS={self.MAX_MARKERS:,}. "
+                "Reduce the input data (subset, filter, or split), narrow the time window, "
+                "or pass allow_large=True to bypass this guard."
+            )
+
+        # Safety guard: flat mode row count (y-axis readability)
+        if self.settings.aesthetics.stacking == "flat" and not allow_large:
+            n_ids = df["__ID__"].n_unique()
+            if n_ids > self.MAX_SEQUENCES_FLAT:
+                raise ValueError(
+                    f"Flat stacking would draw {n_ids} y-axis rows, which exceeds "
+                    f"MAX_SEQUENCES_FLAT={self.MAX_SEQUENCES_FLAT}. "
+                    "Reduce the input data (subset or filter), switch to "
+                    "stacking='by_category', increase builder.MAX_SEQUENCES_FLAT, "
+                    "or pass allow_large=True to bypass this guard."
+                )
+
+        # Assign colors
+        if self.settings.colors is not None:
+            color_map = self._build_color_map(df, self.settings.colors)
+            df = df.with_columns(
+                pl.col("__LABEL__").replace(color_map).alias("__COLOR__")
+            )
+
+        # Build y-tick map for use in _apply_styling
+        self._y_tick_map = build_y_tick_map(df, self.settings.aesthetics.stacking)
+
+        return df
+
+    # ------------------------------------------------------------------
+    # Rendering
+    # ------------------------------------------------------------------
+
+    def _render(self, ax: Any, data: pl.DataFrame) -> None:
+        """Dispatch to interval or event renderer."""
+        if "__END__" in data.columns:
+            self._render_intervals(ax, data)
+        else:
+            self._render_events(ax, data)
+
+    def _render_intervals(self, ax: Any, data: pl.DataFrame) -> None:
+        """Draw horizontal bars (``ax.barh``) for interval/state pools."""
+        marker = self.settings.marker
+        has_colors = "__COLOR__" in data.columns
+        labels = data["__LABEL__"].unique().to_list()
+
+        for label in labels:
+            group = data.filter(pl.col("__LABEL__") == label)
+            y_positions = group["__Y_POSITION__"].to_list()
+            starts = group["__TIME__"].to_list()
+            ends = group["__END__"].to_list()
+            widths = [e - s for s, e in zip(starts, ends)]
+
+            color_kwarg: dict[str, Any] = {}
+            if has_colors:
+                color_kwarg["color"] = group["__COLOR__"][0]
+
+            ax.barh(
+                y_positions,
+                widths,
+                left=starts,
+                height=marker.bar_height,
+                alpha=marker.alpha,
+                edgecolor=marker.edge_color,
+                label=label,
+                **color_kwarg,
+            )
+
+    def _render_events(self, ax: Any, data: pl.DataFrame) -> None:
+        """Draw scatter points for event pools."""
+        marker = self.settings.marker
+        has_colors = "__COLOR__" in data.columns
+        labels = data["__LABEL__"].unique().to_list()
+
+        for label in labels:
+            group = data.filter(pl.col("__LABEL__") == label)
+            x_values = group["__TIME__"].to_list()
+            y_values = group["__Y_POSITION__"].to_list()
+
+            color_kwarg: dict[str, Any] = {}
+            if has_colors:
+                color_kwarg["color"] = group["__COLOR__"][0]
+
+            ax.scatter(
+                x_values,
+                y_values,
+                s=marker.size,
+                alpha=marker.alpha,
+                edgecolors=marker.edge_color,
+                marker=marker.shape,
+                label=label,
+                **color_kwarg,
+            )
+
+    # ------------------------------------------------------------------
+    # Styling
+    # ------------------------------------------------------------------
+
+    def _apply_styling(self, ax: Any) -> None:
+        """Apply common styling then set y-tick labels from the tick map."""
+        super()._apply_styling(ax)
+
+        if self._y_tick_map:
+            ax.set_yticks(list(self._y_tick_map.keys()))
+            ax.set_yticklabels(list(self._y_tick_map.values()))
