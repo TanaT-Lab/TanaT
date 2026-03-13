@@ -32,6 +32,9 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
     SETTINGS_CLASS: type[BaseVizSettings] | None = (
         None  # must be overridden by subclass
     )
+    # Beyond ~30 unique label values the legend and axis labels become unreadable.
+    # Override per-instance or pass allow_large=True at the factory.
+    MAX_CATEGORY: int = 30
 
     def __init__(
         self,
@@ -45,20 +48,80 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
         self._facet_share_y: bool = True
         self.allow_large: bool = allow_large
 
+    # ------------------------------------------------------------------
+    # Chainable configuration: figure layout
+    # ------------------------------------------------------------------
+
+    def title(self, text: str) -> BaseSequenceVizBuilder:
+        """Set the figure title. Chainable.
+
+        Args:
+            text: Title string displayed above the chart.
+        """
+        self.update_settings(title=text)
+        return self
+
+    def figsize(self, width: float, height: float) -> BaseSequenceVizBuilder:
+        """Set the figure dimensions. Chainable.
+
+        Args:
+            width: Figure width in inches.
+            height: Figure height in inches.
+        """
+        self.update_settings(figsize=(width, height))
+        return self
+
+    def grid(self, *, show: bool = True) -> BaseSequenceVizBuilder:
+        """Toggle the background grid. Chainable.
+
+        Args:
+            show: Display grid lines when ``True`` (default). Pass ``False`` to
+                explicitly hide a grid that was previously enabled.
+        """
+        self.update_settings(grid=show)
+        return self
 
     # ------------------------------------------------------------------
-    # Chainable configuration
+    # Chainable configuration: colors & legend
     # ------------------------------------------------------------------
 
     def colors(self, spec: str | dict | list) -> BaseSequenceVizBuilder:
-        """Set the color spec. Chainable."""
+        """Set the color specification. Chainable.
+
+        Args:
+            spec: A matplotlib colormap name (``str``), a mapping of
+                ``{label: color}`` (``dict``), or an ordered list of colors
+                (``list``). ``None`` falls back to the matplotlib default cycle.
+        """
         self.update_settings(colors=spec)
         return self
 
-    def title(self, text: str) -> BaseSequenceVizBuilder:
-        """Set the figure title. Chainable."""
-        self.update_settings(title=text)
+    def legend(
+        self,
+        *,
+        show: bool = True,
+        location: str = "best",
+        title: str | None = None,
+    ) -> BaseSequenceVizBuilder:
+        """Configure legend display. Chainable.
+
+        Args:
+            show: Display the legend when ``True`` (default).
+            location: Matplotlib location string, e.g. ``"upper right"``.
+            title: Optional legend title.
+        """
+        self.update_settings(
+            legend={"show": show, "location": location, "title": title}
+        )
         return self
+
+    def legend_off(self) -> BaseSequenceVizBuilder:
+        """Hide the legend. Convenience shortcut for ``.legend(show=False)``. Chainable."""
+        return self.legend(show=False)
+
+    # ------------------------------------------------------------------
+    # Chainable configuration: faceting
+    # ------------------------------------------------------------------
 
     def facet(
         self,
@@ -67,7 +130,13 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
         cols: int = 3,
         share_y: bool = True,
     ) -> BaseSequenceVizBuilder:
-        """Enable faceted view. Chainable."""
+        """Enable faceted (small-multiples) view. Chainable.
+
+        Args:
+            by: Entity feature name to split by.
+            cols: Number of columns in the facet grid (default 3).
+            share_y: Share the y-axis scale across facets (default ``True``).
+        """
         self._facet_by = by
         self._facet_cols = cols
         self._facet_share_y = share_y
@@ -110,9 +179,22 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
             )
         sequence_or_pool.settings.validate_features(entity_feature)
 
-        return self._prepare_data(
-            sequence_or_pool, entity_feature=entity_feature, drop_na=drop_na
+        df = self._prepare_data(
+            sequence_or_pool,
+            entity_feature=entity_feature,
+            drop_na=drop_na,
         )
+
+        n_categories = df["__LABEL__"].n_unique()
+        if n_categories > self.MAX_CATEGORY and not self.allow_large:
+            raise ValueError(
+                f"'{entity_feature}' has {n_categories} unique values, which exceeds "
+                f"MAX_CATEGORY={self.MAX_CATEGORY}. "
+                "Reduce the feature cardinality, increase builder.MAX_CATEGORY, "
+                "or pass allow_large=True to bypass this guard."
+            )
+
+        return df
 
     def draw(
         self,
@@ -134,7 +216,9 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
             A :class:`~tanat.visualization.utils.result.VisualizationResult`.
         """
         data = self.prepare_data(
-            sequence_or_pool, entity_feature=entity_feature, drop_na=drop_na
+            sequence_or_pool,
+            entity_feature=entity_feature,
+            drop_na=drop_na,
         )
 
         fig, ax = plt.subplots(figsize=self.settings.figsize)
@@ -144,7 +228,41 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
         return VisualizationResult(fig)
 
     # ------------------------------------------------------------------
-    # Internals to implement
+    # Internals: patch helpers (used by subclass axis/marker methods)
+    # ------------------------------------------------------------------
+
+    def _axis_patch(self, axis: str, **kwargs: Any) -> None:
+        """Patch non-``None`` kwargs into an axis settings field.
+
+        Handles the ``rotation`` → ``tick_rotation`` rename transparently so
+        subclass axis methods can expose the more intuitive ``rotation`` name.
+
+        Args:
+            axis: Settings field name, either ``"x_axis"`` or ``"y_axis"``.
+            **kwargs: Axis parameters to update (``None`` values are ignored).
+        """
+        current = getattr(self.settings, axis)
+        patch: dict = vars(current).copy()
+        for key, value in kwargs.items():
+            if value is not None:
+                # rotation maps to tick_rotation in settings
+                patch["tick_rotation" if key == "rotation" else key] = value
+        self.update_settings(**{axis: patch})
+
+    def _marker_patch(self, **kwargs: Any) -> None:
+        """Patch non-``None`` kwargs into the marker settings field.
+
+        Args:
+            **kwargs: Marker parameters to update (``None`` values are ignored).
+        """
+        patch: dict = vars(self.settings.marker).copy()
+        for key, value in kwargs.items():
+            if value is not None:
+                patch[key] = value
+        self.update_settings(marker=patch)
+
+    # ------------------------------------------------------------------
+    # Abstract interface: subclasses must implement
     # ------------------------------------------------------------------
 
     @abstractmethod
@@ -155,7 +273,7 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
         entity_feature: str,
         drop_na: bool,
     ) -> pl.DataFrame:
-        """Subclass-specific data preparation (aggregation)."""
+        """Subclass-specific data preparation (aggregation, labelling, guards)."""
 
     @abstractmethod
     def _render(self, ax: Any, data: pl.DataFrame) -> None:
@@ -172,21 +290,32 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
         if s.title:
             ax.set_title(s.title)
 
+        if s.grid:
+            ax.grid(True)
+
         x = s.x_axis
-        if x.label:
-            ax.set_xlabel(x.label)
-        if x.tick_rotation:
-            ax.tick_params(axis="x", rotation=x.tick_rotation)
-        if x.limit_min is not None or x.limit_max is not None:
-            ax.set_xlim(x.limit_min, x.limit_max)
+        if not x.show:
+            ax.xaxis.set_visible(False)
+        else:
+            if x.label:
+                ax.set_xlabel(x.label)
+            if x.tick_rotation:
+                ax.tick_params(axis="x", rotation=x.tick_rotation)
+            if x.limit_min is not None or x.limit_max is not None:
+                ax.set_xlim(x.limit_min, x.limit_max)
+            if x.autofmt_xdate:
+                ax.figure.autofmt_xdate()
 
         y = s.y_axis
-        if y.label:
-            ax.set_ylabel(y.label)
-        if y.tick_rotation:
-            ax.tick_params(axis="y", rotation=y.tick_rotation)
-        if y.limit_min is not None or y.limit_max is not None:
-            ax.set_ylim(y.limit_min, y.limit_max)
+        if not y.show:
+            ax.yaxis.set_visible(False)
+        else:
+            if y.label:
+                ax.set_ylabel(y.label)
+            if y.tick_rotation:
+                ax.tick_params(axis="y", rotation=y.tick_rotation)
+            if y.limit_min is not None or y.limit_max is not None:
+                ax.set_ylim(y.limit_min, y.limit_max)
 
         if s.legend.show:
             ax.legend(
