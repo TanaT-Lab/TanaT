@@ -9,12 +9,15 @@ from typing import TYPE_CHECKING
 
 from .type.barplot.builder import BarplotVizBuilder
 from .type.barplot.settings import BarplotSettings
+from .type.spanplot.builder import SpanplotVizBuilder
+from .type.spanplot.settings import SpanplotSettings
 from .type.timeline.builder import TimelineVizBuilder
 from .type.timeline.settings import TimelineSettings
 
 if TYPE_CHECKING:
     from .base.literals import DisplayUnit, GroupBy, Orientation, SortOrder
     from .type.barplot.settings import ShowAs
+    from .type.spanplot.settings import SpanKind
     from .type.timeline.settings import TimeMode
 
 
@@ -98,3 +101,65 @@ class SequenceVisualizer:
             }
         )
         return TimelineVizBuilder(settings=settings, allow_large=allow_large)
+
+    @classmethod
+    def spanplot(
+        cls,
+        *,
+        group_by: GroupBy = "category",
+        kind: SpanKind = "box",
+        display_unit: DisplayUnit | None = None,
+        sort: SortOrder = "ascending",
+        orientation: Orientation = "vertical",
+        allow_large: bool = False,
+    ) -> SpanplotVizBuilder:
+        """Create a spanplot (duration distribution) builder.
+
+        Only compatible with **state** and **interval** sequence types. Duration
+        is undefined for event sequences; passing one raises
+        :exc:`~tanat.visualization.sequence.type.spanplot.exception.UnsupportedSequenceTypeError`.
+
+        Args:
+            group_by: Grouping dimension:
+
+                * ``"category"``: one column per unique label value (default).
+                * ``"id"``: one column per sequence ID.
+
+            kind: Chart variety:
+
+                * ``"box"``: standard box-and-whisker (default).
+                * ``"violin"``: kernel-density violin.
+                * ``"strip"``: individual points with horizontal jitter.
+
+            display_unit: Output unit for datetime-based pools: ``"days"``,
+                ``"hours"``, ``"minutes"``, or ``"seconds"``.  Required when
+                the pool is datetime-based; must be ``None`` for numeric timestep
+                pools.
+            sort: Sort order for x-axis groups:
+
+                * ``"ascending"``: ascending median duration (default).
+                * ``"descending"``: descending median duration.
+                * ``"alphabetic"``: alphabetical order of labels or IDs.
+
+            orientation: Chart orientation:
+
+                * ``"vertical"``: groups on the x-axis, durations on y (default).
+                * ``"horizontal"``: groups on the y-axis, durations on x.
+
+            allow_large: Bypass the
+                :attr:`~SpanplotVizBuilder.MAX_CATEGORY` /
+                :attr:`~SpanplotVizBuilder.MAX_IDS` safety guards.
+
+        Returns:
+            A configured :class:`~tanat.visualization.sequence.type.spanplot.builder.SpanplotVizBuilder`.
+        """
+        settings = SpanplotSettings(
+            aesthetics={
+                "group_by": group_by,
+                "kind": kind,
+                "display_unit": display_unit,
+                "sort": sort,
+                "orientation": orientation,
+            }
+        )
+        return SpanplotVizBuilder(settings=settings, allow_large=allow_large)
