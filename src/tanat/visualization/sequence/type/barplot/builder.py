@@ -11,14 +11,14 @@ import numpy as np
 import polars as pl
 
 from ...base.builder import BaseSequenceVizBuilder
-from .exception import UnsupportedShowAsError, IncompatibleDisplayUnitError
+from ...base.exceptions import IncompatibleDisplayUnitError
+from ...base.utils import resolve_label, drop_null_labels
+from .exception import UnsupportedShowAsError
 from .data import (
     aggregate_count,
     aggregate_duration,
     aggregate_rate,
     apply_sort,
-    drop_null_labels,
-    resolve_label,
 )
 from .settings import BarplotSettings
 
@@ -182,10 +182,11 @@ class BarplotVizBuilder(BaseSequenceVizBuilder, register_name="barplot"):
         lf = sequence_or_pool._sequence_data_lf(features=[feature])
 
         # Resolve label column
-        lf, label_col = resolve_label(lf, feature)
+        lf = resolve_label(lf, feature)
+        label_col = "__LABEL__"
 
         if drop_na:
-            lf = drop_null_labels(lf, label_col)
+            lf = drop_null_labels(lf)
 
         # Aggregate
         lf = self._aggregate(lf, sequence_or_pool, label_col, show_as)
@@ -212,6 +213,7 @@ class BarplotVizBuilder(BaseSequenceVizBuilder, register_name="barplot"):
         label_col: str,
         show_as: str,
     ) -> pl.LazyFrame:
+        """Aggregate *lf* according to *show_as* and return a ``__VALUE__`` LazyFrame."""
         if show_as == "count":
             return aggregate_count(lf, label_col)
 
