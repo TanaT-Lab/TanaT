@@ -140,6 +140,44 @@ class SequenceViewMixin:
         return self.settings.available_features(is_static=is_static)
 
     # ------------------------------------------------------------------
+    # Lazy data access (no collect, for internal consumers)
+    # ------------------------------------------------------------------
+
+    def _sequence_data_lf(
+        self,
+        features: list[str] | str | None = None,
+    ) -> pl.LazyFrame:
+        """Return sequence data as a :class:`~polars.LazyFrame` without collecting.
+
+        Applies masks, column selection and renaming identically to
+        :meth:`sequence_data`, but skips the final ``.collect()`` call.
+        Intended for internal consumers that chain further lazy operations.
+        """
+        valid_features = self._resolve_valid_features(features, is_static=False)
+        lf = self._get_data_from_store(is_static=False)
+        lf = self._apply_masks(lf, is_static=False)
+        lf = self._select_columns(lf, valid_features, is_static=False)
+        return self._rename_columns(lf, is_static=False)
+
+    def _static_data_lf(
+        self,
+        features: list[str] | str | None = None,
+    ) -> pl.LazyFrame | None:
+        """Return static data as a :class:`~polars.LazyFrame` without collecting.
+
+        Returns ``None`` when no static features are visible.
+        """
+        valid_features = self._resolve_valid_features(features, is_static=True)
+        if not valid_features:
+            return None
+        lf = self._get_data_from_store(is_static=True)
+        if lf is None:
+            return None
+        lf = self._apply_masks(lf, is_static=True)
+        lf = self._select_columns(lf, valid_features, is_static=True)
+        return self._rename_columns(lf, is_static=True)
+
+    # ------------------------------------------------------------------
     # Column renaming
     # ------------------------------------------------------------------
 
