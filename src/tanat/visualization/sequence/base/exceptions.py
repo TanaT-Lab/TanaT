@@ -8,6 +8,27 @@ from __future__ import annotations
 from ....exceptions import TanaTException
 
 
+class UnsupportedSequenceTypeError(TanaTException, ValueError):
+    """Raised when the pool type is not compatible with a visualization builder.
+
+    Each builder declares its ``_COMPATIBLE_TYPES`` class attribute. Passing a
+    pool of a different type raises this exception.
+    """
+
+    def __init__(
+        self,
+        found_type: str,
+        *,
+        compatible_types: frozenset[str] | None = None,
+    ) -> None:
+        if compatible_types:
+            types_str = " or ".join(sorted(compatible_types))
+            msg = f"Expected a {types_str} sequence, got {found_type!r}."
+        else:
+            msg = f"Unsupported sequence type: {found_type!r}."
+        super().__init__(msg)
+
+
 class IncompatibleDisplayUnitError(TanaTException, ValueError):
     """Raised when display_unit is incompatible with the pool's temporal index.
 
