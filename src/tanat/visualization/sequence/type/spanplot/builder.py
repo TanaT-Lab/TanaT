@@ -245,7 +245,7 @@ class SpanplotVizBuilder(BaseSequenceVizBuilder, register_name="spanplot"):
             df = df.with_columns(
                 pl.col("__ID__").cast(pl.Utf8).replace(color_map).alias("__COLOR__")
             )
-            # "category": color by label
+        else:  # "category": color by label
             label_keys = df["__LABEL__"].unique().to_list()
             color_map = self._build_color_map(label_keys, self.settings.colors)
             df = df.with_columns(
