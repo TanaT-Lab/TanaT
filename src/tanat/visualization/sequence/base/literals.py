@@ -14,3 +14,6 @@ GroupBy = Literal["category", "id"]
 DisplayUnit = Literal["days", "hours", "minutes", "seconds"]
 SortOrder = Literal["alphabetic", "ascending", "descending"]
 Orientation = Literal["vertical", "horizontal"]
+
+# Shared across timeline, distribution, ... # add to list as needed
+TimeMode = Literal["absolute", "relative"]

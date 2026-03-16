@@ -6,15 +6,12 @@ Timeline settings.
 from __future__ import annotations
 
 from dataclasses import field
-from typing import Literal
 
 from tanat_utils import settings_dataclass as dataclass
 
-from ...base.literals import GroupBy
+from ...base.literals import GroupBy, TimeMode
 from ....style.axis import XAxisSettings, YAxisSettings
 from ....style.base import BaseVizSettings
-
-TimeMode = Literal["absolute", "relative"]
 
 
 @dataclass
