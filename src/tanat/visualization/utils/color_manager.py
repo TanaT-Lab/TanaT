@@ -8,7 +8,7 @@ of labels, then returns a dict mapping each label to a hex color string.
 
 from __future__ import annotations
 
-import matplotlib.cm as mpl_cm
+import matplotlib
 import matplotlib.colors as mpl_colors
 
 _DEFAULT_CMAP = "tab10"
@@ -58,6 +58,16 @@ class ColorManager:
             }
 
         # Named colormap
-        cmap = mpl_cm.get_cmap(spec)
+        cmap = matplotlib.colormaps[spec]
         n = max(len(labels), 1)
-        return {lbl: mpl_colors.to_hex(cmap(i / n)) for i, lbl in enumerate(labels)}
+        if hasattr(cmap, "colors"):
+            # Discrete palette (tab10, Set2, …)
+            return {
+                lbl: mpl_colors.to_hex(cmap.colors[i % len(cmap.colors)])
+                for i, lbl in enumerate(labels)
+            }
+        # Continuous colormap (viridis, plasma, …)
+        return {
+            lbl: mpl_colors.to_hex(cmap(i / max(n - 1, 1)))
+            for i, lbl in enumerate(labels)
+        }
