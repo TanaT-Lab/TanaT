@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 
 from .type.barplot.builder import BarplotVizBuilder
 from .type.barplot.settings import BarplotSettings
+from .type.distribution.builder import DistributionVizBuilder
+from .type.distribution.settings import DistributionSettings
 from .type.spanplot.builder import SpanplotVizBuilder
 from .type.spanplot.settings import SpanplotSettings
 from .type.timeline.builder import TimelineVizBuilder
@@ -17,6 +19,7 @@ from .type.timeline.settings import TimelineSettings
 if TYPE_CHECKING:
     from .base.literals import DisplayUnit, GroupBy, Orientation, SortOrder
     from .type.barplot.settings import ShowAs
+    from .type.distribution.settings import DistributionMode
     from .type.spanplot.settings import SpanKind
     from .type.timeline.settings import TimeMode
 
@@ -163,3 +166,58 @@ class SequenceVisualizer:
             }
         )
         return SpanplotVizBuilder(settings=settings, allow_large=allow_large)
+
+    @classmethod
+    def distribution(
+        cls,
+        *,
+        mode: DistributionMode = "percentage",
+        bin_size: str | int | float = "1d",
+        stacked: bool = True,
+        time_mode: TimeMode = "absolute",
+        allow_large: bool = False,
+    ) -> DistributionVizBuilder:
+        """Create a distribution builder.
+
+        Only compatible with **state** sequence types. Passing any other pool
+        type raises
+        :exc:`~tanat.visualization.sequence.type.distribution.exception.UnsupportedSequenceTypeError`.
+
+        The chart shows how many (or what fraction of) sequences occupy each
+        state at each point in time, using occupancy-based binning: a segment
+        contributes to every bin it overlaps.
+
+        Args:
+            mode: What each area represents:
+
+                * ``"count"``: raw number of sequences per state per bin.
+                * ``"proportion"``: fraction of sequences per state (0-1 per bin).
+                * ``"percentage"``: same as proportion expressed as 0-100 (default).
+
+            bin_size: Width of each time bin.
+
+                * **Datetime pools**: a Polars duration string such as ``"1d"``,
+                  ``"12h"``, ``"1w"``, ``"1mo"``.
+                * **Timestep pools**: a numeric step value (``int`` or ``float``).
+
+            stacked: ``True`` (default) renders a stacked area chart.
+                ``False`` renders overlapping transparent fills.
+            time_mode: ``"absolute"`` (default) uses real timestamps on the
+                x-axis. ``"relative"`` raises :exc:`NotImplementedError` until
+                alignment logic is implemented.
+            allow_large: Bypass the
+                :attr:`~BaseSequenceVizBuilder.MAX_CATEGORY` safety guard.
+
+        Returns:
+            A configured
+            :class:`~tanat.visualization.sequence.type.distribution.builder.DistributionVizBuilder`.
+        """
+        settings = DistributionSettings(
+            aesthetics={
+                "mode": mode,
+                "bin_size": bin_size,
+                "stacked": stacked,
+                "time_mode": time_mode,
+            }
+        )
+        return DistributionVizBuilder(settings=settings, allow_large=allow_large)
