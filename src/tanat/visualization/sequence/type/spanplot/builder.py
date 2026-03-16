@@ -13,14 +13,16 @@ import polars as pl
 from ....utils.color_manager import ColorManager
 from ...base.builder import BaseSequenceVizBuilder
 from ...base.utils import resolve_label, drop_null_labels, rename_id_column
-from ...base.exceptions import IncompatibleDisplayUnitError
+from ...base.exceptions import (
+    IncompatibleDisplayUnitError,
+    UnsupportedSequenceTypeError,
+)
 from .data import (
     extract_durations,
     rename_temporal_columns,
     sort_ids,
     sort_labels,
 )
-from .exception import UnsupportedSequenceTypeError
 from .settings import SpanplotSettings
 
 if TYPE_CHECKING:
@@ -183,7 +185,9 @@ class SpanplotVizBuilder(BaseSequenceVizBuilder, register_name="spanplot"):
         """
         pool_type = sequence_or_pool.get_registration_name()
         if pool_type not in self._COMPATIBLE_TYPES:
-            raise UnsupportedSequenceTypeError(pool_type)
+            raise UnsupportedSequenceTypeError(
+                pool_type, compatible_types=self._COMPATIBLE_TYPES
+            )
 
         # Validate display_unit vs temporal type
         temporal = sequence_or_pool.metadata.temporal
