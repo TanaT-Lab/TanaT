@@ -324,7 +324,6 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
             )
 
     @staticmethod
-    def _build_color_map(data: pl.DataFrame, spec: Any) -> dict:
-        """Build a ``{label: hex}`` color map from the __LABEL__ column."""
-        labels = data["__LABEL__"].unique().to_list()
-        return ColorManager.build(labels, spec)
+    def _build_color_map(keys: list[str], spec: Any) -> dict[str, str]:
+        """Return a ``{label: hex}`` color map for the given keys."""
+        return ColorManager.build(sorted(keys), spec)
