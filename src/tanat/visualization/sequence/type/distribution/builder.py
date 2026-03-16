@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import polars as pl
 
-from ....utils.color_manager import ColorManager
 from ...base.builder import BaseSequenceVizBuilder
 from ...base.utils import drop_null_labels, rename_id_column, resolve_label
 from ...base.exceptions import UnsupportedSequenceTypeError
@@ -49,7 +48,6 @@ class DistributionVizBuilder(BaseSequenceVizBuilder, register_name="distribution
         self, settings: Any | None = None, *, allow_large: bool = False
     ) -> None:
         super().__init__(settings=settings, allow_large=allow_large)
-        self._color_map: dict[str, str] = {}
 
     # ------------------------------------------------------------------
     # Chainable configuration: axes
@@ -229,15 +227,11 @@ class DistributionVizBuilder(BaseSequenceVizBuilder, register_name="distribution
                 "or pass allow_large=True to bypass this guard."
             )
 
-        # Build color map
-        if self.settings.colors is not None:
-            color_map = self._build_color_map(df, self.settings.colors)
-        else:
-            labels = df["__LABEL__"].unique().to_list()
-            color_map = ColorManager.build(labels, spec=None)
-
-        # Store color map for use in _render
-        self._color_map: dict[str, str] = color_map
+        # Always assign colors (defaults to tab10 when no spec is provided)
+        color_map = self._build_color_map(
+            df["__LABEL__"].unique().to_list(), self.settings.colors
+        )
+        df = df.with_columns(pl.col("__LABEL__").replace(color_map).alias("__COLOR__"))
 
         return df
 
@@ -258,7 +252,8 @@ class DistributionVizBuilder(BaseSequenceVizBuilder, register_name="distribution
         line_width = self.settings.marker.line_width
 
         labels, x_vals, matrix = self._pivot_data(data)
-        colors = [self._color_map.get(lbl, None) for lbl in labels]
+        color_lookup = dict(data.select(["__LABEL__", "__COLOR__"]).unique().rows())
+        colors = [color_lookup.get(lbl) for lbl in labels]
 
         ax.stackplot(
             x_vals,
@@ -274,10 +269,11 @@ class DistributionVizBuilder(BaseSequenceVizBuilder, register_name="distribution
         alpha = self.settings.marker.alpha
         line_width = self.settings.marker.line_width
 
+        color_lookup = dict(data.select(["__LABEL__", "__COLOR__"]).unique().rows())
         labels, x_vals, matrix = self._pivot_data(data)
 
         for i, lbl in enumerate(labels):
-            color = self._color_map.get(lbl, None)
+            color = color_lookup.get(lbl)
             y = matrix[i]
             ax.fill_between(
                 x_vals,

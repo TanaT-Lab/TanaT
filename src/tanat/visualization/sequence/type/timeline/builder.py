@@ -202,12 +202,11 @@ class TimelineVizBuilder(BaseSequenceVizBuilder, register_name="timeline"):
                     "or pass allow_large=True to bypass this guard."
                 )
 
-        # Assign colors
-        if self.settings.colors is not None:
-            color_map = self._build_color_map(df, self.settings.colors)
-            df = df.with_columns(
-                pl.col("__LABEL__").replace(color_map).alias("__COLOR__")
-            )
+        # Always assign colors (defaults to tab10 when no spec is provided)
+        color_map = self._build_color_map(
+            df["__LABEL__"].unique().to_list(), self.settings.colors
+        )
+        df = df.with_columns(pl.col("__LABEL__").replace(color_map).alias("__COLOR__"))
 
         # Build y-tick map for use in _apply_styling
         self._y_tick_map = build_y_tick_map(df, self.settings.aesthetics.group_by)
@@ -228,7 +227,6 @@ class TimelineVizBuilder(BaseSequenceVizBuilder, register_name="timeline"):
     def _render_intervals(self, ax: Any, data: pl.DataFrame) -> None:
         """Draw horizontal bars (``ax.barh``) for interval/state pools."""
         marker = self.settings.marker
-        has_colors = "__COLOR__" in data.columns
         labels = data["__LABEL__"].unique().to_list()
 
         for label in labels:
@@ -238,9 +236,7 @@ class TimelineVizBuilder(BaseSequenceVizBuilder, register_name="timeline"):
             ends = group["__END__"].to_list()
             widths = [e - s for s, e in zip(starts, ends)]
 
-            color_kwarg: dict[str, Any] = {}
-            if has_colors:
-                color_kwarg["color"] = group["__COLOR__"][0]
+            color_kwarg: dict[str, Any] = {"color": group["__COLOR__"][0]}
 
             ax.barh(
                 y_positions,
@@ -256,7 +252,6 @@ class TimelineVizBuilder(BaseSequenceVizBuilder, register_name="timeline"):
     def _render_events(self, ax: Any, data: pl.DataFrame) -> None:
         """Draw scatter points for event pools."""
         marker = self.settings.marker
-        has_colors = "__COLOR__" in data.columns
         labels = data["__LABEL__"].unique().to_list()
 
         for label in labels:
@@ -264,9 +259,7 @@ class TimelineVizBuilder(BaseSequenceVizBuilder, register_name="timeline"):
             x_values = group["__TIME__"].to_list()
             y_values = group["__Y_POSITION__"].to_list()
 
-            color_kwarg: dict[str, Any] = {}
-            if has_colors:
-                color_kwarg["color"] = group["__COLOR__"][0]
+            color_kwarg: dict[str, Any] = {"color": group["__COLOR__"][0]}
 
             ax.scatter(
                 x_values,

@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import polars as pl
 
-from ....utils.color_manager import ColorManager
 from ...base.builder import BaseSequenceVizBuilder
 from ...base.utils import resolve_label, drop_null_labels, rename_id_column
 from ...base.exceptions import (
@@ -239,21 +238,19 @@ class SpanplotVizBuilder(BaseSequenceVizBuilder, register_name="spanplot"):
         self._label_order = sort_labels(df, sort)
         self._id_order = sort_ids(df, sort)
 
-        # Color assignment
-        if self.settings.colors is not None:
-            if group_by == "id":
-                id_keys = df["__ID__"].cast(pl.Utf8).unique().to_list()
-                color_map = self._build_color_map_from_keys(
-                    id_keys, self.settings.colors
-                )
-                df = df.with_columns(
-                    pl.col("__ID__").cast(pl.Utf8).replace(color_map).alias("__COLOR__")
-                )
-            else:  # "category" — color by label
-                color_map = self._build_color_map(df, self.settings.colors)
-                df = df.with_columns(
-                    pl.col("__LABEL__").replace(color_map).alias("__COLOR__")
-                )
+        # Always assign colors (defaults to tab10 when no spec is provided)
+        if group_by == "id":
+            id_keys = df["__ID__"].cast(pl.Utf8).unique().to_list()
+            color_map = self._build_color_map(id_keys, self.settings.colors)
+            df = df.with_columns(
+                pl.col("__ID__").cast(pl.Utf8).replace(color_map).alias("__COLOR__")
+            )
+            # "category": color by label
+            label_keys = df["__LABEL__"].unique().to_list()
+            color_map = self._build_color_map(label_keys, self.settings.colors)
+            df = df.with_columns(
+                pl.col("__LABEL__").replace(color_map).alias("__COLOR__")
+            )
 
         return df
 
@@ -280,13 +277,12 @@ class SpanplotVizBuilder(BaseSequenceVizBuilder, register_name="spanplot"):
         keys, group_col, df = self._resolve_groups(data, group_by)
 
         groups: list[list[float]] = []
-        colors: list[str | None] = []
-        has_colors = "__COLOR__" in df.columns
+        colors: list[str] = []
 
         for key in keys:
             grp = df.filter(pl.col(group_col) == key)
             groups.append(grp["__DURATION__"].to_list())
-            colors.append(grp["__COLOR__"][0] if has_colors else None)
+            colors.append(grp["__COLOR__"][0])
 
         positions = list(range(len(keys)))
         bplot = ax.boxplot(
@@ -302,8 +298,7 @@ class SpanplotVizBuilder(BaseSequenceVizBuilder, register_name="spanplot"):
             flierprops={"markersize": marker.point_size},
         )
         for patch, color in zip(bplot["boxes"], colors):
-            if color is not None:
-                patch.set_facecolor(color)
+            patch.set_facecolor(color)
             patch.set_alpha(marker.alpha)
             if marker.edge_color:
                 patch.set_edgecolor(marker.edge_color)
@@ -316,8 +311,7 @@ class SpanplotVizBuilder(BaseSequenceVizBuilder, register_name="spanplot"):
         keys, group_col, df = self._resolve_groups(data, group_by)
 
         groups: list[list[float]] = []
-        colors: list[str | None] = []
-        has_colors = "__COLOR__" in df.columns
+        colors: list[str] = []
 
         for key in keys:
             grp = df.filter(pl.col(group_col) == key)
@@ -326,7 +320,7 @@ class SpanplotVizBuilder(BaseSequenceVizBuilder, register_name="spanplot"):
             if len(dur) < 2:
                 dur = dur * 2
             groups.append(dur)
-            colors.append(grp["__COLOR__"][0] if has_colors else None)
+            colors.append(grp["__COLOR__"][0])
 
         positions = list(range(len(keys)))
         vplot = ax.violinplot(
@@ -337,8 +331,7 @@ class SpanplotVizBuilder(BaseSequenceVizBuilder, register_name="spanplot"):
             showextrema=True,
         )
         for body, color in zip(vplot["bodies"], colors):
-            if color is not None:
-                body.set_facecolor(color)
+            body.set_facecolor(color)
             body.set_alpha(marker.alpha)
             if marker.edge_color:
                 body.set_edgecolor(marker.edge_color)
@@ -355,7 +348,6 @@ class SpanplotVizBuilder(BaseSequenceVizBuilder, register_name="spanplot"):
         horizontal = self.settings.aesthetics.orientation == "horizontal"
         keys, group_col, df = self._resolve_groups(data, group_by)
 
-        has_colors = "__COLOR__" in df.columns
         rng = np.random.default_rng(42)  # deterministic jitter
 
         for i, key in enumerate(keys):
@@ -364,9 +356,7 @@ class SpanplotVizBuilder(BaseSequenceVizBuilder, register_name="spanplot"):
             n = len(dur_values)
             jitter = (i + rng.uniform(-0.15, 0.15, n)).tolist()
 
-            color_kwarg: dict[str, Any] = {}
-            if has_colors:
-                color_kwarg["color"] = grp["__COLOR__"][0]
+            color_kwarg: dict[str, Any] = {"color": grp["__COLOR__"][0]}
 
             # horizontal: durations on x, jitter on y
             scatter_x, scatter_y = (
@@ -402,11 +392,6 @@ class SpanplotVizBuilder(BaseSequenceVizBuilder, register_name="spanplot"):
             return self._id_order, "__ID_STR__", df
         # "category": group by label
         return self._label_order, "__LABEL__", data
-
-    @staticmethod
-    def _build_color_map_from_keys(keys: list[str], spec: Any) -> dict[str, str]:
-        """Build a ``{key: hex}`` color map from an arbitrary key list."""
-        return ColorManager.build(keys, spec)
 
     # ------------------------------------------------------------------
     # Styling

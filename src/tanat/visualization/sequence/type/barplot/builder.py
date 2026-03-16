@@ -197,12 +197,11 @@ class BarplotVizBuilder(BaseSequenceVizBuilder, register_name="barplot"):
         # Cast labels to string and fill nulls so None becomes "null" and sort is stable
         df = df.with_columns(pl.col("__LABEL__").cast(pl.Utf8).fill_null("null"))
 
-        # Assign colors via expression, only when a spec is provided
-        if self.settings.colors is not None:
-            color_map = self._build_color_map(df, self.settings.colors)
-            df = df.with_columns(
-                pl.col("__LABEL__").replace(color_map).alias("__COLOR__")
-            )
+        # Always assign colors (defaults to tab10 when no spec is provided)
+        color_map = self._build_color_map(
+            df["__LABEL__"].unique().to_list(), self.settings.colors
+        )
+        df = df.with_columns(pl.col("__LABEL__").replace(color_map).alias("__COLOR__"))
 
         return df
 
@@ -246,8 +245,8 @@ class BarplotVizBuilder(BaseSequenceVizBuilder, register_name="barplot"):
         labels = data["__LABEL__"].to_list()
         values = data["__VALUE__"].to_list()
         x = np.arange(len(labels))
-        colors = data["__COLOR__"].to_list() if "__COLOR__" in data.columns else None
-        color_kwarg = {"color": colors} if colors is not None else {}
+        colors = data["__COLOR__"].to_list()
+        color_kwarg = {"color": colors}
 
         ax.bar(
             x,
@@ -265,8 +264,8 @@ class BarplotVizBuilder(BaseSequenceVizBuilder, register_name="barplot"):
         labels = data["__LABEL__"].to_list()
         values = data["__VALUE__"].to_list()
         y = np.arange(len(labels))
-        colors = data["__COLOR__"].to_list() if "__COLOR__" in data.columns else None
-        color_kwarg = {"color": colors} if colors is not None else {}
+        colors = data["__COLOR__"].to_list()
+        color_kwarg = {"color": colors}
         ax.barh(
             y,
             values,
