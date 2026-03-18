@@ -5,6 +5,7 @@ BaseSequenceVizBuilder: abstract base for all sequence visualization builders.
 
 from __future__ import annotations
 
+import math
 from abc import ABC, abstractmethod
 from typing import Any, TYPE_CHECKING
 
@@ -35,6 +36,9 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
     # Beyond ~30 unique label values the legend and axis labels become unreadable.
     # Override per-instance or pass allow_large=True at the factory.
     MAX_CATEGORY: int = 30
+    # Beyond ~20 facets the individual panels become too small to read.
+    # Override per-instance or pass allow_large=True at the factory.
+    MAX_FACET: int = 20
 
     def __init__(
         self,
@@ -43,9 +47,6 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
         allow_large: bool = False,
     ) -> None:
         CachableSettings.__init__(self, settings=settings)
-        self._facet_by: str | None = None
-        self._facet_cols: int = 3
-        self._facet_share_y: bool = True
         self.allow_large: bool = allow_large
 
     # ------------------------------------------------------------------
@@ -147,20 +148,46 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
         self,
         by: str,
         *,
+        is_static: bool = False,
         cols: int = 3,
+        share_x: bool = True,
         share_y: bool = True,
+        figsize_per_facet: tuple[float, float] = (5.0, 4.0),
+        title_template: str = "{by} = {value}",
     ) -> BaseSequenceVizBuilder:
         """Enable faceted (small-multiples) view. Chainable.
 
+        Calling this method updates the settings and **clears the data cache**,
+        so any previously cached :meth:`prepare_data` result is discarded.
+
         Args:
-            by: Entity feature name to split by.
+            by: Feature name to split by.
+            is_static: ``True`` → static feature;
+                ``False`` (default) → entity feature.
             cols: Number of columns in the facet grid (default 3).
+            share_x: Share the x-axis scale across facets (default ``True``).
             share_y: Share the y-axis scale across facets (default ``True``).
+            figsize_per_facet: Width × height of each cell in inches.
+            title_template: Format string for each facet title.  Placeholders:
+                ``{by}``, ``{value}``, ``{index}``.
         """
-        self._facet_by = by
-        self._facet_cols = cols
-        self._facet_share_y = share_y
+        self.update_settings(
+            facet={
+                "by": by,
+                "is_static": is_static,
+                "cols": cols,
+                "share_x": share_x,
+                "share_y": share_y,
+                "figsize_per_facet": figsize_per_facet,
+                "title_template": title_template,
+            }
+        )
         return self
+
+    @property
+    def _facet_enabled(self) -> bool:
+        """``True`` when a facet has been configured via :meth:`facet`."""
+        return self.settings.facet.by is not None
 
     # ------------------------------------------------------------------
     # Public API
@@ -203,6 +230,7 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
             sequence_or_pool,
             entity_feature=entity_feature,
             drop_na=drop_na,
+            facet_by=self.settings.facet.by if self._facet_enabled else None,
         )
 
         n_categories = df["__LABEL__"].n_unique()
@@ -235,6 +263,13 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
         Returns:
             A :class:`~tanat.visualization.utils.result.VisualizationResult`.
         """
+        if self._facet_enabled:
+            return self._draw_faceted(
+                sequence_or_pool,
+                entity_feature=entity_feature,
+                drop_na=drop_na,
+            )
+
         data = self.prepare_data(
             sequence_or_pool,
             entity_feature=entity_feature,
@@ -245,6 +280,188 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
         self._render(ax, data)
         self._apply_styling(ax)
 
+        return VisualizationResult(fig)
+
+    # ------------------------------------------------------------------
+    # Faceting internals
+    # ------------------------------------------------------------------
+
+    def _inject_facet_column(
+        self,
+        lf: pl.LazyFrame,
+        pool: SequencePool,
+        *,
+        id_col: str,
+    ) -> pl.LazyFrame:
+        """Attach ``__FACET__`` to *lf*.
+
+        This is the **only** method that knows about ``is_static``.
+        Subclasses call it and never inspect ``settings.facet.is_static``
+        directly.
+
+        - *is_static=True*: left-join static data on *id_col*.
+        - *is_static=False*: rename the entity feature column.
+
+        Args:
+            lf: LazyFrame already containing *id_col* when ``is_static=True``.
+            pool: The source pool (needed for the static data join).
+            id_col: Name of the ID column in *lf* (``"__ID__"`` for builders
+                that called :func:`~.utils.rename_id_column`, or the raw
+                ``pool.settings.id_column`` otherwise).
+        """
+        f = self.settings.facet
+        if f.is_static:
+            facet_lf = pool._static_data_lf([f.by])
+            if facet_lf is None:
+                raise ValueError(
+                    f"Feature '{f.by}' not found in static data. "
+                    "Set is_static=False or add the feature as static data."
+                )
+            facet_lf = facet_lf.rename({f.by: "__FACET__"})
+            return lf.join(
+                facet_lf,
+                left_on=id_col,
+                right_on=pool.settings.id_column,
+                how="left",
+            )
+        # Entity (sequence) feature: just rename the column.
+        return lf.rename({f.by: "__FACET__"})
+
+    def _update_per_facet_state(self, df_i: pl.DataFrame) -> pl.DataFrame:
+        """Hook called by :meth:`_draw_faceted` before rendering each panel.
+
+        The base implementation is a no-op.  Subclasses that store
+        instance-level rendering state (e.g. tick orders, y-tick maps) should
+        override this to recompute that state from the facet slice *df_i*.
+
+        Args:
+            df_i: DataFrame for a single facet panel (``__FACET__`` already
+                dropped, ``__COLOR__`` already re-applied from global map).
+
+        Returns:
+            The (possibly modified) *df_i* to pass to :meth:`_render`.
+        """
+        return df_i
+
+    def _draw_faceted(
+        self,
+        pool: SequencePool,
+        *,
+        entity_feature: str,
+        drop_na: bool,
+    ) -> VisualizationResult:
+        """Orchestrate the faceted (small-multiples) render.
+
+        Called by :meth:`draw` when :attr:`_facet_enabled` is ``True``.
+        Single-pass: prepares the full dataset once, then partitions by
+        ``__FACET__`` for each panel.
+        """
+        f = self.settings.facet
+
+        # 1 ─ Prepare full dataset (bypasses public cache to avoid pollution)
+        full_df = self._prepare_data(
+            pool,
+            entity_feature=entity_feature,
+            drop_na=drop_na,
+            facet_by=f.by,
+        )
+        if "__FACET__" not in full_df.columns:
+            raise RuntimeError(
+                "_prepare_data did not produce a '__FACET__' column. "
+                "Make sure the subclass implementation handles facet_by."
+            )
+        full_df = full_df.drop_nulls("__FACET__")
+        full_df = full_df.with_columns(pl.col("__FACET__").cast(pl.Utf8))
+
+        # 2 ─ Global colour map (ensures stability across panels)
+        global_color_map = dict(
+            full_df.select(["__LABEL__", "__COLOR__"]).unique().rows()
+        )
+
+        # 3 ─ Sorted facet values
+        facet_values = sorted(full_df["__FACET__"].unique().to_list())
+        n_facets = len(facet_values)
+
+        if n_facets == 0:
+            raise ValueError(f"No non-null values found for facet feature '{f.by}'.")
+        if n_facets > self.MAX_FACET and not self.allow_large:
+            raise ValueError(
+                f"Facet feature '{f.by}' has {n_facets} unique values, which exceeds "
+                f"MAX_FACET={self.MAX_FACET}. "
+                "Reduce the feature cardinality, increase builder.MAX_FACET, "
+                "or pass allow_large=True to bypass this guard."
+            )
+
+        # 4 ─ Figure layout
+        cols = f.cols
+        rows = math.ceil(n_facets / cols)
+        fig, axes = plt.subplots(
+            rows,
+            cols,
+            figsize=(f.figsize_per_facet[0] * cols, f.figsize_per_facet[1] * rows),
+            sharex=f.share_x,
+            sharey=f.share_y,
+            squeeze=False,
+        )
+        axes_flat = axes.flatten().tolist()
+
+        # 5 ─ Per-facet render loop
+        legend_handles: list | None = None
+        legend_labels: list | None = None
+
+        for i, value in enumerate(facet_values):
+            ax = axes_flat[i]
+            df_i = (
+                full_df.filter(pl.col("__FACET__") == value)
+                .drop("__FACET__")
+                .with_columns(
+                    pl.col("__LABEL__").replace(global_color_map).alias("__COLOR__")
+                )
+            )
+
+            if df_i.is_empty():
+                ax.text(
+                    0.5,
+                    0.5,
+                    "No data",
+                    ha="center",
+                    va="center",
+                    transform=ax.transAxes,
+                )
+            else:
+                df_i = self._update_per_facet_state(df_i)
+                self._render(ax, df_i)
+                self._apply_styling(ax)
+                if legend_handles is None:
+                    legend_handles, legend_labels = ax.get_legend_handles_labels()
+
+            # Remove per-subplot legend (shared figure legend added below)
+            leg = ax.get_legend()
+            if leg is not None:
+                leg.remove()
+
+            ax.set_title(f.title_template.format(by=f.by, value=value, index=i))
+
+        # 6 ─ Hide unused cells
+        for i in range(n_facets, len(axes_flat)):
+            axes_flat[i].axis("off")
+
+        # 7 ─ Figure-level decorations
+        if self.settings.title:
+            fig.suptitle(self.settings.title, y=1.01)
+
+        if self.settings.legend.show and legend_handles:
+            fig.legend(
+                legend_handles,
+                legend_labels,
+                loc="center left",
+                bbox_to_anchor=(1.0, 0.5),
+                title=self.settings.legend.title,
+                frameon=True,
+            )
+            fig.subplots_adjust(right=0.85)
+
+        plt.tight_layout()
         return VisualizationResult(fig)
 
     # ------------------------------------------------------------------
@@ -292,8 +509,14 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
         *,
         entity_feature: str,
         drop_na: bool,
+        facet_by: str | None = None,
     ) -> pl.DataFrame:
-        """Subclass-specific data preparation (aggregation, labelling, guards)."""
+        """Subclass-specific data preparation (aggregation, labelling, guards).
+
+        When *facet_by* is not ``None`` the returned DataFrame must contain a
+        ``__FACET__`` column.  The base :meth:`_draw_faceted` will then
+        partition on that column and render each facet panel separately.
+        """
 
     @abstractmethod
     def _render(self, ax: Any, data: pl.DataFrame) -> None:
