@@ -108,31 +108,46 @@ def assign_time_bins(
 def aggregate_distribution(
     lf: pl.LazyFrame,
     mode: str,
+    *,
+    facet_col: str | None = None,
 ) -> pl.LazyFrame:
     """Count label occurrences per time bin and compute the requested metric.
 
-    After grouping by ``[__TIME_BIN__, __LABEL__]``, the raw count is either
-    kept as-is (``"count"``) or normalised within each bin (``"proportion"`` /
-    ``"percentage"``) using a window expression so no additional collect is
-    required.
+    After grouping by ``[__TIME_BIN__, __LABEL__]`` (or
+    ``[facet_col, __TIME_BIN__, __LABEL__]`` when *facet_col* is set), the raw
+    count is either kept as-is (``"count"``) or normalised within each bin
+    (``"proportion"`` / ``"percentage"``) using a window expression so no
+    additional collect is required.
 
     Args:
         lf: LazyFrame with ``__TIME_BIN__`` and ``__LABEL__`` columns.
         mode: One of ``"count"``, ``"proportion"``, or ``"percentage"``.
+        facet_col: When set, include this column as the leading group-by
+            dimension so that counts and normalisations are computed per
+            facet × bin rather than globally.
 
     Returns:
-        LazyFrame with columns ``__TIME_BIN__``, ``__LABEL__``, ``__VALUE__``.
+        LazyFrame with columns ``__TIME_BIN__``, ``__LABEL__``, ``__VALUE__``
+        (plus *facet_col* when set).
     """
-    counted = lf.group_by(["__TIME_BIN__", "__LABEL__"]).agg(
-        pl.len().alias("__COUNT__")
+    group_cols = (
+        ["__TIME_BIN__", "__LABEL__"]
+        if facet_col is None
+        else [facet_col, "__TIME_BIN__", "__LABEL__"]
     )
+    over_cols = ["__TIME_BIN__"] if facet_col is None else [facet_col, "__TIME_BIN__"]
+    out_cols = (
+        ["__TIME_BIN__", "__LABEL__", "__VALUE__"]
+        if facet_col is None
+        else [facet_col, "__TIME_BIN__", "__LABEL__", "__VALUE__"]
+    )
+
+    counted = lf.group_by(group_cols).agg(pl.len().alias("__COUNT__"))
 
     if mode == "count":
         return counted.rename({"__COUNT__": "__VALUE__"})
 
-    bin_total_expr = (
-        pl.col("__COUNT__").sum().over("__TIME_BIN__").alias("__BIN_TOTAL__")
-    )
+    bin_total_expr = pl.col("__COUNT__").sum().over(over_cols).alias("__BIN_TOTAL__")
 
     if mode == "proportion":
         return (
@@ -140,7 +155,7 @@ def aggregate_distribution(
             .with_columns(
                 (pl.col("__COUNT__") / pl.col("__BIN_TOTAL__")).alias("__VALUE__")
             )
-            .select(["__TIME_BIN__", "__LABEL__", "__VALUE__"])
+            .select(out_cols)
         )
 
     # percentage
@@ -149,5 +164,5 @@ def aggregate_distribution(
         .with_columns(
             (pl.col("__COUNT__") / pl.col("__BIN_TOTAL__") * 100.0).alias("__VALUE__")
         )
-        .select(["__TIME_BIN__", "__LABEL__", "__VALUE__"])
+        .select(out_cols)
     )

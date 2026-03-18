@@ -141,6 +141,7 @@ class DistributionVizBuilder(BaseSequenceVizBuilder, register_name="distribution
         *,
         entity_feature: str,
         drop_na: bool,
+        facet_by: str | None = None,
     ) -> pl.DataFrame:
         """Orchestrate data transformations for the distribution chart.
 
@@ -150,10 +151,12 @@ class DistributionVizBuilder(BaseSequenceVizBuilder, register_name="distribution
         2. Guard: ``time_mode="relative"`` is not yet implemented.
         3. Guard: *bin_size* type must match the pool temporal type.
         4. Rename ID and temporal columns, resolve label, optionally drop nulls.
-        5. Assign time bins (occupancy-based, one collect for global bounds).
-        6. Aggregate by ``[__TIME_BIN__, __LABEL__]`` and compute ``__VALUE__``.
-        7. Collect; cast ``__LABEL__`` to string.
-        8. Build per-label color map if ``colors`` is set.
+        5. Inject ``__FACET__`` when *facet_by* is set.
+        6. Assign time bins (occupancy-based, one collect for global bounds).
+        7. Aggregate by ``[__TIME_BIN__, __LABEL__]`` (plus ``__FACET__``)
+           and compute ``__VALUE__``.
+        8. Collect; cast ``__LABEL__`` to string.
+        9. Build per-label color map if ``colors`` is set.
 
         Args:
             sequence_or_pool: Input pool (must be ``StateSequencePool``).
@@ -199,7 +202,13 @@ class DistributionVizBuilder(BaseSequenceVizBuilder, register_name="distribution
         id_col = sequence_or_pool.settings.id_column
         temporal_cols = sequence_or_pool.settings.get_temporal_columns()
 
-        lf = sequence_or_pool._sequence_data_lf(features=[entity_feature])
+        # Include facet_by in features for entity (non-static) facets
+        is_static_facet = self.settings.facet.is_static
+        features: list[str] = [entity_feature]
+        if facet_by and not is_static_facet:
+            features.append(facet_by)
+
+        lf = sequence_or_pool._sequence_data_lf(features=features)
         lf = rename_id_column(lf, id_col)
         lf = rename_temporal_columns(lf, temporal_cols)
         lf = resolve_label(lf, entity_feature)
@@ -207,12 +216,17 @@ class DistributionVizBuilder(BaseSequenceVizBuilder, register_name="distribution
         if drop_na:
             lf = drop_null_labels(lf)
 
+        # Inject __FACET__ column (cross-join in assign_time_bins preserves all cols)
+        if facet_by:
+            lf = self._inject_facet_column(lf, sequence_or_pool, id_col="__ID__")
+
         # Occupancy-based binning: 1 collect (2 scalars), then cross-join + filter
         lf = assign_time_bins(lf, bin_size, is_datetime=is_datetime)
 
         # Aggregate counts / proportion / percentage
         mode = self.settings.aesthetics.mode
-        lf = aggregate_distribution(lf, mode)
+        facet_col = "__FACET__" if facet_by else None
+        lf = aggregate_distribution(lf, mode, facet_col=facet_col)
 
         df = lf.collect()
         df = df.with_columns(pl.col("__LABEL__").cast(pl.Utf8).fill_null("null"))
@@ -243,8 +257,8 @@ class DistributionVizBuilder(BaseSequenceVizBuilder, register_name="distribution
         """Dispatch to stacked or flat renderer."""
         if self.settings.aesthetics.stacked:
             self._render_stacked(ax, data)
-        # flat rendering
-        self._render_flat(ax, data)
+        else:
+            self._render_flat(ax, data)
 
     def _render_stacked(self, ax: Any, data: pl.DataFrame) -> None:
         """Draw a stacked area chart using ``ax.stackplot``."""
@@ -317,7 +331,7 @@ class DistributionVizBuilder(BaseSequenceVizBuilder, register_name="distribution
         )
 
         x_vals = wide["__TIME_BIN__"].to_list()
-        labels = [c for c in wide.columns if c != "__TIME_BIN__"]
+        labels = sorted(c for c in wide.columns if c != "__TIME_BIN__")
         matrix = np.array([wide[lbl].to_numpy() for lbl in labels])
 
         return labels, x_vals, matrix
