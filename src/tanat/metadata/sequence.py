@@ -372,6 +372,29 @@ class SequenceMetadata:
             )
         return isinstance(info, TemporalInfo) and info.is_duration
 
+    def is_datetime_feature(self, name: str, is_static: bool = False) -> bool:
+        """Returns ``True`` if *name* is a ``pl.Datetime`` or ``pl.Date`` feature (not a Duration).
+
+        Args:
+            name: Feature name to check.
+            is_static: ``True`` for static features, ``False`` for entity features.
+
+        Raises:
+            KeyError: If the feature name is not found.
+
+        Examples::
+
+            >>> pool.metadata.is_datetime_feature("discharge_time")
+            True
+        """
+        info = self.feature_info(name, is_static=is_static)
+        if info is None:
+            raise KeyError(
+                f"Feature '{name}' not found in "
+                f"{'static' if is_static else 'entity'} features."
+            )
+        return isinstance(info, TemporalInfo) and not info.is_duration
+
     def is_categorical_feature(self, name: str, is_static: bool = False) -> bool:
         """Returns ``True`` if *name* is a ``Categorical`` or ``Enum`` feature.
 
