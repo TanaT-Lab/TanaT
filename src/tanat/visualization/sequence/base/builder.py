@@ -71,14 +71,34 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
         self.update_settings(figsize=(width, height))
         return self
 
-    def grid(self, *, show: bool = True) -> BaseSequenceVizBuilder:
-        """Toggle the background grid. Chainable.
+    def grid(
+        self,
+        *,
+        show: bool = True,
+        color: str | None = None,
+        linewidth: float | None = None,
+        axis: str | None = None,
+    ) -> BaseSequenceVizBuilder:
+        """Configure the background grid. Chainable.
+
+        Grid lines are always rendered **behind** markers and bars.
 
         Args:
             show: Display grid lines when ``True`` (default). Pass ``False`` to
                 explicitly hide a grid that was previously enabled.
+            color: Line color, any matplotlib color string (default ``"lightgrey"``).
+            linewidth: Line width in points (default ``0.8``).
+            axis: Which axis to draw lines for: ``"both"`` (default), ``"x"``,
+                or ``"y"``.
         """
-        self.update_settings(grid=show)
+        patch: dict = {"show": show}
+        if color is not None:
+            patch["color"] = color
+        if linewidth is not None:
+            patch["linewidth"] = linewidth
+        if axis is not None:
+            patch["axis"] = axis
+        self.update_settings(grid=patch)
         return self
 
     # ------------------------------------------------------------------
@@ -290,8 +310,14 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
         if s.title:
             ax.set_title(s.title)
 
-        if s.grid:
-            ax.grid(True)
+        if s.grid.show:
+            ax.set_axisbelow(True)
+            ax.grid(
+                True,
+                color=s.grid.color,
+                linewidth=s.grid.linewidth,
+                axis=s.grid.axis,
+            )
 
         x = s.x_axis
         if not x.show:
