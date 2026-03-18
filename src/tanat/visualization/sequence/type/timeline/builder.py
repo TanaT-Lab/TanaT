@@ -143,6 +143,7 @@ class TimelineVizBuilder(BaseSequenceVizBuilder, register_name="timeline"):
         *,
         entity_feature: str,
         drop_na: bool,
+        facet_by: str | None = None,
     ) -> pl.DataFrame:
         """Orchestrate data transformations for the timeline (see ``data.py``).
 
@@ -167,13 +168,23 @@ class TimelineVizBuilder(BaseSequenceVizBuilder, register_name="timeline"):
         id_col = sequence_or_pool.settings.id_column
         temporal_cols = sequence_or_pool.settings.get_temporal_columns()
 
-        lf = sequence_or_pool._sequence_data_lf(features=[entity_feature])
+        # Include facet_by in features for entity (non-static) facets
+        is_static_facet = self.settings.facet.is_static
+        features: list[str] = [entity_feature]
+        if facet_by and not is_static_facet:
+            features.append(facet_by)
+
+        lf = sequence_or_pool._sequence_data_lf(features=features)
         lf = rename_id_column(lf, id_col)
         lf = rename_temporal_columns(lf, temporal_cols)
         lf = resolve_label(lf, entity_feature)
 
         if drop_na:
             lf = drop_null_labels(lf)
+
+        # Inject __FACET__ column (propagates naturally — no explicit select drops it)
+        if facet_by:
+            lf = self._inject_facet_column(lf, sequence_or_pool, id_col="__ID__")
 
         lf = assign_y_positions(lf, mode=self.settings.aesthetics.group_by)
 
@@ -216,6 +227,16 @@ class TimelineVizBuilder(BaseSequenceVizBuilder, register_name="timeline"):
     # ------------------------------------------------------------------
     # Rendering
     # ------------------------------------------------------------------
+
+    def _update_per_facet_state(self, df_i: pl.DataFrame) -> pl.DataFrame:
+        """Recompute y-positions and tick map for the facet slice."""
+        mode = self.settings.aesthetics.group_by
+        rank_col = "__ID__" if mode == "id" else "__LABEL__"
+        df_i = df_i.with_columns(
+            pl.col(rank_col).rank("dense").sub(1).cast(pl.Int32).alias("__Y_POSITION__")
+        )
+        self._y_tick_map = build_y_tick_map(df_i, mode)
+        return df_i
 
     def _render(self, ax: Any, data: pl.DataFrame) -> None:
         """Dispatch to interval or event renderer."""
