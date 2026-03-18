@@ -622,8 +622,9 @@ class SequenceStore(StaticStoreMixin):
     def _fork_event_to_state(
         self,
         virtual_id: str | None,
-        end_value: datetime | int | float | None,
+        end_value: datetime | int | float | str | None,
         temporal_cast: pl.DataType | None = None,
+        static_cast: pl.DataType | None = None,
     ) -> str:
         """Fork a virtual context with ``(_t_start, _t_end)`` where ``_t_end`` is the next event start.
 
@@ -634,9 +635,11 @@ class SequenceStore(StaticStoreMixin):
         Args:
             virtual_id: Active virtual context to inherit from (``None`` → physical only).
             end_value: Fill value for the last row's ``_t_end``, or ``None``.
+                A ``str`` names a static feature column whose per-sequence value is used.
             temporal_cast: Resolved dtype for the temporal column.  Applied to
                 ``_t_event`` before the shift so the forked virtual temporal is
                 written in the user-declared dtype.
+            static_cast: Resolved dtype for the static end_value column (``str`` case only).
 
         Returns:
             UUID of the new forked context.
@@ -648,14 +651,45 @@ class SequenceStore(StaticStoreMixin):
         if temporal_cast is not None:
             active_temporal = apply_casts(active_temporal, {SCH.T_EVENT: temporal_cast})
         combined = pl.concat([self._ids_col(), active_temporal], how="horizontal")
-        temporal_lf = combined.select(
-            pl.col(SCH.T_EVENT).alias(SCH.T_START),
-            pl.col(SCH.T_EVENT).shift(-1).over(SCH.SEQ_ID).alias(SCH.T_END),
-        )
-        if end_value is not None:
-            temporal_lf = temporal_lf.with_columns(
-                pl.col(SCH.T_END).fill_null(pl.lit(end_value))
+        # Sequences are contiguous in the store: the last row of each sequence is the
+        # one where the next row belongs to a different sequence (or doesn't exist).
+        is_last = (pl.col(SCH.SEQ_ID).shift(-1) != pl.col(SCH.SEQ_ID)).fill_null(True)
+        if isinstance(end_value, str):
+            static_col = self.get_static_data(virtual_id).select(
+                [SCH.SEQ_ID, end_value]
             )
+            if static_cast is not None:
+                static_col = apply_casts(static_col, {end_value: static_cast})
+            temporal_lf = (
+                combined.join(static_col, on=SCH.SEQ_ID, how="left")
+                .select(
+                    pl.col(SCH.SEQ_ID),
+                    pl.col(SCH.T_EVENT).alias(SCH.T_START),
+                    pl.col(SCH.T_EVENT).shift(-1).over(SCH.SEQ_ID).alias(SCH.T_END),
+                    pl.col(end_value),
+                )
+                .with_columns(
+                    pl.when(is_last)
+                    .then(pl.col(end_value))
+                    .otherwise(pl.col(SCH.T_END))
+                    .alias(SCH.T_END)
+                )
+                .drop([SCH.SEQ_ID, end_value])
+            )
+        else:
+            temporal_lf = combined.select(
+                pl.col(SCH.SEQ_ID),
+                pl.col(SCH.T_EVENT).alias(SCH.T_START),
+                pl.col(SCH.T_EVENT).shift(-1).over(SCH.SEQ_ID).alias(SCH.T_END),
+            )
+            if end_value is not None:
+                temporal_lf = temporal_lf.with_columns(
+                    pl.when(is_last)
+                    .then(pl.lit(end_value))
+                    .otherwise(pl.col(SCH.T_END))
+                    .alias(SCH.T_END)
+                )
+            temporal_lf = temporal_lf.drop(SCH.SEQ_ID)
         new_uuid = self.fork_virtual_context(virtual_id) or self._virtual.new_context()
         self.write_virtual_temporal(new_uuid, temporal_lf)
         return new_uuid

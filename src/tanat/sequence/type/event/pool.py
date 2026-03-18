@@ -200,7 +200,7 @@ class EventSequencePool(SequencePool, register_name="event"):
     def as_state(
         self,
         *,
-        end_value: datetime | int | float | None = None,
+        end_value: datetime | int | float | str | None = None,
         start_column: str = "start",
         end_column: str = "end",
         destination: str | Path | None = None,
@@ -214,6 +214,8 @@ class EventSequencePool(SequencePool, register_name="event"):
         Args:
             end_value: Sentinel for ``_t_end`` of the last event per sequence.
                 ``None`` leaves the last row with ``_t_end = null``.
+                A ``str`` names a *static* feature column whose per-sequence
+                value fills the last ``_t_end``.
             start_column: User-facing name for the start column. Defaults to ``"start"``.
             end_column: User-facing name for the end column. Defaults to ``"end"``.
             destination: ``None`` → ephemeral result; path → new persistent store.
@@ -222,6 +224,24 @@ class EventSequencePool(SequencePool, register_name="event"):
         Returns:
             A new :class:`StateSequencePool`.
         """
+        if isinstance(end_value, str):
+            self.settings.validate_features([end_value], is_static=True)
+            if self.metadata.is_datetime:
+                if not self.metadata.is_datetime_feature(end_value, is_static=True):
+                    got = self.metadata.feature_info(end_value, is_static=True).dtype
+                    raise TypeError(
+                        f"end_value column {end_value!r} must be a Datetime-compatible type "
+                        "when the temporal index is Datetime. "
+                        f"Got: {got}."
+                    )
+            else:
+                if not self.metadata.is_numeric_feature(end_value, is_static=True):
+                    got = self.metadata.feature_info(end_value, is_static=True).dtype
+                    raise TypeError(
+                        f"end_value column {end_value!r} must be numeric "
+                        "when the temporal index is a timestep (non-Datetime). "
+                        f"Got: {got}."
+                    )
         return self._as_state_impl(
             end_value, start_column, end_column, destination, overwrite
         )
@@ -264,15 +284,21 @@ class EventSequencePool(SequencePool, register_name="event"):
 
     def _as_state_impl(
         self,
-        end_value: datetime | int | float | None,
+        end_value: datetime | int | float | str | None,
         start_column: str,
         end_column: str,
         destination: str | Path | None,
         overwrite: bool = False,
     ) -> StateSequencePool:
         """Fork the virtual context with shift-based ``(_t_start, _t_end)``, then branch on *destination*."""
+        static_cast = (
+            self._casts.static.get(end_value) if isinstance(end_value, str) else None
+        )
         new_uuid = self._store._fork_event_to_state(
-            self._virtual_id, end_value, temporal_cast=self._casts.temporal
+            self._virtual_id,
+            end_value,
+            temporal_cast=self._casts.temporal,
+            static_cast=static_cast,
         )
         new_settings = {
             "id_column": self.settings.id_column,
