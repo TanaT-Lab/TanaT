@@ -39,6 +39,8 @@ def rename_temporal_columns(
 def extract_durations(
     lf: pl.LazyFrame,
     display_unit: DisplayUnit | None,
+    *,
+    extra_cols: list[str] | None = None,
 ) -> pl.LazyFrame:
     """Compute per-row ``__DURATION__`` from ``__END__ - __START__``.
 
@@ -52,9 +54,13 @@ def extract_durations(
     Args:
         lf: LazyFrame with ``__ID__``, ``__LABEL__``, ``__START__``, ``__END__``.
         display_unit: Target duration unit, or ``None`` for raw numeric values.
+        extra_cols: Additional columns to keep in the output (e.g. ``["__FACET__"]``
+            when faceting is active).  Columns that are absent from *lf* are
+            silently ignored.
 
     Returns:
-        LazyFrame with columns ``[__ID__, __LABEL__, __DURATION__]``.
+        LazyFrame with columns ``[__ID__, __LABEL__, __DURATION__]`` plus any
+        *extra_cols* that were present.
 
     Raises:
         ValueError: If *display_unit* is not in :data:`MS_PER_DISPLAY_UNIT`.
@@ -74,7 +80,9 @@ def extract_durations(
             diff.dt.total_milliseconds() / MS_PER_DISPLAY_UNIT[display_unit]
         ).alias("__DURATION__")
 
-    return lf.with_columns(dur_expr).select(["__ID__", "__LABEL__", "__DURATION__"])
+    base_cols = ["__ID__", "__LABEL__", "__DURATION__"]
+    keep_cols = base_cols + [c for c in (extra_cols or []) if c not in base_cols]
+    return lf.with_columns(dur_expr).select(keep_cols)
 
 
 def sort_labels(df: pl.DataFrame, sort: str) -> list[str]:

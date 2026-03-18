@@ -175,6 +175,7 @@ class SpanplotVizBuilder(BaseSequenceVizBuilder, register_name="spanplot"):
         *,
         entity_feature: str,
         drop_na: bool,
+        facet_by: str | None = None,
     ) -> pl.DataFrame:
         """Orchestrate data transformations for the spanplot (see ``data.py``).
 
@@ -199,7 +200,13 @@ class SpanplotVizBuilder(BaseSequenceVizBuilder, register_name="spanplot"):
         id_col = sequence_or_pool.settings.id_column
         temporal_cols = sequence_or_pool.settings.get_temporal_columns()
 
-        lf = sequence_or_pool._sequence_data_lf(features=[entity_feature])
+        # Include facet_by in features for entity (non-static) facets
+        is_static_facet = self.settings.facet.is_static
+        features: list[str] = [entity_feature]
+        if facet_by and not is_static_facet:
+            features.append(facet_by)
+
+        lf = sequence_or_pool._sequence_data_lf(features=features)
         lf = rename_id_column(lf, id_col)
         lf = rename_temporal_columns(lf, temporal_cols)
         lf = resolve_label(lf, entity_feature)
@@ -207,7 +214,12 @@ class SpanplotVizBuilder(BaseSequenceVizBuilder, register_name="spanplot"):
         if drop_na:
             lf = drop_null_labels(lf)
 
-        lf = extract_durations(lf, display_unit)
+        # Inject __FACET__ column (must happen before extract_durations)
+        if facet_by:
+            lf = self._inject_facet_column(lf, sequence_or_pool, id_col="__ID__")
+
+        extra = ["__FACET__"] if facet_by else None
+        lf = extract_durations(lf, display_unit, extra_cols=extra)
 
         df = lf.collect()
         df = df.with_columns(pl.col("__LABEL__").cast(pl.Utf8).fill_null("null"))
@@ -257,6 +269,13 @@ class SpanplotVizBuilder(BaseSequenceVizBuilder, register_name="spanplot"):
     # ------------------------------------------------------------------
     # Rendering
     # ------------------------------------------------------------------
+
+    def _update_per_facet_state(self, df_i: pl.DataFrame) -> pl.DataFrame:
+        """Recompute sort orders for the facet slice before rendering."""
+        sort = self.settings.aesthetics.sort
+        self._label_order = sort_labels(df_i, sort)
+        self._id_order = sort_ids(df_i, sort)
+        return df_i
 
     def _render(self, ax: Any, data: pl.DataFrame) -> None:
         """Dispatch to box / violin / strip renderer."""
