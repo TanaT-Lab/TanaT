@@ -16,6 +16,7 @@ from tanat_utils import CachableSettings
 from ...core.path import resolve_path
 from ...metadata.sequence import SequenceMetadata
 from ...store.sequence.store import SequenceStore
+from ._utils import resolve_store
 
 
 class SequenceViewMixin:
@@ -33,14 +34,7 @@ class SequenceViewMixin:
     @staticmethod
     def _resolve_store(store: str | Path | SequenceStore) -> SequenceStore:
         """Resolve a store argument to a :class:`SequenceStore` instance."""
-        if isinstance(store, SequenceStore):
-            return store
-        if isinstance(store, (str, Path)):
-            return SequenceStore(root_path=resolve_path(store))
-        raise TypeError(
-            f"'store' must be a store name, Path, or SequenceStore instance, "
-            f"got {type(store)}"
-        )
+        return resolve_store(store)
 
     @staticmethod
     def _resolve_features(

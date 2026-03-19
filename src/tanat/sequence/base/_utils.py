@@ -5,7 +5,28 @@ Internal helpers.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import polars as pl
+
+from ...core.path import resolve_path
+from ...store.sequence.store import SequenceStore
+
+
+def resolve_store(store: str | Path | SequenceStore) -> SequenceStore:
+    """Resolve a store argument to a :class:`SequenceStore` instance.
+
+    Accepts a resolved :class:`SequenceStore`, a path-like, or a store name
+    string.  Used by both :class:`SequenceViewMixin` and :class:`Entity`.
+    """
+    if isinstance(store, SequenceStore):
+        return store
+    if isinstance(store, (str, Path)):
+        return SequenceStore(root_path=resolve_path(store))
+    raise TypeError(
+        f"'store' must be a store name, Path, or SequenceStore instance, "
+        f"got {type(store).__name__}"
+    )
 
 
 def resolve_ids_to_add(

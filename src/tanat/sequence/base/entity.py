@@ -11,11 +11,11 @@ from typing import TYPE_CHECKING, Any
 
 from tanat_utils import Registrable
 
-from ...core.path import resolve_path
 from ...metadata.feature import FeatureInfo, build_feature_metadata
 from ...store.common.utils import apply_casts
 from ...store.sequence.store import SequenceStore
 from .cast import SequenceCastRecipe
+from ._utils import resolve_store
 
 if TYPE_CHECKING:
     from ...metadata.sequence import SequenceMetadata
@@ -27,18 +27,6 @@ class Entity(Registrable, ABC):
     """
 
     _REGISTER = {}
-
-    @staticmethod
-    def _resolve_store(store: str | Path | SequenceStore) -> SequenceStore:
-        """Resolve a store argument to a :class:`SequenceStore` instance."""
-        if isinstance(store, SequenceStore):
-            return store
-        if isinstance(store, (str, Path)):
-            return SequenceStore(root_path=resolve_path(store))
-        raise TypeError(
-            f"'store' must be a store name, Path, or SequenceStore instance, "
-            f"got {type(store).__name__}"
-        )
 
     def __init__(
         self,
@@ -58,7 +46,7 @@ class Entity(Registrable, ABC):
         """
         self._id_value = id_value
         self._rank = rank
-        self._store = self._resolve_store(store)
+        self._store = resolve_store(store)
         self._features = features
         self._virtual_id: str | None = None
         self._casts: SequenceCastRecipe = SequenceCastRecipe()
