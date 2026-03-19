@@ -207,7 +207,7 @@ class TrajectoryStoreBuilder(DisplayMixin):
         stats = self._run(resolved, links)
 
         self._display_footer(
-            f"{stats['n_trajectories']:,} trajectories \u00b7 {n_pools} pool(s)"
+            f"{stats['n_trajectories']:,} trajectories · {n_pools} pool(s)"
         )
         return resolved
 
@@ -256,9 +256,7 @@ class TrajectoryStoreBuilder(DisplayMixin):
         self._display_step(2, 2, "Computing & writing metadata")
         self._traj_write_metadata(resolved, index_df, links, written_static_lf)
 
-        self._display_footer(
-            f"{n_trajectories:,} trajectories \u00b7 {len(links)} pool(s)"
-        )
+        self._display_footer(f"{n_trajectories:,} trajectories · {len(links)} pool(s)")
         return resolved
 
     # ------------------------------------------------------------------
