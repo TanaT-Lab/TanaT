@@ -58,8 +58,32 @@
   "softwareRequirements": [
     {
       "@type": "SoftwareApplication",
+      "identifier": "matplotlib",
+      "name": "matplotlib",
+      "runtimePlatform": "Python 3"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "numba",
+      "name": "numba",
+      "runtimePlatform": "Python 3"
+    },
+    {
+      "@type": "SoftwareApplication",
       "identifier": "pandas",
       "name": "pandas",
+      "runtimePlatform": "Python 3"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "polars",
+      "name": "polars",
+      "runtimePlatform": "Python 3"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "pyarrow",
+      "name": "pyarrow",
       "runtimePlatform": "Python 3"
     },
     {
@@ -70,38 +94,14 @@
     },
     {
       "@type": "SoftwareApplication",
-      "identifier": "matplotlib",
-      "name": "matplotlib",
-      "runtimePlatform": "Python 3"
-    },
-    {
-      "@type": "SoftwareApplication",
-      "identifier": "tseqmock",
-      "name": "tseqmock",
-      "runtimePlatform": "Python 3"
-    },
-    {
-      "@type": "SoftwareApplication",
       "identifier": "scikit-survival",
       "name": "scikit-survival",
       "runtimePlatform": "Python 3"
     },
     {
       "@type": "SoftwareApplication",
-      "identifier": "tqdm",
-      "name": "tqdm",
-      "runtimePlatform": "Python 3"
-    },
-    {
-      "@type": "SoftwareApplication",
-      "identifier": "sqlalchemy",
-      "name": "sqlalchemy",
-      "runtimePlatform": "Python 3"
-    },
-    {
-      "@type": "SoftwareApplication",
-      "identifier": "numba",
-      "name": "numba",
+      "identifier": "tanat_utils",
+      "name": "tanat_utils",
       "runtimePlatform": "Python 3"
     }
   ],
