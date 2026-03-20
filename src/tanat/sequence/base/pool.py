@@ -28,6 +28,7 @@ from .cast import SequenceCastRecipe
 from .sequence import Sequence
 from ._utils import merge_optional_frames, resolve_ids_to_add
 from .view_mixin import SequenceViewMixin
+from ...zeroing import T0Setter
 
 if TYPE_CHECKING:
     from ...store.sequence.store import SequenceStore
@@ -84,6 +85,10 @@ class SequencePool(
         self._casts: SequenceCastRecipe = SequenceCastRecipe.coerce(cast_recipe)
         if not self._casts.is_empty():
             self._casts.probe(self._store)
+        self._t0_setter: T0Setter = T0Setter.default(
+            is_event=self.get_registration_name() == "event"
+        )  # always set; default = position=0, anchor pre-resolved
+
         # Locking: when a pool is managed by a TrajectoryPool, it is locked.
         # Prevent any operations that would desynchronise it from its siblings.
         self._locked: bool = False
@@ -184,6 +189,7 @@ class SequencePool(
         row_mask: pl.Series | None,
         has_soft_drops: bool,
         cast_recipe: SequenceCastRecipe,
+        t0_setter: T0Setter,
     ) -> SequencePool:
         """Inject pool-level view state post-``__init__``, bypassing cast probes.
 
@@ -196,6 +202,7 @@ class SequencePool(
             has_soft_drops: Whether soft-dropped sequences exist.
             cast_recipe: Cast recipe to apply directly, bypassing the probe
                 executed in ``__init__``.
+            t0_setter: T0 strategy to propagate from a parent pool.
         """
         self._virtual_id = virtual_id
         self._gc_state[1] = virtual_id
@@ -203,6 +210,7 @@ class SequencePool(
         self._row_mask = row_mask
         self._has_soft_drops = has_soft_drops
         self._casts = cast_recipe
+        self._t0_setter = t0_setter
         return self
 
     # ------------------------------------------------------------------
@@ -248,6 +256,135 @@ class SequencePool(
         reg_name = self.get_registration_name()
         seq_cls = Sequence.get_registered(reg_name)
         return seq_cls
+
+    # ------------------------------------------------------------------
+    # T0 / Zeroing
+    # ------------------------------------------------------------------
+    @CachableSettings.cached_method()
+    def _get_t0_df(
+        self,
+    ) -> pl.DataFrame:
+        """Internal cached T0 computation. Always returns a Polars DataFrame.
+
+        Computes ``[id_col, _T0_, _T0_NEAREST_RANK_]`` in one shot: lazy trigger,
+        mask filter, then floor lookup via :meth:`_resolve_nearest_rank`.
+        Result invalidated by :meth:`clear_cache`.
+
+        Returns:
+            Polars DataFrame with columns ``[id_col, _T0_, _T0_NEAREST_RANK_]``,
+            one row per visible sequence.
+        """
+        df = self._t0_setter.df
+        if df is None:
+            # No explicit set_t0() yet: trigger default (position=0) lazily.
+            # compute(self) uses _sequence_data_lf() → already respects _id_mask.
+            self._t0_setter.compute(self)
+            df = self._t0_setter.df
+        elif self._id_mask is not None:
+            # Pre-computed df may contain IDs no longer in view: filter now.
+            df = df.filter(pl.col(self.settings.id_column).is_in(self._id_mask))
+        return self._resolve_nearest_rank(df)
+
+    def t0_data(
+        self,
+        output_format: Literal["pandas", "polars"] = "pandas",
+    ) -> pd.DataFrame | pl.DataFrame:
+        """Return the T0 table for the sequences visible in this pool view.
+
+        Thin public wrapper around :meth:`_get_t0_df` that handles format
+        conversion.
+
+        Args:
+            output_format: ``"pandas"`` (default) or ``"polars"``.
+
+        Returns:
+            DataFrame with columns ``[id_col, _T0_, _T0_NEAREST_RANK_]``,
+            one row per visible sequence.
+
+        Examples::
+
+            pool.set_t0(position=0, anchor="start")
+            df = pool.t0_data()
+            df_pl = pool.t0_data(output_format="polars")
+        """
+        df = self._get_t0_df()
+        if output_format == "polars":
+            return df
+        if output_format == "pandas":
+            return df.to_pandas()
+        raise ValueError(
+            f"Invalid output_format {output_format!r}. "
+            "Expected one of: 'pandas', 'polars'."
+        )
+
+    def set_t0(
+        self,
+        *,
+        position: int | None = None,
+        direct=None,
+        feature: str | None = None,
+        query: pl.Expr | None = None,
+        anchor: Literal["start", "end", "middle"] | None = None,
+        use_first: bool = True,
+    ) -> SequencePool:
+        """Configure the T0 strategy for this pool.
+
+        Exactly one strategy keyword must be provided.  All others must
+        remain ``None``.
+
+        Args:
+            position: Row index (0-based; negative indexing supported).
+            direct:   Scalar value or ``{seq_id: value}`` dict.
+            feature:  Static feature column name.
+            query:    Polars boolean expression on any sequence column (temporal columns or entity features).
+            anchor:   Which end of each interval/state row to use as the
+                      reference timestamp for the floor lookup:
+
+                      * ``"start"`` *(default)*: use the start timestamp.
+                      * ``"end"``: use the end timestamp.
+                      * ``"middle"``: use the midpoint ``(start + end) / 2``.
+
+                      Omitting ``anchor=`` on an interval/state pool emits a
+                      :exc:`UserWarning` and defaults to ``"start"``.
+                      Passing ``anchor=`` on an event pool emits a
+                      :exc:`UserWarning` and the value is ignored (single
+                      temporal column, anchor is irrelevant).
+            use_first: For the *query* strategy, whether to take the first
+                (``True``) or last (``False``) matching row.
+
+        Returns:
+            ``self`` for chaining.
+        """
+        strategies = {
+            "position": position,
+            "direct": direct,
+            "feature": feature,
+            "query": query,
+        }
+        provided = [k for k, v in strategies.items() if v is not None]
+        if len(provided) == 0:
+            raise TypeError(
+                "set_t0() requires exactly one strategy keyword: "
+                "position, direct, feature, or query."
+            )
+        if len(provided) > 1:
+            raise TypeError(
+                f"set_t0() accepts exactly one strategy keyword, got: {provided}."
+            )
+
+        name = provided[0]
+        strategies_kwargs = {
+            "position": dict(position=position, anchor=anchor),
+            "direct": dict(direct=direct, anchor=anchor),
+            "feature": dict(feature=feature),
+            "query": dict(query=query, anchor=anchor, use_first=use_first),
+        }
+        setter = T0Setter.get_registered(name)(**strategies_kwargs[name])
+        setter.compute(self)  # eager: sets setter._df; errors surface here
+        self._t0_setter = setter
+
+        self.clear_cache()
+        return self
 
     # ------------------------------------------------------------------
     # Access
@@ -364,11 +501,20 @@ class SequencePool(
         # pylint: disable=protected-access
         new_seq = object.__new__(self._target_seq_cls)
         Sequence.__init__(new_seq, id_value, self._store, settings)
+
+        # Inject T0: pass the setter reference so the Sequence computes
+        # _T0_NEAREST_RANK itself using self._sequence_data_lf() → respects
+        # the sequence's own _row_mask.
+        # Ensure setter._df is populated; floor lookup is deferred to the Sequence.
+        if self._t0_setter.df is None:
+            self._t0_setter.compute(self)
+
         return new_seq._inject(
             cast_recipe=self._casts,
             row_mask=row_mask,
             virtual_id=self._virtual_id,
             parent_metadata=self.metadata,
+            parent_t0_setter=self._t0_setter,
         )
 
     # ------------------------------------------------------------------
@@ -848,6 +994,10 @@ class SequencePool(
         The virtual context is **forked** into a new UUID so that the copy
         owns its own independent context.  Garbage-collecting either instance
         will not destroy the other's virtual features.
+
+        The T0 strategy (``_t0_setter``) is propagated to the copy.  The T0
+        result cache is **not** copied; it is recomputed on the first call to
+        :meth:`t0_data` on the copy.
         """
         # pylint: disable=protected-access
         return self.__class__(
@@ -859,6 +1009,7 @@ class SequencePool(
             row_mask=self._row_mask.clone() if self._row_mask is not None else None,
             has_soft_drops=self._has_soft_drops,
             cast_recipe=self._casts,
+            t0_setter=self._t0_setter,
         )
 
     def subset(self, ids, *, inplace=False) -> SequencePool:
@@ -1885,6 +2036,7 @@ class SequencePool(
             row_mask=self._row_mask,
             has_soft_drops=self._has_soft_drops,
             cast_recipe=cast_for_new,
+            t0_setter=self._t0_setter,
         )
         return new_pool
 
@@ -1932,11 +2084,12 @@ class SequencePool(
         """
         ephemeral = self._reinterpret_as(target_cls, settings, virtual_id)
         dest_path = ephemeral.save(destination=destination, overwrite=overwrite)
+        # TODO: FIX : PROPAGATE T0 ...
         return target_cls(dest_path, **settings)
 
     def _as_event_from_period(
         self,
-        anchor: str,
+        anchor: Literal["start", "end", "middle"],
         time_column: str,
         destination: str | Path | None = None,
         overwrite: bool = False,
