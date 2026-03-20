@@ -16,6 +16,7 @@ from tanat_utils import CachableSettings, Registrable
 from .entity import Entity
 from .cast import SequenceCastRecipe
 from .view_mixin import SequenceViewMixin
+from ...zeroing import T0Setter, _T0, _T0_NEAREST_RANK, T0Value
 
 if TYPE_CHECKING:
     from ...store.sequence.store import SequenceStore
@@ -78,6 +79,7 @@ class Sequence(
         self._row_mask: pl.Series | None = None
         self._virtual_id: str | None = None
         self._parent_metadata = None
+        self._parent_t0_setter: T0Setter | None = None
         self._casts: SequenceCastRecipe = SequenceCastRecipe.coerce(cast_recipe)
         if not self._casts.is_empty():
             self._casts.probe(self._store)
@@ -89,6 +91,7 @@ class Sequence(
         row_mask: pl.Series | None = None,
         virtual_id: str | None = None,
         parent_metadata=None,
+        parent_t0_setter: T0Setter | None = None,
     ) -> Sequence:
         """Inject pool-managed context into this sequence.
 
@@ -99,6 +102,12 @@ class Sequence(
             row_mask: Boolean Series aligned with this sequence's rows.
             virtual_id: Virtual context UUID from the parent pool.
             parent_metadata: Pre-computed metadata from the parent pool.
+            parent_t0_setter: The pool's :class:`T0Setter` instance.  The
+                Sequence reads ``setter._df`` (already computed), filters to
+                its own ID, then calls :meth:`_resolve_nearest_rank` with its
+                own ``_sequence_data_lf()``. So ``_T0_NEAREST_RANK`` always
+                respects the sequence's ``_row_mask``.  ``None`` means
+                standalone sequence (lazy T0 compute path).
 
         Returns:
             ``self``
@@ -108,6 +117,7 @@ class Sequence(
         self._row_mask = row_mask
         self._virtual_id = virtual_id
         self._parent_metadata = parent_metadata
+        self._parent_t0_setter = parent_t0_setter
         return self
 
     # ------------------------------------------------------------------
@@ -118,6 +128,59 @@ class Sequence(
     def id_value(self):
         """The sequence identifier."""
         return self._id_value
+
+    @CachableSettings.cached_property
+    def _t0_setter(self) -> T0Setter:
+        """Active T0 setter for this sequence.
+
+        * **Pool path** (``_parent_t0_setter is not None``): returns the
+          parent pool's setter directly.  Already computed and validated.
+        * **Standalone path**: instantiates and runs the default
+          ``position=0`` setter on demand.  Cached after the first access.
+        """
+        if self._parent_t0_setter is not None:
+            return self._parent_t0_setter
+        setter = T0Setter.default(is_event=self.get_registration_name() == "event")
+        setter.compute(self)
+        return setter
+
+    @CachableSettings.cached_property
+    def _t0_result(self) -> tuple[T0Value | None, int | None]:
+        """Compute or return the T0 ``(value, index)`` pair for this sequence.
+
+        Delegates to :attr:`_t0_setter` for the raw ``[id, _T0]`` data, then
+        runs the floor lookup via :meth:`_resolve_nearest_rank`.
+        ``_T0_NEAREST_RANK`` always respects ``_row_mask`` because
+        :meth:`_resolve_nearest_rank` reads ``_sequence_data_lf()``.
+
+        Cached by :class:`~tanat_utils.CachableSettings`.
+        """
+        setter = self._t0_setter
+        if setter.df is None:
+            return (None, None)
+        df = setter.df.filter(pl.col(self.settings.id_column) == self._id_value)
+        resolved = self._resolve_nearest_rank(df)
+        if len(resolved) > 0:
+            return (resolved[_T0][0], resolved[_T0_NEAREST_RANK][0])
+        return (None, None)
+
+    @property
+    def t0(self) -> T0Value | None:
+        """T0 value for this sequence (scalar, not a DataFrame).
+
+        ``None`` when no valid T0 row was found (e.g. sequence too short,
+        or no row matched the query).
+        """
+        return self._t0_result[0]
+
+    @property
+    def t0_nearest_rank(self) -> int | None:
+        """0-based rank of the nearest row at or before T0 within this sequence.
+
+        ``None`` when no valid T0 row was found (e.g. sequence too short,
+        T0 before all timestamps, or no row matched the query).
+        """
+        return self._t0_result[1]
 
     def __len__(self) -> int:
         """Number of events/states in this sequence (respects row mask)."""
