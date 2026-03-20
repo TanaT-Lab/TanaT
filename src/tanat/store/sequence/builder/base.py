@@ -292,9 +292,7 @@ class SequenceStoreBuilder(ABC, Registrable, DisplayMixin):
             n_sequences,
             n_entities,
         )
-        self._display_footer(
-            f"{n_sequences:,} sequences \u00b7 {n_entities:,} entities"
-        )
+        self._display_footer(f"{n_sequences:,} sequences · {n_entities:,} entities")
         return {"n_sequences": n_sequences, "n_entities": n_entities}
 
     # ------------------------------------------------------------------
