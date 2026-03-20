@@ -82,21 +82,60 @@ class T0Setter(ABC, Registrable):
         anchor = None if is_event else "start"
         return cls.get_registered("position")(anchor=anchor)
 
-    @abstractmethod
     def compute(self, target: SequencePool | Sequence) -> pl.DataFrame:
-        """Compute T0 for a pool (all sequences) or a standalone sequence.
+        """Compute T0 and store the result in :attr:`df`.
 
-        Implementations **must** assign ``self._df`` before returning.
-        Always returns a DataFrame with two columns:
+        Template method. Handles the shared steps for every strategy:
 
-        * ``id_col``: sequence identifier (same dtype as in the store).
-        * ``_T0_``: T0 value (``null`` when no valid row found).
-
-        ``_T0_NEAREST_RANK_`` is **not** produced here; it is a view-layer
-        concern computed by the pool's ``_resolve_nearest_rank()``.
+        1. Normalise ``anchor`` against the pool type for strategies that
+           declare that field (via :meth:`_guard_anchor`).
+        2. Collect the full ID list and ID column name from *target*.
+        3. Delegate to :meth:`_compute_t0` for strategy-specific logic.
+        4. Left-join the partial result with all IDs so sequences with no
+           match receive ``_T0_ = null``.
+        5. Emit a :exc:`UserWarning` for every null (via :meth:`_warn_nulls`).
+        6. Assign ``self._df`` and return it.
 
         When *target* is a :class:`~tanat.sequence.base.sequence.Sequence`
         the result has exactly one row.
+        """
+        if hasattr(self.settings, "anchor"):
+            self._guard_anchor(target)
+        id_col = target.settings.id_column
+        ids: list = (
+            target.unique_ids if hasattr(target, "unique_ids") else [target.id_value]
+        )
+        partial_lf = self._compute_t0(target, ids, id_col)
+        t0_df = (
+            pl.LazyFrame({id_col: ids})
+            .join(partial_lf, on=id_col, how="left")
+            .collect()
+        )
+        self._warn_nulls(t0_df.filter(pl.col(_T0).is_null())[id_col].to_list())
+        self._df = t0_df
+        return self._df
+
+    @abstractmethod
+    def _compute_t0(
+        self, target: SequencePool | Sequence, ids: list, id_col: str
+    ) -> pl.LazyFrame:
+        """Return a partial ``[id_col, _T0_]`` LazyFrame for this strategy.
+
+        Called by :meth:`compute` after anchor normalisation. The returned
+        frame may omit IDs for which no valid row was found; those IDs
+        receive ``_T0_ = null`` in the outer left-join performed by
+        :meth:`compute`.
+
+        Args:
+            target: Pool or standalone Sequence being targeted.
+            ids: Full list of sequence IDs visible in *target* (already
+                extracted by :meth:`compute`; passed so strategies that
+                build a frame from scratch avoid re-fetching them).
+            id_col: Name of the ID column in *target*.
+
+        Returns:
+            Two-column LazyFrame ``[id_col, _T0_]``. Partial results are
+            accepted; missing rows are filled with ``null`` by the caller.
         """
 
     # ── Anchor helpers ────────────────────────────────────────────────────

@@ -32,14 +32,15 @@ class FeatureT0Setter(T0Setter, register_name="feature"):
     def __init__(self, *, feature: str):
         super().__init__(FeatureT0Settings(feature=feature))
 
-    def compute(self, target: SequencePool | Sequence) -> pl.DataFrame:
+    def _compute_t0(
+        self, target: SequencePool | Sequence, ids: list, id_col: str
+    ) -> pl.LazyFrame:
         feature = self.settings.feature
-        id_col = target.settings.id_column
 
-        # 1. Validate the feature exists in static features.
+        # Validate the feature exists in static features.
         target.settings.validate_features(feature, is_static=True)
 
-        # 2. Validate dtype compatibility: feature dtype must match temporal dtype.
+        # Validate dtype compatibility: feature dtype must match temporal dtype.
         feat_info = target.metadata.feature_info(feature, is_static=True)
         temporal_dtype = target.metadata.temporal.dtype
         if feat_info is not None and feat_info.dtype != temporal_dtype:
@@ -50,15 +51,7 @@ class FeatureT0Setter(T0Setter, register_name="feature"):
                 "to align the feature dtype before calling set_t0()."
             )
 
-        # 3. Build [id_col, _T0_] via a left-join so that sequences without a static value receive null.
-        ids: list = (
-            target.unique_ids if hasattr(target, "unique_ids") else [target.id_value]
-        )
-        t0_lf = target._static_data_lf(feature).select(
+        # pylint: disable=protected-access
+        return target._static_data_lf(feature).select(
             id_col, pl.col(feature).alias(_T0)
         )
-        t0_df = pl.LazyFrame({id_col: ids}).join(t0_lf, on=id_col, how="left").collect()
-
-        self._warn_nulls(t0_df.filter(pl.col(_T0).is_null())[id_col].to_list())
-        self._df = t0_df
-        return self._df

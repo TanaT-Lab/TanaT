@@ -56,40 +56,20 @@ class QueryT0Setter(T0Setter, register_name="query"):
             QueryT0Settings(query=query, anchor=anchor, use_first=use_first)
         )
 
-    def compute(self, target: SequencePool | Sequence) -> pl.DataFrame:
-        # 1. Normalise anchor (frozen-safe writeback).
-        self._guard_anchor(target)
-
-        id_col = target.settings.id_column
-
-        # 2. Resolve temporal expression (start / end, dtype-aware for middle).
+    def _compute_t0(
+        self, target: SequencePool | Sequence, ids: list, id_col: str
+    ) -> pl.LazyFrame:
         cols = target.settings.get_temporal_columns()
         t_expr = self._t0_temporal_expr(
             self.settings.anchor, cols, target.metadata.is_datetime
         )
-
-        # 3. Full sequence data (temporal + entity features), masks and rename applied.
-        #    Row numbers are stable within each sequence (physical order preserved).
+        # Full sequence data (temporal + entity features), masks applied.
+        # Row numbers are stable within each sequence (physical order preserved).
+        # pylint: disable=protected-access
         lf = target._sequence_data_lf().with_columns(
             pl.int_range(pl.len()).over(id_col).alias("__rn__"),
         )
-
-        # 4. Keep only rows matching the user query.
         matched = lf.filter(self.settings.query)
-
-        # 5. Per sequence: pick the first or last matching row by row number.
         pick = t_expr.sort_by("__rn__")
         pick = pick.first() if self.settings.use_first else pick.last()
-        result_lf = matched.group_by(id_col).agg(pick.alias(_T0))
-
-        # 6. Left-join so sequences with no matching row receive _t0 = null.
-        ids: list = (
-            target.unique_ids if hasattr(target, "unique_ids") else [target.id_value]
-        )
-        t0_df = (
-            pl.LazyFrame({id_col: ids}).join(result_lf, on=id_col, how="left").collect()
-        )
-
-        self._warn_nulls(t0_df.filter(pl.col(_T0).is_null())[id_col].to_list())
-        self._df = t0_df
-        return self._df
+        return matched.group_by(id_col).agg(pick.alias(_T0))

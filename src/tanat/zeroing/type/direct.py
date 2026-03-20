@@ -55,29 +55,13 @@ class DirectT0Setter(T0Setter, register_name="direct"):
             )
         super().__init__(DirectT0Settings(direct=direct, anchor=anchor))
 
-    def compute(self, target: SequencePool | Sequence) -> pl.DataFrame:
-        """Build ``[id_col, _T0]``, assign to ``self._df``, and return it.
-
-        ``_T0_NEAREST_RANK_`` is NOT computed here; that is ViewMixin's job.
-        """
-        # Normalise anchor against pool type and write back to frozen settings.
-        self._guard_anchor(target)
+    def _compute_t0(
+        self, target: SequencePool | Sequence, ids: list, id_col: str
+    ) -> pl.LazyFrame:
         direct = self.settings.direct
-        id_col = target.settings.id_column
-        ids: list = (
-            target.unique_ids if hasattr(target, "unique_ids") else [target.id_value]
-        )
-
         if isinstance(direct, dict):
-            t0_df = self._compute_dict(ids, direct, id_col)
-        else:
-            t0_df = self._compute_scalar(ids, direct, id_col)
-
-        null_ids = t0_df.filter(pl.col(_T0).is_null())[id_col].to_list()
-        self._warn_nulls(null_ids)
-
-        self._df = t0_df
-        return self._df
+            return self._compute_dict(ids, direct, id_col).lazy()
+        return self._compute_scalar(ids, direct, id_col).lazy()
 
     def _compute_scalar(self, ids: list, value: T0Value, id_col: str) -> pl.DataFrame:
         """Build ``[id_col, _T0_]`` with the same value for all sequences."""
@@ -93,7 +77,7 @@ class DirectT0Setter(T0Setter, register_name="direct"):
                 f"DirectT0Setter: {len(unknown_keys)} key(s) in 'direct' dict are not "
                 f"present in the pool and will be ignored: {unknown_keys}",
                 UserWarning,
-                stacklevel=3,
+                stacklevel=5,  # user → set_t0 → compute → _compute_t0 → _compute_dict
             )
 
         return pl.DataFrame({id_col: ids, _T0: [mapping.get(i) for i in ids]})
