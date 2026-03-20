@@ -412,6 +412,30 @@ class SequenceStore(StaticStoreMixin):
             cast_schema.update(feature_casts)
         return apply_casts(lf, cast_schema) if cast_schema else lf
 
+    def get_temporal_data(
+        self,
+        virtual_id: str | None = None,
+        *,
+        id_cast: pl.DataType | None = None,
+        temporal_cast: pl.DataType | None = None,
+    ) -> pl.LazyFrame:
+        """Returns seq_id + temporal columns only (no entity features).
+
+        Cheaper than :meth:`get_sequence_data` when entity features are not
+        needed. Cast overlays are applied after assembly.
+        """
+        lf = pl.concat(
+            [self._ids_col(), self.temporal(virtual_id)],
+            how="horizontal",
+        )
+        cast_schema: dict[str, pl.DataType] = {}
+        if id_cast is not None:
+            cast_schema[SCH.SEQ_ID] = id_cast
+        if temporal_cast is not None:
+            for col in self.temporal(virtual_id).collect_schema().names():
+                cast_schema[col] = temporal_cast
+        return apply_casts(lf, cast_schema) if cast_schema else lf
+
     def get_entity_row(
         self,
         id_value,
