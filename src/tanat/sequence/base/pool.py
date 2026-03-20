@@ -84,6 +84,8 @@ class SequencePool(
         self._casts: SequenceCastRecipe = SequenceCastRecipe.coerce(cast_recipe)
         if not self._casts.is_empty():
             self._casts.probe(self._store)
+        # Locking: when a pool is managed by a TrajectoryPool, it is locked.
+        # Prevent any operations that would desynchronise it from its siblings.
         self._locked: bool = False
 
         # -- GC safety --------------------------------------------------------
