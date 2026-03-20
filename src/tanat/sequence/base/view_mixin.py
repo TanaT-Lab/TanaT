@@ -13,9 +13,9 @@ from pathlib import Path
 import polars as pl
 from tanat_utils import CachableSettings
 
-from ...core.path import resolve_path
 from ...metadata.sequence import SequenceMetadata
 from ...store.sequence.store import SequenceStore
+from ...zeroing import _T0, _T0_NEAREST_RANK
 from ._utils import resolve_store
 
 
@@ -155,6 +155,20 @@ class SequenceViewMixin:
         lf = self._select_columns(lf, valid_features, is_static=False)
         return self._rename_columns(lf, is_static=False)
 
+    def _temporal_data_lf(self) -> pl.LazyFrame:
+        """Return ``id + temporal`` columns as a :class:`~polars.LazyFrame`, masks applied.
+
+        Cheaper than :meth:`_sequence_data_lf` when entity features are not
+        needed.
+        """
+        lf = self._store.get_temporal_data(
+            virtual_id=self._virtual_id,
+            id_cast=self._casts.id,
+            temporal_cast=self._casts.temporal,
+        )
+        lf = self._apply_masks(lf, is_static=False)
+        return self._rename_columns(lf, is_static=False)
+
     def _static_data_lf(
         self,
         features: list[str] | str | None = None,
@@ -264,4 +278,63 @@ class SequenceViewMixin:
             id_cast=self._casts.id,
             temporal_cast=self._casts.temporal,
             feature_casts=self._casts.entity or None,
+        )
+
+    # ------------------------------------------------------------------
+    # T0 / Zeroing
+    # ------------------------------------------------------------------
+
+    def _resolve_nearest_rank(
+        self,
+        t0_df: pl.DataFrame,
+    ) -> pl.DataFrame:
+        """Floor lookup: last row where ``start[i] ≤ _T0`` per sequence.
+
+        The comparison **always** uses the first temporal column (``start``),
+        regardless of the anchor used to compute ``_T0``.
+
+        Rationale: the anchor controls *which edge of a row* is used to
+        compute ``_T0`` (start / end / middle).  The nearest-rank, however,
+        must be the row that *contains or precedes* ``_T0`` on the natural
+        row-ordering axis (left boundary = start).  Using any other column
+        for the ``≤`` comparison gives wrong results:
+
+        * ``end ≤ T0``: excludes the containing row when T0 falls inside an
+          interval (``start < T0 < end``), which is one row too early.
+        * ``middle ≤ T0``: same issue for overlapping intervals.
+
+        For non-overlapping intervals, ``start[i] ≤ T0`` always identifies
+        the containing row, regardless of how ``_T0`` was anchored:
+
+        * ``anchor='start'`` → ``_T0 = start[k]`` → max i where ``start[i] ≤ start[k]`` = k ✓
+        * ``anchor='end'``   → ``_T0 = end[k]``   → max i where ``start[i] ≤ end[k]``   = k ✓
+        * ``anchor='middle'`` → ``_T0 = mid[k]``  → max i where ``start[i] ≤ mid[k]``   = k ✓
+
+        Args:
+            t0_df: Two-column DataFrame ``[id_col, _T0_]``.
+
+        Returns:
+            Three-column DataFrame ``[id_col, _T0_, _T0_NEAREST_RANK_]``.
+        """
+        id_col = self.settings.id_column
+        t_col = self.settings.get_temporal_columns()[0]
+
+        temporal_lf = (
+            self._sequence_data_lf()
+            .select([id_col, t_col])
+            .with_columns(
+                pl.int_range(pl.len()).over(id_col).alias("__rn__"),
+            )
+        )
+        rank_lf = (
+            temporal_lf.join(t0_df.lazy().select([id_col, _T0]), on=id_col)
+            .filter(pl.col(t_col) <= pl.col(_T0))
+            .group_by(id_col)
+            .agg(pl.col("__rn__").max().alias(_T0_NEAREST_RANK))
+        )
+        return (
+            t0_df.lazy()
+            .join(rank_lf, on=id_col, how="left")
+            .with_columns(pl.col(_T0_NEAREST_RANK).cast(pl.Int32))
+            .collect()
         )
