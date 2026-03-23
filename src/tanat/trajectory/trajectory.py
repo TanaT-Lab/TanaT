@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterator, Literal
+from typing import TYPE_CHECKING, Iterator, Literal
 
 import polars as pl
 import pandas as pd
@@ -16,6 +16,9 @@ from ..store.trajectory.store import TrajectoryStore
 from .cast import TrajectoryCastRecipe
 from .settings import TrajectorySettings
 from .view_mixin import TrajectoryViewMixin
+
+if TYPE_CHECKING:
+    from .pool import TrajectoryPool
 
 
 class Trajectory(TrajectoryViewMixin, CachableSettings):
@@ -40,7 +43,6 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
         *,
         id_column: str = "id",
         static_features: list[str] | None = None,
-        cast_recipe: TrajectoryCastRecipe | dict | None = None,
     ) -> None:
         """Create a trajectory view for *id_value*.
 
@@ -50,65 +52,79 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
             id_column: User-facing name for the trajectory ID column.
             static_features: Static feature names to expose.
                 ``None`` → all available.  ``[]`` → none.
-            cast_recipe: Optional cast recipe (or dict) applied at read time.
-                Normalised via :meth:`TrajectoryCastRecipe.coerce` and probed
-                eagerly.
-
-        Raises:
-            TypeError: If *cast_recipe* is not a :class:`TrajectoryCastRecipe`,
-                ``dict``, or ``None``.
         """
         self._id_value = id_value
         self._store = self._resolve_store(store)
         sf = self._resolve_features(self._store, static_features)
         self._alias_mask: set[str] | None = None
-        self._virtual_id: str | None = None
-        self._parent_metadata = None
-        # Set by _inject() when created from a TrajectoryPool.
-        # Delegates _build_sequence to pool[id] so pool-level mutations propagate.
-        self._sequence_pools: dict | None = None
 
         CachableSettings.__init__(
             self, settings=TrajectorySettings(id_column=id_column, static_features=sf)
         )
 
-        self._casts: TrajectoryCastRecipe = TrajectoryCastRecipe.coerce(cast_recipe)
-        if not self._casts.is_empty():
-            self._casts.probe(self._store)
+        self._parent_pool: TrajectoryPool | None = None
 
-    def _inject(
-        self,
+    @classmethod
+    def from_parent(
+        cls,
+        id_value,
+        store: TrajectoryStore,
+        settings: TrajectorySettings,
         *,
-        cast_recipe: TrajectoryCastRecipe | dict | None = None,
+        parent_pool: TrajectoryPool,
         alias_mask: set[str] | None = None,
-        virtual_id: str | None = None,
-        parent_metadata=None,
-        sequence_pools: dict | None = None,
     ) -> Trajectory:
-        """Inject pool-managed context into this trajectory.
+        """Create a pool-managed trajectory.  **Not part of the public API.**
 
-        Called by :meth:`TrajectoryPool._build_trajectory` immediately after
-        construction - **not part of the public API**.  End users create
-        trajectories through a pool (``pool[id]``) or standalone without context.
+        Bypasses store resolution, feature resolution, and cast probe — all
+        already performed by the pool.  Pool context (casts, virtual ID,
+        sequence pools, metadata) is read lazily from *parent_pool* via
+        the corresponding properties.
 
         Args:
-            cast_recipe: Cast recipe propagated from the parent pool.
-            alias_mask: Set of visible store aliases.
-            virtual_id: Virtual context UUID from the parent pool.
-            parent_metadata: Pre-computed metadata from the parent pool.
-            sequence_pools: Shared sequence pool registry from the parent pool.
+            id_value: Trajectory identifier.
+            store: Already-resolved :class:`TrajectoryStore`.
+            settings: Fully-resolved :class:`TrajectorySettings`.
+            parent_pool: The owning :class:`TrajectoryPool`.
+            alias_mask: Override the pool-level alias mask (used by
+                :meth:`TrajectoryPool.get_trajectories` with explicit aliases).
 
         Returns:
-            ``self`` - enables fluent construction:
-            ``Trajectory(...)._inject(...)``.
+            A new :class:`Trajectory` instance bound to *parent_pool*.
         """
-        if cast_recipe is not None:
-            self._casts = TrajectoryCastRecipe.coerce(cast_recipe)
-        self._alias_mask = alias_mask
-        self._virtual_id = virtual_id
-        self._parent_metadata = parent_metadata
-        self._sequence_pools = sequence_pools
-        return self
+        new_traj = object.__new__(cls)
+        new_traj._id_value = id_value
+        new_traj._store = store
+        new_traj._alias_mask = alias_mask
+        CachableSettings.__init__(new_traj, settings=settings)
+        new_traj._parent_pool = parent_pool
+        return new_traj
+
+    # ------------------------------------------------------------------
+    # Lazy pool-delegating properties
+    # ------------------------------------------------------------------
+
+    @property
+    def _casts(self) -> TrajectoryCastRecipe:
+        """Active cast recipe for this trajectory.
+
+        * **Pool path:** delegates to the parent pool's recipe.
+        * **Standalone path:** always empty (no casts).
+        """
+        if self._parent_pool is not None:
+            return self._parent_pool._casts
+        return TrajectoryCastRecipe()
+
+    @property
+    def _virtual_id(self) -> str | None:
+        """Virtual context UUID for this trajectory.
+
+        * **Pool path:** delegates to the parent pool's virtual context.
+        * **Standalone path:** always ``None``.
+        """
+        if self._parent_pool is not None:
+            return self._parent_pool._virtual_id
+        return None
 
     # ------------------------------------------------------------------
     # Properties
@@ -156,26 +172,23 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
         present in :attr:`_store_aliases` (e.g. when iterating or building
         :attr:`sequences`).
 
-        When the parent pool's ``_sequence_pools`` has been injected (via
-        ``_build_trajectory``), delegates to ``pool[id]`` so that all pool-level
-        mutations (casts, ``add_entity_features``, ``add_static_features``,
-        ``drop_features``) propagate
+        When created from a :class:`TrajectoryPool` (via
+        :meth:`from_parent`), delegates to ``pool.sequence_pools[alias][id]``
+        so that all pool-level mutations (casts, features, drops) propagate
         automatically.  Falls back to building directly from the store when
         the :class:`Trajectory` is used standalone.
         """
-        if self._sequence_pools is not None:
-            return self._sequence_pools[store_alias][self._id_value]
-        # Standalone fallback: build directly from the linked store.
+        if self._parent_pool is not None:
+            return self._parent_pool.sequence_pools[store_alias][self._id_value]
+        # Standalone fallback: no casts, no pool context.
         seq_store = self._store.sequence_stores[store_alias]
         seq_type = seq_store.get_sequence_type()
         seq_cls = Sequence.get_registered(seq_type)
-        # pylint: disable=protected-access
-        seq = seq_cls(
+        return seq_cls(
             id_value=self._id_value,
             store=seq_store,
             **self.settings,
-        )._inject(cast_recipe={"id": self._casts.id, "temporal": self._casts.temporal})
-        return seq
+        )
 
     def __getitem__(self, store_alias: str):
         if store_alias not in self._store_aliases:
