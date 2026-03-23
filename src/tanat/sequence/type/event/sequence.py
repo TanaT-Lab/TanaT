@@ -6,7 +6,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ...base.cast import SequenceCastRecipe
 from ...base.sequence import Sequence
 from .settings import EventSequenceSettings
 
@@ -28,7 +27,6 @@ class EventSequence(Sequence, register_name="event"):
         time_column: str = "time",
         entity_features: list[str] | None = None,
         static_features: list[str] | None = None,
-        cast_recipe: SequenceCastRecipe | dict | None = None,
     ) -> None:
         """Create an event sequence for *id_value*.
 
@@ -41,13 +39,6 @@ class EventSequence(Sequence, register_name="event"):
                 ``None`` → all available from the store.
             static_features: Static feature names to expose.
                 ``None`` → all available.  ``[]`` → none.
-            cast_recipe: Optional cast recipe (or dict) applied at read time.
-                Normalised via :meth:`SequenceCastRecipe.coerce` and probed
-                eagerly.
-
-        Raises:
-            TypeError: If *cast_recipe* is not a :class:`SequenceCastRecipe`,
-                ``dict``, or ``None``.
         """
         _store = self._resolve_store(store)
         ef, sf = self._resolve_features(_store, entity_features, static_features)
@@ -60,5 +51,4 @@ class EventSequence(Sequence, register_name="event"):
                 entity_features=ef,
                 static_features=sf,
             ),
-            cast_recipe=cast_recipe,
         )
