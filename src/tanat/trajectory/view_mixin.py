@@ -79,8 +79,8 @@ class TrajectoryViewMixin:
         invalidated whenever settings change.
         """
         # Propagated from parent Pool.
-        if getattr(self, "_parent_metadata", None) is not None:
-            return self._parent_metadata
+        if getattr(self, "_parent_pool", None) is not None:
+            return self._parent_pool.metadata
 
         # traj_id dtype: from cast recipe if set, else store schema - no plan traversal.
         traj_id_dtype = self._casts.id

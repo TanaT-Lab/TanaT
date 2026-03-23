@@ -76,8 +76,8 @@ class SequenceViewMixin:
         or ``drop_features``).
         """
         # Propagated from parent Pool: consistent pool-level metadata.
-        if getattr(self, "_parent_metadata", None) is not None:
-            return self._parent_metadata
+        if getattr(self, "_parent_pool", None) is not None:
+            return self._parent_pool.metadata
 
         # seq_id dtype: from cast recipe if set, else store schema
         seq_id_dtype = self._casts.id
