@@ -7,6 +7,9 @@ from types import MappingProxyType
 
 import pytest
 
+from tanat.sequence.base.entity import Entity
+from tanat.sequence.base.pool import SequencePool
+from tanat.sequence.base.sequence import Sequence
 from tanat.trajectory.pool import TrajectoryPool
 from tanat.trajectory.trajectory import Trajectory
 
@@ -18,6 +21,12 @@ from tanat.trajectory.trajectory import Trajectory
 @pytest.mark.parametrize("pool_type", ["interval", "event", "state"])
 class TestSequencePool:
     """Pool-level read API: size, unique IDs, sequence_data and static_data schemas."""
+
+    def test_isinstance(self, pools_dict: dict, pool_type: str) -> None:
+        """Pool is a SequencePool subclass registered under pool_type."""
+        pool = pools_dict[pool_type]
+        assert isinstance(pool, SequencePool)
+        assert pool.get_registration_name() == pool_type
 
     def test_len(self, pools_dict: dict, pool_type: str, snapshot) -> None:
         """Pool size matches snapshot."""
@@ -52,6 +61,13 @@ class TestSequencePool:
 class TestSequence:
     """Navigate from pool to a single sequence via pool[id]."""
 
+    def test_isinstance(self, pools_dict: dict, pool_type: str) -> None:
+        """pool[id] returns a Sequence subclass registered under pool_type."""
+        pool = pools_dict[pool_type]
+        seq = pool[pool.unique_ids[0]]
+        assert isinstance(seq, Sequence)
+        assert seq.get_registration_name() == pool_type
+
     def test_access_by_id(self, pools_dict: dict, pool_type: str) -> None:
         """pool[id].id_value matches the requested ID."""
         pool = pools_dict[pool_type]
@@ -79,6 +95,13 @@ class TestSequence:
 @pytest.mark.parametrize("pool_type", ["interval", "event", "state"])
 class TestEntity:
     """Navigate from sequence to individual events / states via seq[index]."""
+
+    def test_isinstance(self, pools_dict: dict, pool_type: str) -> None:
+        """seq[0] returns an Entity subclass registered under pool_type."""
+        pool = pools_dict[pool_type]
+        entity = pool[pool.unique_ids[0]][0]
+        assert isinstance(entity, Entity)
+        assert entity.get_registration_name() == pool_type
 
     def test_data(self, pools_dict: dict, pool_type: str, snapshot) -> None:
         """entity.data() for the first event of the first sequence matches snapshot."""
@@ -128,6 +151,11 @@ class TestTrajectoryPool:
 class TestTrajectory:
     """Navigate from trajectory pool to a single trajectory via tpool[id]."""
 
+    def test_isinstance(self, traj_pool: TrajectoryPool) -> None:
+        """tpool[id] returns a Trajectory instance."""
+        traj = traj_pool[traj_pool.unique_ids[0]]
+        assert isinstance(traj, Trajectory)
+
     def test_access_by_id(self, traj_pool: TrajectoryPool) -> None:
         """tpool[id].id_value matches the requested ID."""
         first_id = traj_pool.unique_ids[0]
@@ -139,3 +167,75 @@ class TestTrajectory:
         traj: Trajectory = traj_pool[traj_pool.unique_ids[0]]
         df = traj["intervals"].sequence_data(output_format="polars")
         assert snapshot == df.select(sorted(df.columns))
+
+
+# ---------------------------------------------------------------------------
+# from_parent: regression test — instance attributes invariant
+# ---------------------------------------------------------------------------
+
+
+class TestTrajectoryFromParentAttrs:
+    """``from_parent`` must set the same instance attributes as ``__init__``.
+
+    Guards against fields silently added in ``Trajectory.__init__`` that
+    ``from_parent`` would miss.
+    """
+
+    def test_from_parent_sets_same_attrs_as_standalone_init(
+        self, traj_pool: TrajectoryPool
+    ) -> None:
+        """Ensure from_parent sets the same instance attributes as __init__."""
+        traj_id = traj_pool.unique_ids[0]
+
+        from_pool = traj_pool[traj_id]
+        standalone = Trajectory(
+            id_value=traj_id,
+            store=traj_pool._store,  # pylint: disable=protected-access
+        )
+
+        standalone_attrs = {k for k in vars(standalone) if not k.startswith("__")}
+        from_pool_attrs = {k for k in vars(from_pool) if not k.startswith("__")}
+
+        # Both must expose exactly the same set of instance attributes.
+        assert from_pool_attrs == standalone_attrs
+
+        # Sanity: standalone has no pool ref, pool-built does.
+        assert standalone._parent_pool is None  # pylint: disable=protected-access
+        assert from_pool._parent_pool is not None  # pylint: disable=protected-access
+
+
+@pytest.mark.parametrize("pool_type", ["interval", "event", "state"])
+class TestFromParentAttrs:
+    """``from_parent`` must set the same instance attributes as ``__init__``.
+
+    The only allowed difference is ``_parent_pool`` (present only on
+    pool-managed sequences).  This guards against typed subclasses
+    (Event, State, Interval) silently adding instance state that
+    ``from_parent`` — which calls ``Sequence.__init__`` directly —
+    would miss.
+    """
+
+    def test_from_parent_sets_same_attrs_as_subclass_init(
+        self, pools_dict: dict, pool_type: str, stores_dict: dict
+    ) -> None:
+        """Ensure from_parent sets the same instance attributes as __init__."""
+        pool = pools_dict[pool_type]
+        first_id = pool.unique_ids[0]
+
+        # Derive the concrete subclass (EventSequence, StateSequence, …)
+        # from the pool-built sequence rather than importing each type.
+        from_pool = pool[first_id]
+        seq_cls = type(from_pool)
+
+        standalone = seq_cls(id_value=first_id, store=stores_dict[pool_type])
+
+        standalone_attrs = {k for k in vars(standalone) if not k.startswith("__")}
+        from_pool_attrs = {k for k in vars(from_pool) if not k.startswith("__")}
+
+        # Both must expose exactly the same set of instance attributes.
+        # __init__ sets _parent_pool = None; from_parent overrides it.
+        assert from_pool_attrs == standalone_attrs
+
+        # Sanity: standalone has no pool ref, pool-built does.
+        assert standalone._parent_pool is None  # pylint: disable=protected-access
+        assert from_pool._parent_pool is not None  # pylint: disable=protected-access
