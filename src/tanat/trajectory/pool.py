@@ -426,20 +426,16 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             else self.settings.static_features
         )
         mask = alias_mask if alias_mask is not None else self._alias_mask
-        # pylint: disable=protected-access
-        traj = Trajectory(
+        return Trajectory.from_parent(
             id_value=traj_id,
             store=self._store,
-            id_column=self.settings.id_column,
-            static_features=sf,
-        )._inject(
-            cast_recipe=self._casts,
+            settings=TrajectorySettings(
+                id_column=self.settings.id_column,
+                static_features=sf,
+            ),
+            parent_pool=self,
             alias_mask=mask,
-            virtual_id=self._virtual_id,
-            parent_metadata=self.metadata,
-            sequence_pools=self.sequence_pools,
         )
-        return traj
 
     def __getitem__(self, traj_id) -> Trajectory:
         if traj_id not in set(self.unique_ids):
