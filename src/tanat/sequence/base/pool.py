@@ -487,34 +487,10 @@ class SequencePool(
             settings["entity_features"] = entity_features
         if static_features is not None:
             settings["static_features"] = static_features
-        if settings:
-            settings = replace(self.settings, **settings)  # dataclass replace
-        else:
-            settings = self.settings
+        settings = replace(self.settings, **settings) if settings else self.settings
 
-        row_mask = None
-        if self._row_mask is not None:
-            offset, length = self._store.get_slice(id_value, id_cast=self._casts.id)
-            row_mask = self._row_mask.slice(offset, length)
-
-        # Bypass the concrete subclass __init__ for speed (no store resolution, no cast probe, ...)
-        # pylint: disable=protected-access
-        new_seq = object.__new__(self._target_seq_cls)
-        Sequence.__init__(new_seq, id_value, self._store, settings)
-
-        # Inject T0: pass the setter reference so the Sequence computes
-        # _T0_NEAREST_RANK itself using self._sequence_data_lf() → respects
-        # the sequence's own _row_mask.
-        # Ensure setter._df is populated; floor lookup is deferred to the Sequence.
-        if self._t0_setter.df is None:
-            self._t0_setter.compute(self)
-
-        return new_seq._inject(
-            cast_recipe=self._casts,
-            row_mask=row_mask,
-            virtual_id=self._virtual_id,
-            parent_metadata=self.metadata,
-            parent_t0_setter=self._t0_setter,
+        return self._target_seq_cls.from_parent(
+            id_value, self._store, settings, parent_pool=self
         )
 
     # ------------------------------------------------------------------
