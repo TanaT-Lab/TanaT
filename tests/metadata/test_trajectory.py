@@ -8,7 +8,6 @@ import polars as pl
 
 from tanat.metadata.trajectory import TrajectoryMetadata
 from tanat.trajectory.pool import TrajectoryPool
-from tanat.trajectory.trajectory import Trajectory
 
 # ---------------------------------------------------------------------------
 # Trajectory pool: full metadata snapshot
@@ -133,10 +132,10 @@ class TestStandaloneTrajectoryMetadata:
         """metadata.traj_id matches the stored dtype (Int64)."""
         assert standalone_trajs[traj_case].metadata.traj_id == pl.Int64
 
-    def test_no_parent_metadata(self, standalone_trajs, traj_case: str) -> None:
-        """Standalone trajectory has no parent_metadata; it infers its own."""
+    def test_no_parent_pool(self, standalone_trajs, traj_case: str) -> None:
+        """Standalone trajectory has no parent pool; it infers its own metadata."""
         assert (  # pylint: disable=protected-access
-            standalone_trajs[traj_case]._parent_metadata is None
+            standalone_trajs[traj_case]._parent_pool is None
         )
 
     def test_metadata(self, standalone_trajs, traj_case: str, snapshot) -> None:
@@ -149,30 +148,19 @@ class TestStandaloneTrajectoryMetadata:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("traj_case", ["partial", "complete"])
-class TestStandaloneTrajectoryCast:
-    """cast_recipe passed at construction is reflected in metadata."""
+class TestPoolCastToTrajectory:
+    """Cast applied at pool level is reflected in child trajectory metadata."""
 
-    def test_cast_id_reflected(
-        self, standalone_trajs, traj_case: str, traj_store
-    ) -> None:
-        """cast_recipe={'id': pl.String} → metadata.traj_id == pl.String."""
-        orig = standalone_trajs[traj_case]
-        traj = Trajectory(
-            id_value=str(orig.id_value),  # id_value must match the cast dtype
-            store=traj_store,
-            cast_recipe={"id": pl.String},
-        )
+    def test_cast_id_reflected(self, traj_pool: TrajectoryPool) -> None:
+        """cast_id(pl.String) on pool → trajectory.metadata.traj_id == pl.String."""
+        pool = traj_pool.copy()
+        pool.cast_id(pl.String)
+        traj = pool[str(pool.unique_ids[0])]
         assert traj.metadata.traj_id == pl.String
 
-    def test_cast_static_feature_reflected(
-        self, standalone_trajs, traj_case: str, traj_store
-    ) -> None:
-        """cast_recipe with static cast → is_categorical_feature returns True."""
-        orig = standalone_trajs[traj_case]
-        traj = Trajectory(
-            id_value=orig.id_value,
-            store=traj_store,
-            cast_recipe={"static": {"group": pl.Categorical}},
-        )
+    def test_cast_static_feature_reflected(self, traj_pool: TrajectoryPool) -> None:
+        """cast_static_features on pool → trajectory reflects the cast."""
+        pool = traj_pool.copy()
+        pool.cast_static_features({"group": pl.Categorical})
+        traj = pool[pool.unique_ids[0]]
         assert traj.metadata.is_categorical_feature("group")

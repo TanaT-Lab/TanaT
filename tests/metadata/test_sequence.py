@@ -240,10 +240,10 @@ class TestStandaloneSequenceMetadata:
         """metadata.seq_id matches the stored dtype (Int64)."""
         assert standalone_seqs[seq_case].metadata.seq_id == pl.Int64
 
-    def test_no_parent_metadata(self, standalone_seqs, seq_case) -> None:
-        """Standalone sequence has no parent_metadata; it infers its own."""
+    def test_no_parent_pool(self, standalone_seqs, seq_case) -> None:
+        """Standalone sequence has no parent pool; it infers its own metadata."""
         assert (
-            standalone_seqs[seq_case]._parent_metadata is None
+            standalone_seqs[seq_case]._parent_pool is None
         )  # pylint: disable=protected-access
 
     def test_metadata(self, standalone_seqs, seq_case, snapshot) -> None:
@@ -252,34 +252,32 @@ class TestStandaloneSequenceMetadata:
 
 
 # ---------------------------------------------------------------------------
-# Standalone Sequence: cast_recipe passed at construction
+# Pool cast propagation to child Sequence via _parent_pool
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("seq_case", ["partial", "complete"])
-class TestStandaloneSequenceCast:
-    """cast_recipe passed at construction is reflected in metadata."""
+class TestPoolCastToSequence:
+    """Casts applied on a pool are reflected in Sequences built from it.
 
-    def test_cast_id_reflected(
-        self, standalone_seqs, seq_case, stores_dict: dict, seq_type: str
-    ) -> None:
-        """cast_recipe={'id': pl.String} → metadata.seq_id == pl.String."""
-        orig = standalone_seqs[seq_case]
-        seq = SEQ_CLS[seq_type](
-            id_value=str(orig.id_value),  # id_value must match the cast dtype
-            store=stores_dict[seq_type],
-            cast_recipe={"id": pl.String},
-        )
+    cast_recipe is a pool-level concern: ``pool.cast_id()`` /
+    ``pool.cast_features()`` are the canonical entry points.
+    Sequences read casts lazily from ``_parent_pool._casts``.
+    """
+
+    def test_cast_id_reflected(self, pools_dict: dict, seq_case, seq_type: str) -> None:
+        """pool.cast_id(pl.String) → pool[id].metadata.seq_id == pl.String."""
+        pool = pools_dict[seq_type].copy()
+        pool.cast_id(pl.String)
+        id_value = pool.unique_ids[0]
+        seq = pool[id_value]
         assert seq.metadata.seq_id == pl.String
 
     def test_cast_entity_feature_reflected(
-        self, standalone_seqs, seq_case, stores_dict: dict, seq_type: str
+        self, pools_dict: dict, seq_case, seq_type: str
     ) -> None:
-        """cast_recipe with entity cast → CategoricalInfo in metadata."""
-        orig = standalone_seqs[seq_case]
-        seq = SEQ_CLS[seq_type](
-            id_value=orig.id_value,
-            store=stores_dict[seq_type],
-            cast_recipe={"entity": {"status": pl.Categorical}},
-        )
+        """pool.cast_features({'status': Categorical}) → CategoricalInfo in seq.metadata."""
+        pool = pools_dict[seq_type].copy()
+        pool.cast_features({"status": pl.Categorical})
+        seq = pool[pool.unique_ids[0]]
         assert isinstance(seq.metadata.feature_info("status"), CategoricalInfo)
