@@ -34,6 +34,10 @@ class Entity(Registrable, ABC):
         rank: int,
         store: str | Path | SequenceStore,
         features: list[str] | None = None,
+        *,
+        cast_recipe: SequenceCastRecipe | dict | None = None,
+        virtual_id: str | None = None,
+        parent_metadata: SequenceMetadata | None = None,
     ) -> None:
         """Create an entity proxy for row *rank* of sequence *id_value*.
 
@@ -43,41 +47,23 @@ class Entity(Registrable, ABC):
             store: Store path, name, or :class:`SequenceStore` instance.
             features: Visible feature names propagated from the parent
                 :class:`Sequence`.  ``None`` → all store features.
+            cast_recipe: Cast recipe propagated from the parent
+                :class:`Sequence`.  Normalised via
+                :meth:`SequenceCastRecipe.coerce`.
+            virtual_id: Virtual context UUID from the parent
+                :class:`Sequence`.
+            parent_metadata: Pre-computed
+                :class:`~tanat.metadata.sequence.SequenceMetadata` from the
+                parent pool.  When provided, ``metadata`` returns this
+                directly (no extra I/O).
         """
         self._id_value = id_value
         self._rank = rank
         self._store = resolve_store(store)
         self._features = features
-        self._virtual_id: str | None = None
-        self._casts: SequenceCastRecipe = SequenceCastRecipe()
-        self._parent_metadata: SequenceMetadata | None = None
-
-    def _inject(
-        self,
-        *,
-        cast_recipe: SequenceCastRecipe | dict | None = None,
-        virtual_id: str | None = None,
-        parent_metadata: SequenceMetadata | None = None,
-    ) -> Entity:
-        """Inject sequence-managed context into this entity.
-
-        **Not part of the public API**.
-
-        Args:
-            cast_recipe: Cast recipe propagated from the parent sequence.
-                Normalised via :meth:`SequenceCastRecipe.coerce`.
-            virtual_id: Virtual context UUID from the parent sequence.
-            parent_metadata: Pre-computed metadata from the parent sequence.
-
-        Returns:
-            ``self``: enables fluent construction:
-            ``entity_cls(...)._inject(...)``.
-        """
-        if cast_recipe is not None:
-            self._casts = SequenceCastRecipe.coerce(cast_recipe)
-        self._virtual_id = virtual_id
-        self._parent_metadata = parent_metadata
-        return self
+        self._virtual_id: str | None = virtual_id
+        self._casts: SequenceCastRecipe = SequenceCastRecipe.coerce(cast_recipe)
+        self._parent_metadata: SequenceMetadata | None = parent_metadata
 
     # ------------------------------------------------------------------
     # Public helpers
