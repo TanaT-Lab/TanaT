@@ -20,6 +20,7 @@ from ...zeroing import T0Setter, _T0, _T0_NEAREST_RANK, T0Value
 
 if TYPE_CHECKING:
     from ...store.sequence.store import SequenceStore
+    from .pool import SequencePool
 
 LOGGER = logging.getLogger(__name__)
 
@@ -52,73 +53,102 @@ class Sequence(
         id_value,
         store: SequenceStore,
         settings,
-        *,
-        cast_recipe: SequenceCastRecipe | dict | None = None,
     ) -> None:
-        """Base initialiser. delegated to by concrete subclasses after store and
-        feature resolution have been performed.
+        """Base initialiser.  Delegated to by concrete subclasses and
+        :meth:`from_parent` after store and feature resolution have been
+        performed.
 
         Args:
             id_value: Unique identifier for this sequence in the store.
             store: Already-resolved :class:`~tanat.store.sequence.store.SequenceStore`.
             settings: Fully-resolved :class:`SequenceSettings`
                 (``entity_features`` and ``static_features`` never ``None``).
-            cast_recipe: Optional cast recipe (or dict) applied at read time.
-                Normalised via :meth:`SequenceCastRecipe.coerce` and probed
-                eagerly.
-
-        Raises:
-            TypeError: If *cast_recipe* is not a :class:`SequenceCastRecipe`,
-                ``dict``, or ``None``.
         """
         self._id_value = id_value
         self._store = store
 
         CachableSettings.__init__(self, settings=settings)
 
-        self._row_mask: pl.Series | None = None
-        self._virtual_id: str | None = None
-        self._parent_metadata = None
-        self._parent_t0_setter: T0Setter | None = None
-        self._casts: SequenceCastRecipe = SequenceCastRecipe.coerce(cast_recipe)
-        if not self._casts.is_empty():
-            self._casts.probe(self._store)
+        self._parent_pool: SequencePool | None = None
+        self._own_row_mask: pl.Series | None = None
 
-    def _inject(
-        self,
+    @classmethod
+    def from_parent(
+        cls,
+        id_value,
+        store: SequenceStore,
+        settings,
         *,
-        cast_recipe: SequenceCastRecipe | dict | None = None,
-        row_mask: pl.Series | None = None,
-        virtual_id: str | None = None,
-        parent_metadata=None,
-        parent_t0_setter: T0Setter | None = None,
+        parent_pool: SequencePool,
     ) -> Sequence:
-        """Inject pool-managed context into this sequence.
+        """Create a pool-managed sequence.  **Not part of the public API.**
 
-        **Not part of the public API**.
+        Bypasses store resolution, feature resolution, and cast probe — all
+        already performed by the pool.  Every piece of pool context
+        (casts, row mask, virtual ID, T0) is read lazily from *parent_pool*
+        via the corresponding cached properties.
 
         Args:
-            cast_recipe: Cast recipe propagated from the parent pool.
-            row_mask: Boolean Series aligned with this sequence's rows.
-            virtual_id: Virtual context UUID from the parent pool.
-            parent_metadata: Pre-computed metadata from the parent pool.
-            parent_t0_setter: The pool's :class:`T0Setter` instance.  The
-                Sequence reads ``setter._df`` (already computed), filters to
-                its own ID, then calls :meth:`_resolve_nearest_rank` with its
-                own ``_sequence_data_lf()``. So ``_T0_NEAREST_RANK`` always
-                respects the sequence's ``_row_mask``.  ``None`` means
-                standalone sequence (lazy T0 compute path).
+            id_value: Sequence identifier.
+            store: Already-resolved :class:`~tanat.store.sequence.store.SequenceStore`.
+            settings: Fully-resolved :class:`SequenceSettings`.
+            parent_pool: The owning :class:`~tanat.sequence.base.pool.SequencePool`.
 
         Returns:
-            ``self``
+            A new :class:`Sequence` instance bound to *parent_pool*.
         """
-        if cast_recipe is not None:
-            self._casts = SequenceCastRecipe.coerce(cast_recipe)
-        self._row_mask = row_mask
-        self._virtual_id = virtual_id
-        self._parent_metadata = parent_metadata
-        self._parent_t0_setter = parent_t0_setter
-        return self
+        new_seq = object.__new__(cls)
+        Sequence.__init__(new_seq, id_value, store, settings)
+        new_seq._parent_pool = parent_pool
+        return new_seq
+
+    # ------------------------------------------------------------------
+    # Lazy pool-delegating properties
+    # ------------------------------------------------------------------
+
+    @property
+    def _casts(self) -> SequenceCastRecipe:
+        """Active cast recipe for this sequence.
+
+        * **Pool path:** delegates to the parent pool's recipe.
+        * **Standalone path:** always empty (no casts).
+        """
+        if self._parent_pool is not None:
+            return self._parent_pool._casts
+        return SequenceCastRecipe()
+
+    @property
+    def _virtual_id(self) -> str | None:
+        """Virtual context UUID for this sequence.
+
+        * **Pool path:** delegates to the parent pool's virtual context.
+        * **Standalone path:** always ``None``.
+        """
+        if self._parent_pool is not None:
+            return self._parent_pool._virtual_id
+        return None
+
+    @CachableSettings.cached_property
+    def _row_mask(self) -> pl.Series | None:
+        """Composed row mask for this sequence.
+
+        Combines the pool-level mask (sliced to this sequence's rows) with
+        the sequence's own ``_own_row_mask`` via logical AND.
+        Returns ``None`` when neither source is set.
+        """
+        # Pool contribution: slice the flat pool mask to this sequence's rows.
+        pool_slice: pl.Series | None = None
+        if self._parent_pool is not None and self._parent_pool._row_mask is not None:
+            offset, length = self._parent_pool._store.get_slice(
+                self._id_value, id_cast=self._parent_pool._casts.id
+            )
+            pool_slice = self._parent_pool._row_mask.slice(offset, length)
+
+        own = self._own_row_mask  # None until a future filter() sets it
+
+        if pool_slice is not None and own is not None:
+            return pool_slice & own
+        return pool_slice if pool_slice is not None else own
 
     # ------------------------------------------------------------------
     # Properties
@@ -133,28 +163,36 @@ class Sequence(
     def _t0_setter(self) -> T0Setter:
         """Active T0 setter for this sequence.
 
-        * **Pool path** (``_parent_t0_setter is not None``): returns the
-          parent pool's setter directly.  Already computed and validated.
-        * **Standalone path**: instantiates and runs the default
+        * **Pool path:** returns the parent pool's setter directly.
+          Already computed and validated.
+        * **Standalone path:** instantiates and runs the default
           ``position=0`` setter on demand.  Cached after the first access.
         """
-        if self._parent_t0_setter is not None:
-            return self._parent_t0_setter
+        if self._parent_pool is not None:
+            return self._parent_pool._t0_setter
         setter = T0Setter.default(is_event=self.get_registration_name() == "event")
         setter.compute(self)
         return setter
 
     @CachableSettings.cached_property
     def _t0_result(self) -> tuple[T0Value | None, int | None]:
-        """Compute or return the T0 ``(value, index)`` pair for this sequence.
+        """T0 ``(value, nearest_rank)`` pair for this sequence.
 
-        Delegates to :attr:`_t0_setter` for the raw ``[id, _T0]`` data, then
-        runs the floor lookup via :meth:`_resolve_nearest_rank`.
-        ``_T0_NEAREST_RANK`` always respects ``_row_mask`` because
-        :meth:`_resolve_nearest_rank` reads ``_sequence_data_lf()``.
+        * **Pool path:** filters the pool's cached :meth:`_get_t0_df` result
+          (single vectorised pass already computed by the pool, zero extra I/O).
+        * **Standalone path:** computes from scratch via :attr:`_t0_setter`
+          and :meth:`_resolve_nearest_rank`.
 
         Cached by :class:`~tanat_utils.CachableSettings`.
         """
+        if self._parent_pool is not None:
+            df = self._parent_pool._get_t0_df()
+            row = df.filter(pl.col(self.settings.id_column) == self._id_value)
+            if row.height > 0:
+                return (row[_T0][0], row[_T0_NEAREST_RANK][0])
+            return (None, None)
+
+        # Standalone path
         setter = self._t0_setter
         if setter.df is None:
             return (None, None)
@@ -217,15 +255,12 @@ class Sequence(
         else:
             physical_rank = rank
 
-        reg_name = self.get_registration_name()
-        entity_cls = Entity.get_registered(reg_name)
-        # pylint: disable=protected-access
+        entity_cls = Entity.get_registered(self.get_registration_name())
         return entity_cls(
             id_value=self._id_value,
             rank=physical_rank,
             store=self._store,
             features=self.settings.entity_features,
-        )._inject(
             cast_recipe=self._casts,
             virtual_id=self._virtual_id,
             parent_metadata=self.metadata,
