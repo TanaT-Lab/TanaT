@@ -281,3 +281,71 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
             f"Invalid output_format {output_format!r}. "
             "Expected one of: 'pandas', 'polars'."
         )
+
+    # ------------------------------------------------------------------
+    # Describe
+    # ------------------------------------------------------------------
+
+    @CachableSettings.cached_method()
+    def _describe_result(self, separator: str = "_") -> pl.DataFrame:
+        """Cached polars result for :meth:`describe`.
+
+        Calls ``seq.describe()`` for each visible sequence, prefixes metric
+        columns with ``{alias}{separator}``, and prepends a ``n_sequences``
+        column.  Cached: invalidated automatically when settings change.
+
+        Args:
+            separator: Separator between alias and metric name (default ``_``).
+
+        Returns:
+            Single-row polars DataFrame with columns
+            ``[n_sequences, {alias}{sep}length, …]``.
+        """
+        frames: list[pl.DataFrame] = []
+        for alias, seq in self.items():
+            per_seq: pl.DataFrame = seq.describe(output_format="polars")
+            renamed = {c: f"{alias}{separator}{c}" for c in per_seq.columns}
+            frames.append(per_seq.rename(renamed))
+
+        if not frames:
+            raise ValueError("This trajectory has no visible sequences.")
+
+        result = pl.concat(frames, how="horizontal")
+        return result.with_columns(pl.lit(len(frames)).alias("n_sequences")).select(
+            ["n_sequences"] + [c for c in result.columns if c != "n_sequences"]
+        )
+
+    def describe(
+        self,
+        separator: str = "_",
+        output_format: Literal["pandas", "polars"] = "pandas",
+    ) -> pd.DataFrame | pl.DataFrame:
+        """Compute summary statistics for this single trajectory.
+
+        Calls ``seq.describe()`` for each visible sequence and prefixes
+        metric columns with ``{alias}{separator}``.  The result is a
+        single-row DataFrame.
+
+        Args:
+            separator: Separator between alias and metric name (default ``_``).
+            output_format: ``"pandas"`` *(default)* or ``"polars"``.
+
+        Returns:
+            Single-row DataFrame with columns
+            ``[n_sequences, {alias}{sep}length, …]``.
+
+        Examples::
+
+            traj = traj_pool[42]
+            traj.describe()
+            traj.describe(separator=".", output_format="polars")
+        """
+        result = self._describe_result(separator)
+        if output_format == "polars":
+            return result
+        if output_format == "pandas":
+            return result.to_pandas()
+        raise ValueError(
+            f"Invalid output_format {output_format!r}. "
+            "Expected one of: 'pandas', 'polars'."
+        )
