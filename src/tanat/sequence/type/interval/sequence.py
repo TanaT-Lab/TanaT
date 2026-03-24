@@ -6,7 +6,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import polars as pl
+
 from ...base.sequence import Sequence
+from ...base._describe import (
+    _n_unique_entities_expr,
+    _temporal_span_expr,
+    _duration_stats_exprs,
+)
 from .settings import IntervalSequenceSettings
 
 if TYPE_CHECKING:
@@ -60,3 +67,17 @@ class IntervalSequence(Sequence, register_name="interval"):
                 static_features=sf,
             ),
         )
+
+    @classmethod
+    def _exprs_for_describe(cls, settings: IntervalSequenceSettings) -> list[pl.Expr]:
+        """Polars expressions for interval-specific describe stats.
+
+        Columns: ``length``, ``n_unique_entities``, ``temporal_span``,
+        ``mean_duration``, ``median_duration``, ``duration_std``.
+        """
+        return [
+            pl.len().alias("length"),
+            _n_unique_entities_expr(settings.entity_features),
+            _temporal_span_expr(settings.get_temporal_columns()),
+            *_duration_stats_exprs(settings.start_column, settings.end_column),
+        ]

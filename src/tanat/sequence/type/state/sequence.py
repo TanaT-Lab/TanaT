@@ -6,7 +6,15 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import polars as pl
+
 from ...base.sequence import Sequence
+from ...base._describe import (
+    _n_unique_entities_expr,
+    _temporal_span_expr,
+    _duration_stats_exprs,
+    _n_transitions_expr,
+)
 from .settings import StateSequenceSettings
 
 if TYPE_CHECKING:
@@ -59,3 +67,19 @@ class StateSequence(Sequence, register_name="state"):
                 static_features=sf,
             ),
         )
+
+    @classmethod
+    def _exprs_for_describe(cls, settings: StateSequenceSettings) -> list[pl.Expr]:
+        """Polars expressions for state-specific describe stats.
+
+        Columns: ``length``, ``n_unique_entities``, ``temporal_span``,
+        ``mean_duration``, ``median_duration``, ``duration_std``,
+        ``n_transitions``.
+        """
+        return [
+            pl.len().alias("length"),
+            _n_unique_entities_expr(settings.entity_features),
+            _temporal_span_expr(settings.get_temporal_columns()),
+            *_duration_stats_exprs(settings.start_column, settings.end_column),
+            _n_transitions_expr(settings.entity_features),
+        ]

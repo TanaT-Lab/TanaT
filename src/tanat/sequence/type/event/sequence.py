@@ -6,7 +6,15 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import polars as pl
+
 from ...base.sequence import Sequence
+from ...base._describe import (
+    _n_unique_entities_expr,
+    _temporal_span_expr,
+    _median_gap_expr,
+    _gap_std_expr,
+)
 from .settings import EventSequenceSettings
 
 if TYPE_CHECKING:
@@ -52,3 +60,18 @@ class EventSequence(Sequence, register_name="event"):
                 static_features=sf,
             ),
         )
+
+    @classmethod
+    def _exprs_for_describe(cls, settings: EventSequenceSettings) -> list[pl.Expr]:
+        """Polars expressions for event-specific describe stats.
+
+        Columns: ``length``, ``n_unique_entities``, ``temporal_span``,
+        ``median_gap``, ``gap_std``.
+        """
+        return [
+            pl.len().alias("length"),
+            _n_unique_entities_expr(settings.entity_features),
+            _temporal_span_expr(settings.get_temporal_columns()),
+            _median_gap_expr(settings.time_column),
+            _gap_std_expr(settings.time_column),
+        ]
