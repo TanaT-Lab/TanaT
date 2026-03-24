@@ -19,6 +19,14 @@ class FeatureInfo(ABC):
     name: str
     dtype: str
 
+    @property
+    @abstractmethod
+    def summary(self) -> str:
+        """User-facing type summary (without the feature name)."""
+
+    def __str__(self) -> str:
+        return f"{self.name}: {self.summary}"
+
     def to_json_dict(self) -> dict:
         """Converts this instance to a JSON-serializable dictionary."""
         return self.__dict__
@@ -45,8 +53,9 @@ class NumericalInfo(FeatureInfo):
     min: float | int | None
     max: float | int | None
 
-    def __repr__(self) -> str:
-        return f"{self.name} ({self.dtype}): [{self.min} - {self.max}]"
+    @property
+    def summary(self) -> str:
+        return f"Numerical [{self.min} → {self.max}]"
 
     @classmethod
     def get_aggregations(
@@ -84,9 +93,10 @@ class CategoricalInfo(FeatureInfo):
     n_unique: int | None
     ordered: bool = False
 
-    def __repr__(self) -> str:
-        ord_str = " (Ordered)" if self.ordered else ""
-        return f"{self.name} ({self.dtype}){ord_str}: {self.n_unique} distinct values"
+    @property
+    def summary(self) -> str:
+        ord_str = ", ordered" if self.ordered else ""
+        return f"Categorical ({self.n_unique} categories{ord_str})"
 
     @classmethod
     def get_aggregations(
@@ -122,12 +132,9 @@ class BooleanInfo(FeatureInfo):
     true_count: int | None
     false_count: int | None
 
-    def __repr__(self) -> str:
-        if self.true_count is not None and self.false_count is not None:
-            total = self.true_count + self.false_count
-            ratio = (self.true_count / total * 100) if total > 0 else 0
-            return f"{self.name} (Bool): {self.true_count} True, {self.false_count} False ({ratio:.1f}% True)"
-        return f"{self.name} (Bool): No stats"
+    @property
+    def summary(self) -> str:
+        return "Boolean"
 
     @classmethod
     def get_aggregations(
@@ -162,8 +169,9 @@ class StringInfo(FeatureInfo):
     min_length: int | None
     max_length: int | None
 
-    def __repr__(self) -> str:
-        return f"{self.name} (String): length range [{self.min_length} - {self.max_length}]"
+    @property
+    def summary(self) -> str:
+        return f"String [len {self.min_length} → {self.max_length}]"
 
     @classmethod
     def get_aggregations(
@@ -198,8 +206,9 @@ class TemporalInfo(FeatureInfo):
         """Returns ``True`` if this feature has a ``pl.Duration`` type."""
         return self.dtype.startswith("Duration")
 
-    def __repr__(self) -> str:
-        return f"{self.name} ({self.dtype}): [{self.min} - {self.max}]"
+    @property
+    def summary(self) -> str:
+        return f"{self.dtype} [{self.min} → {self.max}]"
 
     def to_json_dict(self) -> dict:
         d = self.__dict__.copy()
@@ -235,10 +244,11 @@ class ArrayInfo(FeatureInfo):
 
     dimension: int | None
 
-    def __repr__(self) -> str:
+    @property
+    def summary(self) -> str:
         if self.dimension:
-            return f"{self.name} (Array): {self.dimension}-dim"
-        return f"{self.name} (Array): variable length"
+            return f"Array ({self.dimension}-dim)"
+        return "Array (variable)"
 
     @classmethod
     def get_aggregations(
