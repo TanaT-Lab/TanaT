@@ -100,7 +100,7 @@ class TemporalIndexInfo:
             max=global_max,
         )
 
-    def __repr__(self) -> str:
+    def __str__(self) -> str:
         s = f"{self.dtype}"
         if not self.is_datetime:
             s += " (Timestep)"
@@ -144,7 +144,7 @@ class SequenceMetadata:
     entity_features: list[FeatureInfo]
     static_features: list[FeatureInfo] | None
 
-    def __repr__(self) -> str:
+    def __str__(self) -> str:
         s = "\n"
 
         # ID
@@ -155,16 +155,14 @@ class SequenceMetadata:
         # Temporal
         s += f"  Temporal Index: {self.temporal}\n\n"
 
-        # Helper to print table rows
+        # Helper to print feature bullets with aligned labels
         def print_features(title: str, features: list[FeatureInfo]) -> str:
             if not features:
                 return ""
             out = f"  {title} ({len(features)}):\n"
-
-            # Simple list with bullets
+            col_w = max(len(f.name) for f in features) + 2
             for f in features:
-                # Type specific formatting handled by f.__repr__
-                out += f"    • {f}\n"
+                out += f"    • {f.name:<{col_w}} {f.summary}\n"
             return out
 
         s += print_features("Entity Features", self.entity_features)
