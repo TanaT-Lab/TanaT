@@ -5,7 +5,7 @@ Base class for sequence objects.
 
 from __future__ import annotations
 
-from abc import ABC
+from abc import ABC, abstractmethod
 import logging
 from typing import TYPE_CHECKING, Literal
 
@@ -421,6 +421,55 @@ class Sequence(
         if output_format == "pandas":
             return lf.collect().to_pandas()
 
+        raise ValueError(
+            f"Invalid output_format {output_format!r}. "
+            "Expected one of: 'pandas', 'polars'."
+        )
+
+    # ------------------------------------------------------------------
+    # Describe
+    # ------------------------------------------------------------------
+
+    @classmethod
+    @abstractmethod
+    def _exprs_for_describe(cls, settings) -> list[pl.Expr]:
+        """
+        Return the type-specific Polars expressions for :meth:`describe`.
+        """
+
+    def _describe_exprs(self) -> list[pl.Expr]:
+        """Type-appropriate describe expressions for this sequence."""
+        return type(self)._exprs_for_describe(self.settings)
+
+    @CachableSettings.cached_method()
+    def _describe_result(self) -> pl.DataFrame:
+        """Compute the describe result as a Polars DataFrame (cached)."""
+        return self.apply(self._describe_exprs(), output_format="polars")
+
+    def describe(
+        self,
+        output_format: Literal["pandas", "polars"] = "pandas",
+    ) -> pl.DataFrame | pd.DataFrame:
+        """Compute summary statistics for this single sequence.
+
+        Args:
+            output_format: ``"pandas"`` *(default)* or ``"polars"``.
+
+        Returns:
+            Single-row DataFrame with columns
+            ``[length, n_unique_entities, temporal_span, …]``.
+
+        Examples::
+
+            seq = pool[42]
+            seq.describe()
+            seq.describe(output_format="polars")
+        """
+        result = self._describe_result()
+        if output_format == "polars":
+            return result
+        if output_format == "pandas":
+            return result.to_pandas()
         raise ValueError(
             f"Invalid output_format {output_format!r}. "
             "Expected one of: 'pandas', 'polars'."
