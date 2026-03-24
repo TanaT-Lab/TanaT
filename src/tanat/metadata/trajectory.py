@@ -35,21 +35,19 @@ class TrajectoryMetadata:
     temporal: TemporalIndexInfo
     static_features: list[FeatureInfo] | None
 
-    def __repr__(self) -> str:
+    def __str__(self) -> str:
         s = "\n"
 
         id_str = str(self.traj_id).replace("DataType.", "")
-        s += f"  Trajectory ID : {id_str}\n"
-        s += f"  Temporal      : {self.temporal}\n"
+        s += f"  Trajectory ID: {id_str}\n"
+        s += f"  Temporal Index: {self.temporal}\n"
 
         if self.static_features:
-            col_w = max(len(f.name) for f in self.static_features) + 2
-
             s += "\n"
-            s += f"  {'Feature':<{col_w}} {'Type':<20} Info\n"
-            s += "  " + "-" * 60 + "\n"
+            col_w = max(len(f.name) for f in self.static_features) + 2
+            s += f"  Static Features ({len(self.static_features)}):\n"
             for f in self.static_features:
-                s += f"  {f.name:<{col_w}} {repr(f)}\n"
+                s += f"    • {f.name:<{col_w}} {f.summary}\n"
         else:
             s += "\n  No static features.\n"
 
