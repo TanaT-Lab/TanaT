@@ -624,6 +624,114 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         updated = current + [c for c in new_cols if c not in current]
         self.update_settings(static_features=updated)
 
+    # ------------------------------------------------------------------
+    # Describe
+    # ------------------------------------------------------------------
+
+    @CachableSettings.cached_method()
+    def _describe_result(self, separator: str = "_") -> pl.DataFrame:
+        """Cached polars result (one row per trajectory) for :meth:`describe`.
+
+        For each visible sequence pool, calls ``pool.describe()`` and
+        prefixes its metric columns with ``{alias}{separator}``.  Results
+        are joined horizontally on the trajectory ID.  A ``n_sequences``
+        column (number of visible stores) is prepended.  Cached: invalidated
+        automatically when settings change.
+
+        Args:
+            separator: Separator between alias and metric name (default ``_``).
+
+        Returns:
+            Polars DataFrame with columns
+            ``[id, n_sequences, {alias}{sep}length, …]``.
+        """
+        id_col = self.settings.id_column
+        pools = self.sequence_pools
+        n_aliases = len(pools)
+
+        frames: list[pl.DataFrame] = []
+        for alias, seq_pool in pools.items():
+            per_id: pl.DataFrame = seq_pool.describe(by_id=True, output_format="polars")
+            # Rename metrics with alias prefix; keep the id column unchanged.
+            metric_cols = [
+                c for c in per_id.columns if c != seq_pool.settings.id_column
+            ]
+            renamed = {c: f"{alias}{separator}{c}" for c in metric_cols}
+            # Ensure id column name matches the trajectory-level id_column.
+            if seq_pool.settings.id_column != id_col:
+                renamed[seq_pool.settings.id_column] = id_col
+            per_id = per_id.rename(renamed)
+            frames.append(per_id)
+
+        if not frames:
+            raise ValueError("No sequence pools available for describe().")
+
+        # Horizontal join on the ID column
+        result = frames[0]
+        for frame in frames[1:]:
+            result = result.join(frame, on=id_col, how="full", coalesce=True)
+
+        # Prepend n_sequences
+        return result.with_columns(pl.lit(n_aliases).alias("n_sequences")).select(
+            [id_col, "n_sequences"]
+            + [c for c in result.columns if c not in (id_col, "n_sequences")]
+        )
+
+    def describe(
+        self,
+        by_id: bool = True,
+        add_to_static: bool = False,
+        separator: str = "_",
+        output_format: Literal["pandas", "polars"] = "pandas",
+    ) -> pd.DataFrame | pl.DataFrame:
+        """Compute summary statistics across all sequences and all trajectories.
+
+        Args:
+            by_id: If ``True`` *(default)*, return one row per trajectory.
+                If ``False``, return cross-trajectory pandas ``.describe()``.
+            add_to_static: If ``True``, persist the per-ID result via
+                :meth:`add_static_features`.  Ignored (with a warning) when
+                ``by_id=False``.
+            separator: Separator between alias and metric name (default ``_``).
+            output_format: ``"pandas"`` *(default)* or ``"polars"``.
+
+        Returns:
+            DataFrame with columns
+            ``[id, n_sequences, {alias}{sep}length, …]``.
+
+        Examples::
+
+            traj_pool.describe()
+            traj_pool.describe(separator=".")
+            traj_pool.describe(by_id=False)
+            traj_pool.describe(add_to_static=True)
+        """
+        result = self._describe_result(separator)
+
+        if add_to_static:
+            if not by_id:
+                warnings.warn(
+                    "add_to_static=True is ignored when by_id=False "
+                    "(no per-ID result to persist).",
+                    UserWarning,
+                    stacklevel=2,
+                )
+            else:
+                self.add_static_features(result)
+
+        if not by_id:
+            numeric = result.drop(self.settings.id_column)
+            return numeric.to_pandas().describe()
+
+        if output_format == "polars":
+            return result
+        if output_format == "pandas":
+            return result.to_pandas()
+        raise ValueError(
+            f"Invalid output_format {output_format!r}. "
+            "Expected one of: 'pandas', 'polars'."
+        )
+
     def copy(self) -> TrajectoryPool:
         """Return a shallow copy sharing the same store, with all view state preserved.
 
