@@ -959,6 +959,87 @@ class SequencePool(
         )
 
     # ------------------------------------------------------------------
+    # Describe
+    # ------------------------------------------------------------------
+
+    def _describe_exprs(self) -> list[pl.Expr]:
+        """Type-appropriate describe expressions for this pool."""
+        return self._target_seq_cls._exprs_for_describe(self.settings)
+
+    @CachableSettings.cached_method()
+    def _describe_result(self) -> pl.DataFrame:
+        """Compute the per-ID describe result as a Polars DataFrame (cached)."""
+        result: pl.DataFrame = self.apply(
+            self._describe_exprs(), by_id=True, output_format="polars"
+        )
+
+        # IDs that appear in the pool index but have no data rows are absent
+        # from the group_by result.  Re-attach them with nulls so the output
+        # always has one row per pool ID (consistent with unique_ids).
+        id_col = self.settings.id_column
+        if result.height < len(self.unique_ids):
+            all_ids = pl.DataFrame({id_col: self.unique_ids})
+            result = all_ids.join(result, on=id_col, how="left")
+
+        return result
+
+    def describe(
+        self,
+        by_id: bool = True,
+        add_to_static: bool = False,
+        output_format: Literal["pandas", "polars"] = "pandas",
+    ) -> pd.DataFrame | pl.DataFrame:
+        """Compute summary statistics for every sequence in the pool.
+
+        Args:
+            by_id: If ``True`` *(default)*, return one row per sequence ID
+                with columns ``[id, length, n_unique_entities, …]``.
+                If ``False``, return the cross-sequence pandas
+                ``.describe()`` (count, mean, std, min, 25%, …).
+            add_to_static: If ``True``, write the per-ID result to the
+                static-feature store via :meth:`add_static_features`.
+                Ignored (with a warning) when ``by_id=False``.
+            output_format: ``"pandas"`` *(default)* or ``"polars"``.
+                Ignored when ``by_id=False`` (always pandas).
+
+        Returns:
+            - ``by_id=True``: DataFrame with one row per sequence ID.
+            - ``by_id=False``: Aggregated statistics (pandas ``describe()``
+              output).
+
+        Examples::
+
+            pool.describe()                          # one row per ID, pandas
+            pool.describe(output_format="polars")    # same, polars
+            pool.describe(by_id=False)               # cross-ID stats
+            pool.describe(add_to_static=True)        # persist as static cols
+        """
+        result = self._describe_result()
+
+        if add_to_static:
+            if not by_id:
+                warnings.warn(
+                    "add_to_static=True is ignored when by_id=False "
+                    "(no per-ID result to persist).",
+                    UserWarning,
+                    stacklevel=2,
+                )
+            else:
+                self.add_static_features(result)
+
+        if not by_id:
+            return result.drop(self.settings.id_column).to_pandas().describe()
+
+        if output_format == "polars":
+            return result
+        if output_format == "pandas":
+            return result.to_pandas()
+        raise ValueError(
+            f"Invalid output_format {output_format!r}. "
+            "Expected one of: 'pandas', 'polars'."
+        )
+
+    # ------------------------------------------------------------------
     # Mutations
     # ------------------------------------------------------------------
 
