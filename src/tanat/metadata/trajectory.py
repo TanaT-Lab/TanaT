@@ -10,7 +10,12 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from .feature import FeatureInfo, CategoricalInfo, build_feature_metadata
+from .feature import (
+    FeatureInfo,
+    CategoricalInfo,
+    build_feature_metadata,
+    print_features,
+)
 from .sequence import TemporalIndexInfo
 
 if TYPE_CHECKING:
@@ -40,16 +45,10 @@ class TrajectoryMetadata:
 
         id_str = str(self.traj_id).replace("DataType.", "")
         s += f"  Trajectory ID: {id_str}\n"
-        s += f"  Temporal Index: {self.temporal}\n"
+        s += f"  Temporal Index: {self.temporal}\n\n"
 
         if self.static_features:
-            s += "\n"
-            col_w = max(len(f.name) for f in self.static_features) + 2
-            s += f"  Static Features ({len(self.static_features)}):\n"
-            for f in self.static_features:
-                s += f"    • {f.name:<{col_w}} {f.summary}\n"
-        else:
-            s += "\n  No static features.\n"
+            s += print_features("Static Features", self.static_features)
 
         return s
 

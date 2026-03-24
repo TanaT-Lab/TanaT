@@ -318,3 +318,23 @@ def build_feature_metadata(lf: pl.LazyFrame) -> list[FeatureInfo]:
         info_classes[col].from_stats(col_name=col, dtype=schema[col], stats=stats)
         for col in sorted(schema.names())
     ]
+
+
+def print_features(title: str, features: list[FeatureInfo]) -> str:
+    """
+    Helper to print feature bullets with aligned labels.
+
+    Args:
+        title: Section title to print above the features.
+        features: List of FeatureInfo instances to print.
+
+    Returns:
+        Formatted string with the title and feature summaries, or an empty string if no features.
+    """
+    if not features:
+        return ""
+    out = f"  {title} ({len(features)}):\n"
+    col_w = max(len(f.name) for f in features) + 2
+    for f in features:
+        out += f"    • {f.name:<{col_w}} {f.summary}\n"
+    return out

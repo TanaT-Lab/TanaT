@@ -16,6 +16,7 @@ from .feature import (
     NumericalInfo,
     TemporalInfo,
     build_feature_metadata,
+    print_features,
 )
 
 
@@ -154,16 +155,6 @@ class SequenceMetadata:
 
         # Temporal
         s += f"  Temporal Index: {self.temporal}\n\n"
-
-        # Helper to print feature bullets with aligned labels
-        def print_features(title: str, features: list[FeatureInfo]) -> str:
-            if not features:
-                return ""
-            out = f"  {title} ({len(features)}):\n"
-            col_w = max(len(f.name) for f in features) + 2
-            for f in features:
-                out += f"    • {f.name:<{col_w}} {f.summary}\n"
-            return out
 
         s += print_features("Entity Features", self.entity_features)
 
