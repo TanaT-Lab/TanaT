@@ -124,6 +124,10 @@ class TestEntity:
 class TestTrajectoryPool:
     """Trajectory pool: size and unique IDs."""
 
+    def test_is_instance(self, traj_pool):
+        """Fixtures are valid TrajectoryPool instance."""
+        assert isinstance(traj_pool, TrajectoryPool)
+
     def test_len(self, traj_pool: TrajectoryPool, snapshot) -> None:
         """Trajectory pool size matches snapshot."""
         assert len(traj_pool) == snapshot
