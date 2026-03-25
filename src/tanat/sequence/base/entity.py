@@ -96,11 +96,8 @@ class Entity(Registrable, ABC):
         across all entities in the pool, no extra I/O.
         """
         if self._parent_metadata is not None:
-            infos = self._parent_metadata.entity_features
-            if self._features is not None:
-                allowed = set(self._features)
-                infos = [f for f in infos if f.name in allowed]
-            return {f.name: f for f in infos}
+            scoped = self._parent_metadata.scope(entity_features=self._features)
+            return {f.name: f for f in scoped.entity_features}
 
         # Fallback for standalone Entity: infer directly from store
         entity_lf = self._store.entity(virtual_id=self._virtual_id)

@@ -63,8 +63,8 @@ class SequenceViewMixin:
         masks, and feature selection.
 
         When created from a parent :class:`SequencePool`, the pool's
-        metadata is returned directly (propagation + consistent pool-level
-        stats, no extra inference cost).
+        metadata is returned directly or scoped by the view's settings
+        (when built with a feature subset).
 
         For a standalone view (no parent), metadata is inferred directly
         from the assembled, cast and masked LazyFrames.  The seq_id dtype
@@ -75,9 +75,12 @@ class SequenceViewMixin:
         invalidated whenever settings change (e.g. after ``cast_features``
         or ``drop_features``).
         """
-        # Propagated from parent Pool: consistent pool-level metadata.
+        # Propagated from parent Pool, scoped to this view's feature selection.
         if getattr(self, "_parent_pool", None) is not None:
-            return self._parent_pool.metadata
+            return self._parent_pool.metadata.scope(
+                entity_features=self.settings.entity_features,
+                static_features=self.settings.static_features,
+            )
 
         # seq_id dtype: from cast recipe if set, else store schema
         seq_id_dtype = self._casts.id

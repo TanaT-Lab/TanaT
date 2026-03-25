@@ -68,8 +68,8 @@ class TrajectoryViewMixin:
         cast recipes, masks, and feature selection.
 
         When created from a parent :class:`TrajectoryPool`, the pool's
-        metadata is returned directly (propagation - consistent stats,
-        no extra inference cost).
+        metadata is returned directly or scoped by the view's settings
+        (when built with a feature subset).
 
         For a standalone view, the traj_id dtype is derived from the
         cast recipe (or the store schema when no cast is active) - no
@@ -78,9 +78,11 @@ class TrajectoryViewMixin:
         Automatically cached via ``CachableSettings``: the cache is
         invalidated whenever settings change.
         """
-        # Propagated from parent Pool.
+        # Propagated from parent Pool, scoped to this view's feature selection.
         if getattr(self, "_parent_pool", None) is not None:
-            return self._parent_pool.metadata
+            return self._parent_pool.metadata.scope(
+                static_features=self.settings.static_features,
+            )
 
         # traj_id dtype: from cast recipe if set, else store schema - no plan traversal.
         traj_id_dtype = self._casts.id
