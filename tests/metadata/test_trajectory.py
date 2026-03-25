@@ -164,3 +164,54 @@ class TestPoolCastToTrajectory:
         pool.cast_static_features({"group": pl.Categorical})
         traj = pool[pool.unique_ids[0]]
         assert traj.metadata.is_categorical_feature("group")
+
+
+# ---------------------------------------------------------------------------
+# Trajectory pool: static feature scoping propagation to child Trajectory
+# ---------------------------------------------------------------------------
+
+
+class TestTrajectoryPoolScoping:
+    """Static feature subset via get_trajectories() → traj.metadata reflects only visible features."""
+
+    def test_default_has_all_static(self, traj_pool: TrajectoryPool) -> None:
+        """Trajectory built via tpool[id] (no subset) exposes all pool static features."""
+        if not traj_pool.settings.static_features:
+            pytest.skip("no static features")
+        traj = traj_pool[traj_pool.unique_ids[0]]
+        assert len(traj.metadata.static_features) == len(
+            traj_pool.settings.static_features
+        )
+
+    def test_static_subset_reduces_metadata(self, traj_pool: TrajectoryPool) -> None:
+        """get_trajectories(static_features=subset) → traj.metadata contains only those features."""
+        if not traj_pool.settings.static_features:
+            pytest.skip("no static features")
+        subset = traj_pool.settings.static_features[:1]
+        trajs = traj_pool.get_trajectories(static_features=subset)
+        traj = next(iter(trajs.values()))
+        assert [f.name for f in traj.metadata.static_features] == subset
+
+    def test_pool_metadata_unchanged(self, traj_pool: TrajectoryPool) -> None:
+        """Scoping a child trajectory must not mutate the parent pool's metadata."""
+        if not traj_pool.settings.static_features:
+            pytest.skip("no static features")
+        n_before = len(traj_pool.metadata.static_features)
+        _ = traj_pool.get_trajectories(
+            static_features=traj_pool.settings.static_features[:1]
+        )
+        assert len(traj_pool.metadata.static_features) == n_before
+
+    def test_settings_static_features_sorted(self, traj_pool: TrajectoryPool) -> None:
+        """settings.static_features is always in alphabetical order (normalised at construction)."""
+        if not traj_pool.settings.static_features:
+            pytest.skip("no static features")
+        names = traj_pool.settings.static_features
+        assert names == sorted(names)
+
+    def test_metadata_static_features_sorted(self, traj_pool: TrajectoryPool) -> None:
+        """metadata.static_features is always in alphabetical order (built by build_feature_metadata)."""
+        if not traj_pool.settings.static_features:
+            pytest.skip("no static features")
+        names = [f.name for f in traj_pool.metadata.static_features]
+        assert names == sorted(names)
