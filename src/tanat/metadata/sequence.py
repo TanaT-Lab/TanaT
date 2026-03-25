@@ -16,8 +16,8 @@ from .feature import (
     NumericalInfo,
     TemporalInfo,
     build_feature_metadata,
-    print_features,
 )
+from tanat_utils.pretty_format import format_feature_section
 
 
 @dataclass(frozen=True)
@@ -200,11 +200,21 @@ class SequenceMetadata:
         # Temporal
         s += f"  Temporal Index: {self.temporal}\n\n"
 
-        s += print_features("Entity Features", self.entity_features)
+        ef_section = format_feature_section(
+            "Entity Features",
+            [(f.name, f.summary) for f in self.entity_features],
+        )
+        if ef_section:
+            s += ef_section
 
         if self.static_features:
-            s += "\n"
-            s += print_features("Static Features", self.static_features)
+            sf_section = format_feature_section(
+                "Static Features",
+                [(f.name, f.summary) for f in self.static_features],
+            )
+            if sf_section:
+                s += "\n"
+                s += sf_section
 
         return s
 

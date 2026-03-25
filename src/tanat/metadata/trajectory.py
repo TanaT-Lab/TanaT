@@ -9,12 +9,12 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import polars as pl
+from tanat_utils.pretty_format import format_feature_section
 
 from .feature import (
     FeatureInfo,
     CategoricalInfo,
     build_feature_metadata,
-    print_features,
 )
 from .sequence import TemporalIndexInfo
 
@@ -48,7 +48,12 @@ class TrajectoryMetadata:
         s += f"  Temporal Index: {self.temporal}\n\n"
 
         if self.static_features:
-            s += print_features("Static Features", self.static_features)
+            sf_section = format_feature_section(
+                "Static Features",
+                [(f.name, f.summary) for f in self.static_features],
+            )
+            if sf_section:
+                s += sf_section
 
         return s
 
