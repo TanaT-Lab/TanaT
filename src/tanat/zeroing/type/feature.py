@@ -38,7 +38,7 @@ class FeatureT0Setter(T0Setter, register_name="feature"):
         return f"feature='{self.settings.feature}'"
 
     def _compute_t0(
-        self, target: SequencePool | Sequence, ids: list, id_col: str
+        self, target: SequencePool | Sequence, id_col: str
     ) -> pl.LazyFrame:
         feature = self.settings.feature
 

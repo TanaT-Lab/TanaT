@@ -61,21 +61,30 @@ class DirectT0Setter(T0Setter, register_name="direct"):
         return f"direct, anchor={self.settings.anchor}"
 
     def _compute_t0(
-        self, target: SequencePool | Sequence, ids: list, id_col: str
+        self, target: SequencePool | Sequence, id_col: str
     ) -> pl.LazyFrame:
         direct = self.settings.direct
+        # pylint: disable=protected-access
+        id_lf = target._id_lf
         if isinstance(direct, dict):
-            return self._compute_dict(ids, direct, id_col).lazy()
-        return self._compute_scalar(ids, direct, id_col).lazy()
+            return self._compute_dict(id_lf, direct, id_col)
+        return self._compute_scalar(id_lf, direct, id_col)
 
-    def _compute_scalar(self, ids: list, value: T0Value, id_col: str) -> pl.DataFrame:
-        """Build ``[id_col, _T0_]`` with the same value for all sequences."""
-        return pl.DataFrame({id_col: ids, _T0: [value] * len(ids)})
+    @staticmethod
+    def _compute_scalar(
+        id_lf: pl.LazyFrame, value: T0Value, id_col: str
+    ) -> pl.LazyFrame:
+        """Add a constant ``_T0_`` column to the typed ID frame."""
+        return id_lf.with_columns(pl.lit(value).alias(_T0))
 
+    @staticmethod
     def _compute_dict(
-        self, ids: list, mapping: dict[Any, T0Value], id_col: str
-    ) -> pl.DataFrame:
-        """Build ``[id_col, _T0_]`` from a per-sequence mapping."""
+        id_lf: pl.LazyFrame,
+        mapping: dict[Any, T0Value],
+        id_col: str,
+    ) -> pl.LazyFrame:
+        """Join the typed ID frame with a mapping frame built from *mapping*."""
+        ids = id_lf.collect().to_series().to_list()
         unknown_keys = [k for k in mapping if k not in set(ids)]
         if unknown_keys:
             warnings.warn(
@@ -85,4 +94,10 @@ class DirectT0Setter(T0Setter, register_name="direct"):
                 stacklevel=5,  # user → set_t0 → compute → _compute_t0 → _compute_dict
             )
 
-        return pl.DataFrame({id_col: ids, _T0: [mapping.get(i) for i in ids]})
+        # Build a lookup frame with the same ID dtype as the store.
+        id_dtype = id_lf.collect_schema()[id_col]
+        lookup = pl.DataFrame(
+            {id_col: list(mapping.keys()), _T0: list(mapping.values())}
+        ).with_columns(pl.col(id_col).cast(id_dtype))
+
+        return id_lf.join(lookup.lazy(), on=id_col, how="left")

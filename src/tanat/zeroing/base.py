@@ -107,22 +107,18 @@ class T0Setter(ABC, Registrable):
         if hasattr(self.settings, "anchor"):
             self._guard_anchor(target)
         id_col = target.settings.id_column
-        ids: list = (
-            target.unique_ids if hasattr(target, "unique_ids") else [target.id_value]
-        )
-        partial_lf = self._compute_t0(target, ids, id_col)
-        t0_df = (
-            pl.LazyFrame({id_col: ids})
-            .join(partial_lf, on=id_col, how="left")
-            .collect()
-        )
+        id_lf = target._id_lf
+
+        partial_lf = self._compute_t0(target, id_col)
+
+        t0_df = id_lf.join(partial_lf, on=id_col, how="left").collect()
         self._warn_nulls(t0_df.filter(pl.col(_T0).is_null())[id_col].to_list())
         self._df = t0_df
         return self._df
 
     @abstractmethod
     def _compute_t0(
-        self, target: SequencePool | Sequence, ids: list, id_col: str
+        self, target: SequencePool | Sequence, id_col: str
     ) -> pl.LazyFrame:
         """Return a partial ``[id_col, _T0_]`` LazyFrame for this strategy.
 
@@ -133,9 +129,6 @@ class T0Setter(ABC, Registrable):
 
         Args:
             target: Pool or standalone Sequence being targeted.
-            ids: Full list of sequence IDs visible in *target* (already
-                extracted by :meth:`compute`; passed so strategies that
-                build a frame from scratch avoid re-fetching them).
             id_col: Name of the ID column in *target*.
 
         Returns:
