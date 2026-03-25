@@ -56,6 +56,11 @@ class QueryT0Setter(T0Setter, register_name="query"):
             QueryT0Settings(query=query, anchor=anchor, use_first=use_first)
         )
 
+    @property
+    def strategy_summary(self) -> str:
+        """e.g. ``'query, anchor=start'``."""
+        return f"query, anchor={self.settings.anchor}"
+
     def _compute_t0(
         self, target: SequencePool | Sequence, ids: list, id_col: str
     ) -> pl.LazyFrame:

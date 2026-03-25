@@ -55,6 +55,11 @@ class DirectT0Setter(T0Setter, register_name="direct"):
             )
         super().__init__(DirectT0Settings(direct=direct, anchor=anchor))
 
+    @property
+    def strategy_summary(self) -> str:
+        """e.g. ``'direct, anchor=start'``."""
+        return f"direct, anchor={self.settings.anchor}"
+
     def _compute_t0(
         self, target: SequencePool | Sequence, ids: list, id_col: str
     ) -> pl.LazyFrame:

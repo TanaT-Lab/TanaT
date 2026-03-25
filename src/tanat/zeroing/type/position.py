@@ -41,6 +41,11 @@ class PositionT0Setter(T0Setter, register_name="position"):
     ):
         super().__init__(PositionT0Settings(position=position, anchor=anchor))
 
+    @property
+    def strategy_summary(self) -> str:
+        """e.g. ``'position=0, anchor=start'``."""
+        return f"position={self.settings.position}, anchor={self.settings.anchor}"
+
     def _compute_t0(
         self, target: SequencePool | Sequence, ids: list, id_col: str
     ) -> pl.LazyFrame:

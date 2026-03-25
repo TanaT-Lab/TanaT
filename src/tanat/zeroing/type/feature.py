@@ -32,6 +32,11 @@ class FeatureT0Setter(T0Setter, register_name="feature"):
     def __init__(self, *, feature: str):
         super().__init__(FeatureT0Settings(feature=feature))
 
+    @property
+    def strategy_summary(self) -> str:
+        """e.g. ``"feature='admission_date'"``."""
+        return f"feature='{self.settings.feature}'"
+
     def _compute_t0(
         self, target: SequencePool | Sequence, ids: list, id_col: str
     ) -> pl.LazyFrame:

@@ -58,6 +58,11 @@ class T0Setter(ABC, Registrable):
         self.settings: Any = settings
 
     @property
+    @abstractmethod
+    def strategy_summary(self) -> str:
+        """One-line description of the active strategy and its parameters."""
+
+    @property
     def df(self) -> pl.DataFrame | None:
         """Pre-computed ``[id_col, _T0]`` DataFrame.  ``None`` until ``set_t0()`` assigns it."""
         return self._df
