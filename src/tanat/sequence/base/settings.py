@@ -33,11 +33,11 @@ class SequenceSettings(ABC):
     @field_validator("entity_features", mode="before")
     @classmethod
     def normalize_entity_features(cls, v):
-        """Convert single string to list; deduplicate; require at least one."""
+        """Normalize to a sorted, deduplicated list; require at least one."""
         if isinstance(v, str):
             v = [v]
-        # Remove duplicates while preserving order
-        result = list(dict.fromkeys(v))
+        # Remove duplicates while preserving order, then sort.
+        result = sorted(dict.fromkeys(v))
         if not result:
             raise ValueError("entity_features must contain at least one feature name.")
         return result
@@ -45,11 +45,10 @@ class SequenceSettings(ABC):
     @field_validator("static_features", mode="before")
     @classmethod
     def normalize_static_features(cls, v):
-        """Convert single string to list; deduplicate."""
+        """Normalize to a sorted, deduplicated list."""
         if isinstance(v, str):
             v = [v]
-        # Remove duplicates while preserving order
-        return list(dict.fromkeys(v))
+        return sorted(dict.fromkeys(v))
 
     @abstractmethod
     def get_temporal_columns(self) -> list[str]:

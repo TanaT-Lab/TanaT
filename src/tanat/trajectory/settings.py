@@ -39,10 +39,10 @@ class TrajectorySettings:
     @field_validator("static_features", mode="before")
     @classmethod
     def normalize_static_features(cls, v):
-        """Convert single string to list; deduplicate."""
+        """Normalize to a sorted, deduplicated list."""
         if isinstance(v, str):
             v = [v]
-        return list(dict.fromkeys(v))
+        return sorted(dict.fromkeys(v))
 
     # ------------------------------------------------------------------
     # Helpers
