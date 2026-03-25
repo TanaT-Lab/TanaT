@@ -33,7 +33,7 @@ class TrajectoryMetadata:
             A :class:`TrajectoryStore` always has at least one linked store,
             so this field is never ``None``.
         static_features: List of :class:`FeatureInfo` for each
-            static feature, or ``None`` if no static features exist.
+            static feature (alphabetical order), or ``None`` if none exist.
     """
 
     traj_id: pl.DataType
