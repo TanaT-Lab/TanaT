@@ -63,6 +63,15 @@ class TestEntityFromSequence:
         seq = pool[pool.unique_ids[0]]
         assert isinstance(seq[0].metadata["status"], CategoricalInfo)
 
+    def test_scoped_entity_features(self, pools_dict: dict, pool_type: str) -> None:
+        """Entity from a scoped sequence only sees the requested feature subset."""
+        pool = pools_dict[pool_type]
+        subset = pool.settings.entity_features[:2]
+        seqs = pool.get_sequences(entity_features=subset)
+        seq = next(iter(seqs.values()))
+        entity = seq[0]
+        assert set(entity.metadata.keys()) == set(subset)
+
 
 # ---------------------------------------------------------------------------
 # Standalone Entity (no parent; metadata inferred from store)
