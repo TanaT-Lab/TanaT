@@ -92,6 +92,39 @@ class TrajectoryMetadata:
         """Returns the list of :class:`FeatureInfo` for *lf*, or ``None`` if *lf* is ``None``."""
         return build_feature_metadata(lf) if lf is not None else None
 
+    def scope(
+        self,
+        static_features: list[str] | None = None,
+    ) -> TrajectoryMetadata:
+        """Return a new metadata restricted to the given static feature subset.
+
+        Args:
+            static_features: Feature names to keep.  ``None`` keeps all.
+                An empty list produces ``static_features=None``.
+
+        Returns:
+            A filtered copy, or ``self`` when nothing was actually removed.
+            Original feature order is preserved.
+        """
+        sf = self.static_features
+        if (
+            static_features is not None
+            and sf is not None
+            and len(static_features) < len(sf)
+        ):
+            visible = set(static_features)
+            sf = [f for f in sf if f.name in visible] or None
+
+        # Fast-path: nothing was actually filtered → return self unchanged.
+        if sf is self.static_features:
+            return self
+
+        return TrajectoryMetadata(
+            traj_id=self.traj_id,
+            temporal=self.temporal,
+            static_features=sf,
+        )
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
