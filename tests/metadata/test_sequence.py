@@ -281,3 +281,84 @@ class TestPoolCastToSequence:
         pool.cast_features({"status": pl.Categorical})
         seq = pool[pool.unique_ids[0]]
         assert isinstance(seq.metadata.feature_info("status"), CategoricalInfo)
+
+
+# ---------------------------------------------------------------------------
+# Sequence pool: feature scoping propagation to child Sequence objects
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("pool_type", ["interval", "event", "state"])
+class TestSequencePoolScoping:
+    """Feature subset via get_sequences() → seq.metadata reflects only visible features."""
+
+    def test_default_has_all_entity_features(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """seq built via pool[id] (no subset) exposes all pool entity features."""
+        pool = pools_dict[pool_type]
+        seq = pool[pool.unique_ids[0]]
+        assert len(seq.metadata.entity_features) == len(pool.settings.entity_features)
+
+    def test_entity_subset_reduces_metadata(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """get_sequences(entity_features=subset) → seq.metadata contains only the requested features."""
+        pool = pools_dict[pool_type]
+        subset = pool.settings.entity_features[:2]
+        seqs = pool.get_sequences(entity_features=subset)
+        seq = next(iter(seqs.values()))
+        assert [f.name for f in seq.metadata.entity_features] == subset
+
+    def test_static_subset_reduces_metadata(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """get_sequences(static_features=subset) → seq.metadata.static_features reflects the subset."""
+        pool = pools_dict[pool_type]
+        if not pool.settings.static_features:
+            pytest.skip("no static features")
+        subset = pool.settings.static_features[:1]
+        seqs = pool.get_sequences(static_features=subset)
+        seq = next(iter(seqs.values()))
+        assert [f.name for f in seq.metadata.static_features] == subset
+
+    def test_pool_metadata_unchanged(self, pools_dict: dict, pool_type: str) -> None:
+        """Scoping a child sequence must not mutate the parent pool's metadata."""
+        pool = pools_dict[pool_type]
+        n_before = len(pool.metadata.entity_features)
+        _ = pool.get_sequences(entity_features=pool.settings.entity_features[:1])
+        assert len(pool.metadata.entity_features) == n_before
+
+    def test_settings_entity_features_sorted(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """settings.entity_features is always in alphabetical order (normalised at construction)."""
+        pool = pools_dict[pool_type]
+        names = pool.settings.entity_features
+        assert names == sorted(names)
+
+    def test_metadata_entity_features_sorted(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """metadata.entity_features is always in alphabetical order (built by build_feature_metadata)."""
+        pool = pools_dict[pool_type]
+        names = [f.name for f in pool.metadata.entity_features]
+        assert names == sorted(names)
+
+    def test_settings_static_features_sorted(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """settings.static_features is always in alphabetical order (normalised at construction)."""
+        pool = pools_dict[pool_type]
+        names = pool.settings.static_features
+        assert names == sorted(names)
+
+    def test_metadata_static_features_sorted(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """metadata.static_features is always in alphabetical order (built by build_feature_metadata)."""
+        pool = pools_dict[pool_type]
+        if not pool.settings.static_features:
+            pytest.skip("no static features")
+        names = [f.name for f in pool.metadata.static_features]
+        assert names == sorted(names)
