@@ -299,7 +299,7 @@ def build_feature_metadata(lf: pl.LazyFrame) -> list[FeatureInfo]:
     large datasets.
 
     Returns:
-        List of :class:`FeatureInfo` instances, one per column in schema order.
+        List of :class:`FeatureInfo` instances in alphabetical order.
     """
     schema = lf.collect_schema()
     if not schema:
