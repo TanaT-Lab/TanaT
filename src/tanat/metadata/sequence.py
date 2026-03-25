@@ -148,6 +148,47 @@ class SequenceMetadata:
     entity_features: list[FeatureInfo]
     static_features: list[FeatureInfo] | None
 
+    def scope(
+        self,
+        entity_features: list[str] | None = None,
+        static_features: list[str] | None = None,
+    ) -> SequenceMetadata:
+        """Return a new metadata restricted to the given feature subsets.
+
+        Args:
+            entity_features: Feature names to keep.  ``None`` keeps all.
+            static_features: Feature names to keep.  ``None`` keeps all.
+                An empty list produces ``static_features=None``.
+
+        Returns:
+            A filtered copy, or ``self`` when nothing was actually removed.
+            Original feature order is preserved.
+        """
+        ef = self.entity_features
+        if entity_features is not None and len(entity_features) < len(ef):
+            visible = set(entity_features)
+            ef = [f for f in ef if f.name in visible]
+
+        sf = self.static_features
+        if (
+            static_features is not None
+            and sf is not None
+            and len(static_features) < len(sf)
+        ):
+            visible = set(static_features)
+            sf = [f for f in sf if f.name in visible] or None
+
+        # Fast-path: nothing was actually filtered → return self unchanged.
+        if ef is self.entity_features and sf is self.static_features:
+            return self
+
+        return SequenceMetadata(
+            seq_id=self.seq_id,
+            temporal=self.temporal,
+            entity_features=ef,
+            static_features=sf,
+        )
+
     def __str__(self) -> str:
         s = "\n"
 
