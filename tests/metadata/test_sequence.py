@@ -256,7 +256,7 @@ class TestStandaloneSequenceMetadata:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("seq_case", ["partial", "complete"])
+@pytest.mark.parametrize("pool_type", ["interval", "event", "state"])
 class TestPoolCastToSequence:
     """Casts applied on a pool are reflected in Sequences built from it.
 
@@ -265,19 +265,19 @@ class TestPoolCastToSequence:
     Sequences read casts lazily from ``_parent_pool._casts``.
     """
 
-    def test_cast_id_reflected(self, pools_dict: dict, seq_case, seq_type: str) -> None:
+    def test_cast_id_reflected(self, pools_dict: dict, pool_type: str) -> None:
         """pool.cast_id(pl.String) → pool[id].metadata.seq_id == pl.String."""
-        pool = pools_dict[seq_type].copy()
+        pool = pools_dict[pool_type].copy()
         pool.cast_id(pl.String)
         id_value = pool.unique_ids[0]
         seq = pool[id_value]
         assert seq.metadata.seq_id == pl.String
 
     def test_cast_entity_feature_reflected(
-        self, pools_dict: dict, seq_case, seq_type: str
+        self, pools_dict: dict, pool_type: str
     ) -> None:
         """pool.cast_features({'status': Categorical}) → CategoricalInfo in seq.metadata."""
-        pool = pools_dict[seq_type].copy()
+        pool = pools_dict[pool_type].copy()
         pool.cast_features({"status": pl.Categorical})
         seq = pool[pool.unique_ids[0]]
         assert isinstance(seq.metadata.feature_info("status"), CategoricalInfo)
