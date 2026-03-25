@@ -20,6 +20,12 @@ import numpy as np
 import polars as pl
 import pandas as pd
 from tanat_utils import CachableSettings, Registrable
+from tanat_utils.pretty_format import (
+    format_header,
+    format_section,
+    format_kv,
+    format_feature_section,
+)
 
 from ...core.path import resolve_path
 from ...store.common.utils import normalise_to_lazyframe, check_no_reserved_names
@@ -233,6 +239,55 @@ class SequencePool(
     def __len__(self) -> int:
         """Number of sequences visible in this view."""
         return len(self.unique_ids)
+
+    def __repr__(self) -> str:
+        cls = type(self).__name__
+        n_entity = len(self.settings.entity_features)
+        n_static = len(self.settings.static_features)
+        return (
+            f"{cls}(n={len(self)}, entity_features={n_entity}, "
+            f"static_features={n_static}, store='{self._store.root_path}')"
+        )
+
+    def __str__(self) -> str:
+        cls = type(self).__name__
+        meta = self.metadata
+        t_cols = self.settings.get_temporal_columns()
+
+        overview = [
+            format_kv("Sequences", f"{len(self):,}"),
+            format_kv("Store", str(self._store.root_path)),
+            format_kv("id_column", self.settings.id_column),
+        ]
+        temporal = [
+            format_kv("Type", str(meta.temporal)),
+            format_kv("Columns", str(t_cols)),
+            format_kv("t0", self._t0_setter.strategy_summary),
+        ]
+
+        parts = [
+            format_header(f"{cls} Summary"),
+            "",
+            format_section("Overview", overview),
+            "",
+            format_section("Temporal", temporal),
+        ]
+
+        ef_section = format_feature_section(
+            "Entity Features",
+            [(f.name, f.summary) for f in meta.entity_features],
+        )
+        if ef_section:
+            parts += ["", ef_section]
+
+        sf_section = format_feature_section(
+            "Static Features",
+            [(f.name, f.summary) for f in (meta.static_features or [])],
+        )
+        if sf_section:
+            parts += ["", sf_section]
+
+        return "\n".join(parts)
 
     @property
     def is_dirty(self) -> bool:

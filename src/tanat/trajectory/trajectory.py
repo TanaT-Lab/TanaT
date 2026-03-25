@@ -10,6 +10,13 @@ import polars as pl
 import pandas as pd
 
 from tanat_utils import CachableSettings
+from tanat_utils.pretty_format import (
+    format_header,
+    format_section,
+    format_kv,
+    format_bullet,
+    format_feature_section,
+)
 
 from ..sequence.base.sequence import Sequence
 from ..store.trajectory.store import TrajectoryStore
@@ -157,6 +164,38 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
 
     def __len__(self) -> int:
         return len(self._store_aliases)
+
+    def __repr__(self) -> str:
+        return f"Trajectory(id={self._id_value}, sequences={self._store_aliases})"
+
+    def __str__(self) -> str:
+        meta = self.metadata
+        aliases = self._store_aliases
+
+        overview = [
+            format_kv("Trajectory ID", str(self._id_value)),
+            format_kv("Sequences", ", ".join(aliases)),
+        ]
+        seq_bullets = [
+            format_bullet(alias, repr(seq)) for alias, seq in self.sequences.items()
+        ]
+
+        parts = [
+            format_header("Trajectory Summary"),
+            "",
+            format_section("Overview", overview),
+            "",
+            format_section("Sequences", seq_bullets),
+        ]
+
+        sf_section = format_feature_section(
+            "Static Features",
+            [(f.name, f.summary) for f in (meta.static_features or [])],
+        )
+        if sf_section:
+            parts += ["", sf_section]
+
+        return "\n".join(parts)
 
     def __contains__(self, alias: str) -> bool:
         return alias in self._store_aliases

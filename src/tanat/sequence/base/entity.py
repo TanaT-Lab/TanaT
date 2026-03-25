@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from tanat_utils import Registrable
+from tanat_utils.pretty_format import format_header, format_section, format_kv
 
 from ...metadata.feature import FeatureInfo, build_feature_metadata
 from ...store.common.utils import apply_casts
@@ -64,6 +65,30 @@ class Entity(Registrable, ABC):
         self._virtual_id: str | None = virtual_id
         self._casts: SequenceCastRecipe = SequenceCastRecipe.coerce(cast_recipe)
         self._parent_metadata: SequenceMetadata | None = parent_metadata
+
+    def __repr__(self) -> str:
+        cls = type(self).__name__
+        return f"{cls}(id={self._id_value}, rank={self._rank})"
+
+    def __str__(self) -> str:
+        cls = type(self).__name__
+        feature_values = self.data()
+        overview = [
+            format_kv("Sequence ID", str(self._id_value)),
+            format_kv("Rank", str(self._rank)),
+        ]
+        feature_lines = [
+            format_kv(name, str(value)) for name, value in feature_values.items()
+        ]
+
+        parts = [
+            format_header(f"{cls} Summary"),
+            "",
+            format_section("Overview", overview),
+            "",
+            format_section("Entity Features", feature_lines),
+        ]
+        return "\n".join(parts)
 
     # ------------------------------------------------------------------
     # Public helpers

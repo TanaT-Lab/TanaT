@@ -12,6 +12,12 @@ from typing import TYPE_CHECKING, Literal
 import polars as pl
 import pandas as pd
 from tanat_utils import CachableSettings, Registrable
+from tanat_utils.pretty_format import (
+    format_header,
+    format_section,
+    format_kv,
+    format_feature_section,
+)
 
 from .entity import Entity
 from .cast import SequenceCastRecipe
@@ -225,6 +231,62 @@ class Sequence(
         if self._row_mask is not None:
             return int(self._row_mask.sum())
         return self._store.get_sequence_length(self._id_value, id_cast=self._casts.id)
+
+    def __repr__(self) -> str:
+        cls = type(self).__name__
+        n_entity = len(self.settings.entity_features)
+        return f"{cls}(id={self._id_value}, length={len(self)}, entity_features={n_entity})"
+
+    def __str__(self) -> str:
+        cls = type(self).__name__
+        meta = self.metadata
+        t_cols = self.settings.get_temporal_columns()
+
+        # Temporal range for this specific sequence
+        # avoid using metadata propagated from parent pool.
+        df = self._temporal_data_lf().select(t_cols).collect()
+        if len(t_cols) == 1:
+            t_min = df[t_cols[0]].min()
+            t_max = df[t_cols[0]].max()
+        else:
+            t_min = min(df[c].min() for c in t_cols)
+            t_max = max(df[c].max() for c in t_cols)
+
+        t0_val = self.t0
+        t0_desc = f"{t0_val} (rank {self.t0_nearest_rank})"
+
+        overview = [
+            format_kv("Sequence ID", str(self._id_value)),
+            format_kv("Length", str(len(self))),
+        ]
+        temporal = [
+            format_kv("Range", f"{t_min} → {t_max}"),
+            format_kv("t0", t0_desc),
+        ]
+
+        parts = [
+            format_header(f"{cls} Summary"),
+            "",
+            format_section("Overview", overview),
+            "",
+            format_section("Temporal", temporal),
+        ]
+
+        ef_section = format_feature_section(
+            "Entity Features",
+            [(f.name, f.summary) for f in meta.entity_features],
+        )
+        if ef_section:
+            parts += ["", ef_section]
+
+        sf_section = format_feature_section(
+            "Static Features",
+            [(f.name, f.summary) for f in (meta.static_features or [])],
+        )
+        if sf_section:
+            parts += ["", sf_section]
+
+        return "\n".join(parts)
 
     # ------------------------------------------------------------------
     # Access

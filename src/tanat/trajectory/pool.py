@@ -17,6 +17,13 @@ import numpy as np
 import polars as pl
 import pandas as pd
 from tanat_utils import CachableSettings
+from tanat_utils.pretty_format import (
+    format_header,
+    format_section,
+    format_kv,
+    format_bullet,
+    format_feature_section,
+)
 
 from ..store.trajectory.builder import TrajectoryStoreBuilder
 from ..store.trajectory.schema import TrajectorySchema as TSCH
@@ -375,6 +382,49 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
     def __len__(self) -> int:
         """Number of trajectories visible in this view."""
         return len(self.unique_ids)
+
+    def __repr__(self) -> str:
+        aliases = self._store_aliases
+        n_static = len(self.settings.static_features)
+        return (
+            f"TrajectoryPool(n={len(self)}, sequences={aliases}, "
+            f"static_features={n_static}, store='{self._store.root_path}')"
+        )
+
+    def __str__(self) -> str:
+        meta = self.metadata
+        pools = self.sequence_pools
+
+        overview = [
+            format_kv("Trajectories", f"{len(self):,}"),
+            format_kv("Store", str(self._store.root_path)),
+            format_kv("id_column", self.settings.id_column),
+        ]
+        temporal = [
+            format_kv("Type", str(meta.temporal)),
+        ]
+        seq_bullets = [
+            format_bullet(alias, repr(pool)) for alias, pool in pools.items()
+        ]
+
+        parts = [
+            format_header("TrajectoryPool Summary"),
+            "",
+            format_section("Overview", overview),
+            "",
+            format_section("Temporal", temporal),
+            "",
+            format_section(f"Sequences ({len(pools)})", seq_bullets),
+        ]
+
+        sf_section = format_feature_section(
+            "Static Features",
+            [(f.name, f.summary) for f in (meta.static_features or [])],
+        )
+        if sf_section:
+            parts += ["", sf_section]
+
+        return "\n".join(parts)
 
     @property
     def is_dirty(self) -> bool:
