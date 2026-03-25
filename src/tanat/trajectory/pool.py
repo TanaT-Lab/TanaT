@@ -360,16 +360,16 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
 
     @CachableSettings.cached_property
     def unique_ids(self) -> list:
-        """
-        Returns trajectory IDs visible through the current view.
+        """Visible trajectory IDs as a plain Python list.
 
-        Respects ``_id_mask`` (ID-level filtering), following the
-        same pattern as :attr:`SequencePool.unique_ids`.
+        Respects ``_id_mask``.
+
+        .. warning::
+
+           ``list`` erases rich Polars dtypes.
+           Prefer :attr:`_id_lf` when the result feeds a Polars join.
         """
-        all_ids = self._store.get_sorted_ids(id_cast=self._casts.id)
-        if self._id_mask is not None:
-            return [uid for uid in all_ids if uid in self._id_mask]
-        return all_ids
+        return self._id_lf.collect().to_series().to_list()
 
     @property
     def _store_aliases(self) -> list[str]:

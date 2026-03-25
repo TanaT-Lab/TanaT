@@ -225,16 +225,16 @@ class SequencePool(
 
     @CachableSettings.cached_property
     def unique_ids(self) -> list:
-        """
-        Returns the list of unique sequence IDs in their physical store order,
-        filtered by ``_id_mask`` when set.
+        """Visible sequence IDs in store order as a plain Python list.
 
-        The store guarantees a stable, deterministic order (sorted at build time).
+        Respects ``_id_mask``.  Deterministic order (sorted at build time).
+
+        .. warning::
+
+           ``list`` erases rich Polars dtypes (``Categorical`` → ``str``).
+           Prefer :attr:`_id_lf` when the result feeds a Polars join.
         """
-        all_ids = self._store.get_sorted_ids(id_cast=self._casts.id)
-        if self._id_mask is not None:
-            return [uid for uid in all_ids if uid in self._id_mask]
-        return all_ids
+        return self._id_lf.collect().to_series().to_list()
 
     def __len__(self) -> int:
         """Number of sequences visible in this view."""
@@ -1033,7 +1033,7 @@ class SequencePool(
         # always has one row per pool ID (consistent with unique_ids).
         id_col = self.settings.id_column
         if result.height < len(self.unique_ids):
-            all_ids = pl.DataFrame({id_col: self.unique_ids})
+            all_ids = self._id_lf.collect()
             result = all_ids.join(result, on=id_col, how="left")
 
         return result
@@ -1572,7 +1572,7 @@ class SequencePool(
 
         # All IDs captured before truncation (preserves pool order and
         # keeps sequences that have no data within the bin range).
-        ids_df = pl.Series(id_col, self.unique_ids, dtype=df[id_col].dtype).to_frame()
+        ids_df = self._id_lf.collect()
 
         if max_bins is None:
             max_b = df[bin_col].max()

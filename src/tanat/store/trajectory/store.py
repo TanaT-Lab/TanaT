@@ -136,15 +136,24 @@ class TrajectoryStore(StaticStoreMixin):
         return pl.DataFrame({TSCH.TRAJ_ID: []}).lazy()
 
     def get_sorted_ids(self, id_cast: pl.DataType | None = None) -> list:
-        """All trajectory IDs in their stored order, cast to *id_cast* when provided.
+        """All trajectory IDs in stored order, optionally cast to *id_cast*.
 
-        Use this at view boundaries to expose IDs in the user-facing type while
-        keeping all internal navigation on the physical (stored) type.
+        .. warning::
+
+           The returned ``list`` loses rich Polars dtypes (e.g. ``Categorical`` → ``str``).
+           Prefer :meth:`get_id_lf` when the result feeds a Polars join.
         """
-        ids = self.trajectory_index.select(TSCH.TRAJ_ID).collect().to_series().to_list()
-        if id_cast is None:
-            return ids
-        return pl.Series("id", ids).cast(id_cast).to_list()
+        return self.get_id_lf(id_cast=id_cast).collect().to_series().to_list()
+
+    def get_id_lf(self, id_cast: pl.DataType | None = None) -> pl.LazyFrame:
+        """All trajectory IDs as a single-column lazy frame, optionally cast.
+
+        Preserves the physical dtype — stays lazy until collected.
+        """
+        lf = self.trajectory_index.select(TSCH.TRAJ_ID)
+        if id_cast is not None:
+            lf = lf.with_columns(pl.col(TSCH.TRAJ_ID).cast(id_cast))
+        return lf
 
     @property
     def traj_id_col(self) -> str:
