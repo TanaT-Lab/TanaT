@@ -138,6 +138,9 @@ class TemporalIndexInfo:
 class SequenceMetadata:
     """
     Rich Sequence metadata with semantic profiling.
+
+    Feature lists (``entity_features``, ``static_features``) are
+    guaranteed to be in alphabetical order.
     """
 
     seq_id: pl.DataType
