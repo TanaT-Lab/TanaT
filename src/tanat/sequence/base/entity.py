@@ -61,7 +61,10 @@ class Entity(Registrable, ABC):
         self._id_value = id_value
         self._rank = rank
         self._store = resolve_store(store)
-        self._features = features
+        # Resolve features if None. Assume provided features are valid for performances
+        self._features: list[str] = (
+            features if features is not None else self._store.entity_features()
+        )
         self._virtual_id: str | None = virtual_id
         self._casts: SequenceCastRecipe = SequenceCastRecipe.coerce(cast_recipe)
         self._parent_metadata: SequenceMetadata | None = parent_metadata
@@ -105,9 +108,9 @@ class Entity(Registrable, ABC):
         return self._rank
 
     @property
-    def feature_names(self) -> list[str] | None:
-        """Visible feature names (``None`` means all store features)."""
-        return list(self._features) if self._features is not None else None
+    def feature_names(self) -> list[str]:
+        """Visible feature names."""
+        return list(self._features)
 
     @property
     def metadata(self) -> dict[str, FeatureInfo]:
@@ -176,9 +179,7 @@ class Entity(Registrable, ABC):
         )
         # Resolve + validate feature scope
         effective = self._resolve_features(features, available=list(row.keys()))
-        if effective is not None:
-            row = {k: v for k, v in row.items() if k in set(effective)}
-        return row
+        return {k: v for k, v in row.items() if k in set(effective)}
 
     # ------------------------------------------------------------------
     # Internal
@@ -188,13 +189,12 @@ class Entity(Registrable, ABC):
         self,
         features: list[str] | None,
         available: list[str] | None = None,
-    ) -> list[str] | None:
+    ) -> list[str]:
         """
         Resolve the effective feature list and validate names.
 
-        * ``features=None`` and no scope → ``None`` (all store features).
-        * ``features=None`` with scope   → ``self._features``.
-        * ``features`` provided          → intersected with scope.
+        * ``features=None`` → ``self._features`` (always a concrete list after init).
+        * ``features`` provided → validated against *available*.
 
         Args:
             features: User-requested feature names (``None`` → all visible).
@@ -208,9 +208,9 @@ class Entity(Registrable, ABC):
         if isinstance(features, str):
             features = [features]
 
-        # No explicit request → use scope or all available
+        # No explicit request → use scope (always set after __init__)
         if features is None:
-            return self._features or available
+            return self._features
 
         # Validate requested features against available keys
         if available is not None:
