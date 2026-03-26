@@ -37,9 +37,7 @@ class FeatureT0Setter(T0Setter, register_name="feature"):
         """e.g. ``"feature='admission_date'"``."""
         return f"feature='{self.settings.feature}'"
 
-    def _compute_t0(
-        self, target: SequencePool | Sequence, id_col: str
-    ) -> pl.LazyFrame:
+    def _compute_t0(self, target: SequencePool | Sequence, id_col: str) -> pl.LazyFrame:
         feature = self.settings.feature
 
         # Validate the feature exists in static features.

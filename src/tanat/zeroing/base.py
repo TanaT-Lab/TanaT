@@ -117,9 +117,7 @@ class T0Setter(ABC, Registrable):
         return self._df
 
     @abstractmethod
-    def _compute_t0(
-        self, target: SequencePool | Sequence, id_col: str
-    ) -> pl.LazyFrame:
+    def _compute_t0(self, target: SequencePool | Sequence, id_col: str) -> pl.LazyFrame:
         """Return a partial ``[id_col, _T0_]`` LazyFrame for this strategy.
 
         Called by :meth:`compute` after anchor normalisation. The returned

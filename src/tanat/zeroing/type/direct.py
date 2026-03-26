@@ -60,9 +60,7 @@ class DirectT0Setter(T0Setter, register_name="direct"):
         """e.g. ``'direct, anchor=start'``."""
         return f"direct, anchor={self.settings.anchor}"
 
-    def _compute_t0(
-        self, target: SequencePool | Sequence, id_col: str
-    ) -> pl.LazyFrame:
+    def _compute_t0(self, target: SequencePool | Sequence, id_col: str) -> pl.LazyFrame:
         direct = self.settings.direct
         # pylint: disable=protected-access
         id_lf = target._id_lf

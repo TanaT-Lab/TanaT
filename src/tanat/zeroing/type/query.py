@@ -61,9 +61,7 @@ class QueryT0Setter(T0Setter, register_name="query"):
         """e.g. ``'query, anchor=start'``."""
         return f"query, anchor={self.settings.anchor}"
 
-    def _compute_t0(
-        self, target: SequencePool | Sequence, id_col: str
-    ) -> pl.LazyFrame:
+    def _compute_t0(self, target: SequencePool | Sequence, id_col: str) -> pl.LazyFrame:
         cols = target.settings.get_temporal_columns()
         t_expr = self._t0_temporal_expr(
             self.settings.anchor, cols, target.metadata.is_datetime
