@@ -17,6 +17,7 @@ import pytest
 from tanat import get_workspace
 from tanat.sequence.type.event.pool import EventSequencePool
 from tanat.sequence.type.interval.pool import IntervalSequencePool
+from tanat.zeroing import _T0
 
 # ---------------------------------------------------------------------------
 # as_event  (parametrized over anchor)
@@ -192,3 +193,32 @@ class TestIntervalPoolPersist:
         reloaded = get_workspace()[store_name]
         assert isinstance(reloaded, EventSequencePool)
         assert len(reloaded) == len(interval_pool)
+
+
+# ---------------------------------------------------------------------------
+# T0 propagation (non-regression for _persist_as)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("anchor", ["start", "end", "middle"])
+class TestT0PropagationPersist:
+    """
+    T0 strategy is preserved through a persistent as_event() conversion.
+    """
+
+    def test_t0_propagated_as_event(
+        self, interval_pool: IntervalSequencePool, anchor: str, tmp_path: Path
+    ) -> None:
+        """set_t0(position=2, anchor=anchor) on IntervalPool → persisted EventPool keeps the same T0."""
+        pool = interval_pool.copy()
+        pool.set_t0(position=2, anchor=anchor)
+        source_t0 = pool.t0_data(output_format="polars")
+
+        converted = pool.as_event(
+            anchor,
+            destination=str(tmp_path / f"t0_event_{anchor}"),
+            overwrite=True,
+        )
+        converted_t0 = converted.t0_data(output_format="polars")
+
+        assert source_t0[_T0].equals(converted_t0[_T0], null_equal=True)

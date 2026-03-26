@@ -18,6 +18,7 @@ from tanat import get_workspace
 from tanat.sequence.type.event.pool import EventSequencePool
 from tanat.sequence.type.interval.pool import IntervalSequencePool
 from tanat.sequence.type.state.pool import StateSequencePool
+from tanat.zeroing import _T0
 
 # ---------------------------------------------------------------------------
 # as_interval  (zero I/O reinterpretation)
@@ -240,3 +241,32 @@ class TestStatePoolPersist:
         reloaded = get_workspace()[store_name]
         assert isinstance(reloaded, EventSequencePool)
         assert len(reloaded) == len(state_pool)
+
+
+# ---------------------------------------------------------------------------
+# T0 propagation (non-regression for _persist_as)
+# ---------------------------------------------------------------------------
+
+
+class TestT0PropagationPersist:
+    """
+    T0 strategy is preserved through a persistent type conversion.
+    """
+
+    def test_t0_propagated_as_event(
+        self, state_pool: StateSequencePool, tmp_path: Path
+    ) -> None:
+        """set_t0(position=2, anchor='start') on StatePool → persisted EventPool keeps the same T0."""
+        pool = state_pool.copy()
+        pool.set_t0(position=2, anchor="start")
+        source_t0 = pool.t0_data(output_format="polars")
+
+        converted = pool.as_event(
+            "start",
+            destination=str(tmp_path / "t0_event"),
+            overwrite=True,
+        )
+        converted_t0 = converted.t0_data(output_format="polars")
+
+        # T0 values must be identical after a persist conversion.
+        assert source_t0[_T0].equals(converted_t0[_T0], null_equal=True)

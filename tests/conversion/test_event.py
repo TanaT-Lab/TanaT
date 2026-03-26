@@ -19,6 +19,7 @@ from tanat import get_workspace
 from tanat.sequence.type.event.pool import EventSequencePool
 from tanat.sequence.type.interval.pool import IntervalSequencePool
 from tanat.sequence.type.state.pool import StateSequencePool
+from tanat.zeroing import _T0
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -342,3 +343,48 @@ class TestEventPoolTemporalCast:
             == n
         )
         assert pool.as_state().sequence_data(output_format="polars").height == n
+
+
+# ---------------------------------------------------------------------------
+# T0 propagation (non-regression for _persist_as)
+# ---------------------------------------------------------------------------
+
+
+class TestT0PropagationPersist:
+    """
+    T0 strategy is preserved through a persistent type conversion.
+    """
+
+    def test_t0_propagated_as_interval(
+        self, event_pool: EventSequencePool, tmp_path: Path
+    ) -> None:
+        """set_t0(position=2) on EventPool → persisted IntervalPool keeps the same T0."""
+        pool = event_pool.copy()
+        pool.set_t0(position=2)
+        source_t0 = pool.t0_data(output_format="polars")
+
+        converted = pool.as_interval(
+            duration=_duration(pool),
+            destination=str(tmp_path / "t0_interval"),
+            overwrite=True,
+        )
+        converted_t0 = converted.t0_data(output_format="polars")
+
+        # T0 values must be identical after a persist conversion.
+        assert source_t0[_T0].equals(converted_t0[_T0], null_equal=True)
+
+    def test_t0_propagated_as_state(
+        self, event_pool: EventSequencePool, tmp_path: Path
+    ) -> None:
+        """set_t0(position=2) on EventPool → persisted StatePool keeps the same T0."""
+        pool = event_pool.copy()
+        pool.set_t0(position=2)
+        source_t0 = pool.t0_data(output_format="polars")
+
+        converted = pool.as_state(
+            destination=str(tmp_path / "t0_state"),
+            overwrite=True,
+        )
+        converted_t0 = converted.t0_data(output_format="polars")
+
+        assert source_t0[_T0].equals(converted_t0[_T0], null_equal=True)
