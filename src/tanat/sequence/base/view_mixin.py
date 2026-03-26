@@ -46,8 +46,26 @@ class SequenceViewMixin:
 
         - ``None``    → take all available from the store.
         - ``[]``      → expose no features (explicit empty selection).
-        - ``[...]``   → use the provided list as-is.
+        - ``[...]``   → validate against the store, then use as-is.
+
+        Raises:
+            KeyError: If any feature name in a non-``None`` list is not
+                available in the store.
         """
+        if entity_features is not None:
+            unknown = set(entity_features) - set(store.entity_features())
+            if unknown:
+                raise KeyError(
+                    f"Unknown entity features: {sorted(unknown)}. "
+                    f"Available: {store.entity_features()}"
+                )
+        if static_features is not None:
+            unknown = set(static_features) - set(store.static_features())
+            if unknown:
+                raise KeyError(
+                    f"Unknown static features: {sorted(unknown)}. "
+                    f"Available: {store.static_features()}"
+                )
         ef = entity_features if entity_features is not None else store.entity_features()
         sf = static_features if static_features is not None else store.static_features()
         return ef, sf

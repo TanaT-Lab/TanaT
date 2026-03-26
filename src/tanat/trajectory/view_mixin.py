@@ -51,8 +51,19 @@ class TrajectoryViewMixin:
 
         - ``None``  → take all available from the store.
         - ``[]``    → expose no features (explicit empty selection).
-        - ``[...]`` → use the provided list as-is.
+        - ``[...]`` → validate against the store, then use as-is.
+
+        Raises:
+            KeyError: If any feature name in a non-``None`` list is not
+                available in the store.
         """
+        if static_features is not None:
+            unknown = set(static_features) - set(store.static_features())
+            if unknown:
+                raise KeyError(
+                    f"Unknown static features: {sorted(unknown)}. "
+                    f"Available: {store.static_features()}"
+                )
         return (
             static_features if static_features is not None else store.static_features()
         )
