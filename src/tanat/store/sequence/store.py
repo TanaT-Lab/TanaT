@@ -14,9 +14,8 @@ import pandas as pd
 import polars as pl
 
 from ...metadata.sequence import SequenceMetadata
-from ..common.virtual import VirtualStore
-from ..common.static import StaticStoreMixin
-from ..common.utils import (
+from ..base.store import BaseStore
+from ..base.utils import (
     apply_casts,
     check_no_reserved_names,
     drop_columns_from_file,
@@ -29,13 +28,13 @@ from .schema import StoreSchema as SCH
 LOGGER = logging.getLogger(__name__)
 
 
-class SequenceStore(StaticStoreMixin):
+class SequenceStore(BaseStore):
     """
     Sequence store.
 
     Delegates virtual (temporary) feature storage to a ``VirtualStore``
-    and inherits shared I/O helpers from ``StaticStoreMixin``
-    (which itself inherits ``StoreMixin``).
+    and inherits shared I/O helpers from ``BaseStore``
+    (which itself inherits ``StaticStoreMixin``).
     """
 
     _MAIN_INDEX_PROPERTY: str = "sequence_index"
@@ -52,49 +51,23 @@ class SequenceStore(StaticStoreMixin):
         Args:
             root_path: Root directory of the store.
         """
-        self._root_path = Path(root_path)
-        self._check_structure()
-
-        # Virtual store delegate
-        self._virtual = VirtualStore(self._root_path)
+        super().__init__(root_path)
 
         # Name cache (physical columns only; invalidated after drop/snapshot)
         self._phys_entity_names: list[str] | None = None
 
-        # Metadata cache
-        self._metadata_cache: SequenceMetadata | None = None
-
-    @property
-    def root_path(self) -> Path:
-        """Root directory of this store."""
-        return self._root_path
-
-    def _check_structure(self) -> None:
-        """Validates that the store directory contains the required files."""
-        if not self._root_path.exists():
-            raise FileNotFoundError(f"Store path not found: {self._root_path}")
-
-        required = [
+    def _required_files(self) -> list[str]:
+        """List of file names that must exist in the root directory."""
+        return [
             SCH.Files.CORE,
             SCH.Files.SEQUENCE_INDEX,
             SCH.Files.TIME_INDEX,
             SCH.Files.ENTITY_FEATURES,
         ]
-        for fname in required:
-            if not (self._root_path / fname).exists():
-                raise FileNotFoundError(
-                    f"Invalid Store: Missing required file '{fname}' in {self._root_path}"
-                )
 
     # ------------------------------------------------------------------
     # Settings / Manifest
     # ------------------------------------------------------------------
-
-    @property
-    def core(self) -> dict:
-        """Returns the static store facts written once at build time."""
-        with open(self._root_path / SCH.Files.CORE, "r", encoding="utf-8") as f:
-            return json.load(f)
 
     def get_sequence_type(self) -> str:
         """Returns the sequence type declared in ``core.json``."""
@@ -123,16 +96,6 @@ class SequenceStore(StaticStoreMixin):
         }
         with open(path / SCH.Files.CORE, "w", encoding="utf-8") as fh:
             json.dump(core, fh, indent=4)
-
-    @staticmethod
-    def write_metadata_json(metadata: SequenceMetadata, path: Path) -> None:
-        """Writes *metadata* to *path* as ``metadata.json``."""
-        data = {
-            "__NOTICE__": "auto-generated. DO NOT EDIT BY HAND",
-            **metadata.to_json_dict(),
-        }
-        with open(path / SCH.Files.METADATA, "w", encoding="utf-8") as fh:
-            json.dump(data, fh, indent=4)
 
     # ------------------------------------------------------------------
     # Indexes
@@ -284,16 +247,6 @@ class SequenceStore(StaticStoreMixin):
             n_rows: Sample size (default: 10).
         """
         probe_cast(self.entity(), schema, n_rows)
-
-    def probe_id_cast(self, dtype: pl.DataType, n_rows: int = 10) -> None:
-        """
-        Validates casting the sequence-ID column to *dtype*.
-
-        Args:
-            dtype: Target Polars DataType.
-            n_rows: Sample size (default: 10).
-        """
-        probe_cast(self.sequence_index.select(SCH.SEQ_ID), {SCH.SEQ_ID: dtype}, n_rows)
 
     def probe_time_cast(self, dtype: pl.DataType, n_rows: int = 10) -> None:
         """
@@ -595,20 +548,6 @@ class SequenceStore(StaticStoreMixin):
             df=lf,
             expected_height=expected_height,
         )
-
-    def clear_virtual_context(self, virtual_id: str) -> None:
-        """Removes a virtual context (features on disk + cast registries)."""
-        self._virtual.clear_context(virtual_id)
-
-    def fork_virtual_context(self, source_virtual_id: str | None) -> str | None:
-        """Fork *source_virtual_id* into a new context, or ``None`` if nothing to inherit.
-
-        Returns ``None`` immediately when *source_virtual_id* is ``None``;
-        otherwise delegates to :meth:`~tanat.store.common.virtual.VirtualStore.fork_context`.
-        """
-        if source_virtual_id is None:
-            return None
-        return self._virtual.fork_context(source_virtual_id)
 
     # ------------------------------------------------------------------
     # Temporal conversion helpers

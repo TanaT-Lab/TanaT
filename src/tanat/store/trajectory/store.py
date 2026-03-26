@@ -25,13 +25,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 import polars as pl
 
-from ..common.virtual import VirtualStore
-from ..common.static import StaticStoreMixin
-from ..common.utils import (
+from ..base.store import BaseStore
+from ..base.utils import (
     apply_casts,
-    probe_cast,
 )
-from ...metadata.trajectory import TrajectoryMetadata
 from ..sequence.store import SequenceStore
 from .schema import TrajectorySchema as TSCH
 
@@ -41,7 +38,7 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 
 
-class TrajectoryStore(StaticStoreMixin):
+class TrajectoryStore(BaseStore):
     """
     Persistent storage for a :class:`TrajectoryPool`.
 
@@ -63,43 +60,18 @@ class TrajectoryStore(StaticStoreMixin):
     # ------------------------------------------------------------------
 
     def __init__(self, root_path: str | Path) -> None:
-        self._root_path = Path(root_path)
-        self._check_structure()
-        self._virtual = VirtualStore(self._root_path)
+        super().__init__(root_path)
         # Caches
         self._store_links: dict[str, str] | None = None
         self._seq_stores: dict[str, SequenceStore] | None = None
-        self._metadata_cache: TrajectoryMetadata | None = None
 
-    @property
-    def root_path(self) -> Path:
-        """Root directory of this store."""
-        return self._root_path
-
-    def _check_structure(self) -> None:
-        """Validates that the store directory contains the required files."""
-        if not self._root_path.exists():
-            raise FileNotFoundError(f"Trajectory store not found: {self._root_path}")
-        required = [TSCH.Files.CORE, TSCH.Files.TRAJECTORY_INDEX]
-        for fname in required:
-            if not (self._root_path / fname).exists():
-                raise FileNotFoundError(
-                    f"Invalid trajectory store: missing '{fname}' in {self._root_path}. "
-                    "Use TrajectoryPool.builder().add(...).build(path) to create it first."
-                )
+    def _required_files(self) -> list[str]:
+        """List of file names that must exist in the root directory."""
+        return [TSCH.Files.CORE, TSCH.Files.TRAJECTORY_INDEX]
 
     # ------------------------------------------------------------------
     # Store links (JSON)
     # ------------------------------------------------------------------
-
-    @property
-    def core(self) -> dict:
-        """Contents of ``core.json`` (written once at build time)."""
-        path = self._root_path / TSCH.Files.CORE
-        if path.exists():
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        return {}
 
     @property
     def store_links(self) -> dict[str, str]:
@@ -159,20 +131,6 @@ class TrajectoryStore(StaticStoreMixin):
     # Cast probes (fast validation on a small sample before accepting a cast)
     # ------------------------------------------------------------------
 
-    def probe_id_cast(self, dtype: pl.DataType, n_rows: int = 10) -> None:
-        """
-        Validates casting the trajectory-ID column to *dtype*.
-
-        Args:
-            dtype: Target Polars DataType.
-            n_rows: Sample size (default: 10).
-        """
-        probe_cast(
-            self.trajectory_index.select(TSCH.TRAJ_ID),
-            {TSCH.TRAJ_ID: dtype},
-            n_rows,
-        )
-
     def probe_time_cast(self, dtype: pl.DataType, n_rows: int = 10) -> None:
         """
         Validates casting time index columns to *dtype* against the first
@@ -198,20 +156,6 @@ class TrajectoryStore(StaticStoreMixin):
             )
         first_store = next(iter(stores.values()))
         first_store.probe_time_cast(dtype, n_rows)
-
-    def clear_virtual_context(self, virtual_id: str) -> None:
-        """Removes a virtual context directory and all its feature files."""
-        self._virtual.clear_context(virtual_id)
-
-    def fork_virtual_context(self, source_virtual_id: str | None) -> str | None:
-        """Fork *source_virtual_id* into a new context, or ``None`` if nothing to inherit.
-
-        Returns ``None`` immediately when *source_virtual_id* is ``None``;
-        otherwise delegates to :meth:`~tanat.store.common.virtual.VirtualStore.fork_context`.
-        """
-        if source_virtual_id is None:
-            return None
-        return self._virtual.fork_context(source_virtual_id)
 
     def _filter_by_id(self, lf: pl.LazyFrame, id_value) -> pl.LazyFrame:
         """Filters a LazyFrame to rows belonging to *id_value* (physical type)."""
@@ -302,16 +246,6 @@ class TrajectoryStore(StaticStoreMixin):
         }
         with open(path / TSCH.Files.CORE, "w", encoding="utf-8") as fh:
             json.dump(core, fh, indent=4)
-
-    @staticmethod
-    def write_metadata_json(metadata: TrajectoryMetadata, path: Path) -> None:
-        """Writes *metadata* to *path* as ``metadata.json``."""
-        data = {
-            "__NOTICE__": "auto-generated. DO NOT EDIT BY HAND",
-            **metadata.to_json_dict(),
-        }
-        with open(path / TSCH.Files.METADATA, "w", encoding="utf-8") as fh:
-            json.dump(data, fh, indent=4)
 
     def _write_core_snapshot(self, target: Path) -> None:
         """Writes ``core.json`` to *target*, refreshing ``created_at`` to now (UTC).
