@@ -469,14 +469,21 @@ class SequencePool(
             seqs = pool.get_sequences()
             print(seqs[42].sequence_data())
         """
-        return {
-            sid: self._build_sequence(
-                sid,
-                entity_features=entity_features,
-                static_features=static_features,
-            )
-            for sid in self.unique_ids
-        }
+        # Validate feature names early, before iterating over all IDs.
+        if entity_features is not None:
+            self.settings.validate_features(entity_features, is_static=False)
+        if static_features is not None:
+            self.settings.validate_features(static_features, is_static=True)
+        # Build the overridden SequenceSettings if overrides are provided.
+        prebuilt: SequenceSettings | None = None
+        if entity_features is not None or static_features is not None:
+            overrides: dict = {}
+            if entity_features is not None:
+                overrides["entity_features"] = entity_features
+            if static_features is not None:
+                overrides["static_features"] = static_features
+            prebuilt = replace(self.settings, **overrides)
+        return {sid: self._build_sequence(sid, prebuilt) for sid in self.unique_ids}
 
     def __getitem__(self, id_value) -> Sequence:
         """
@@ -520,9 +527,7 @@ class SequencePool(
     def _build_sequence(
         self,
         id_value,
-        *,
-        entity_features=None,
-        static_features=None,
+        settings=None,
     ) -> Sequence:
         """Internal helper to build a Sequence by ID without any validity check.
 
@@ -532,20 +537,14 @@ class SequencePool(
 
         Args:
             id_value: A sequence ID already known to be in the view.
-            entity_features: Override the pool-level entity-feature list.
-                ``None`` → use :attr:`settings.entity_features`.
-            static_features: Override the pool-level static-feature list.
-                ``None`` → use :attr:`settings.static_features`.
+            settings: :class:`SequenceSettings` to use for this sequence.
+                ``None`` → use :attr:`settings` (pool-level defaults).
         """
-        settings = {}
-        if entity_features is not None:
-            settings["entity_features"] = entity_features
-        if static_features is not None:
-            settings["static_features"] = static_features
-        settings = replace(self.settings, **settings) if settings else self.settings
-
         return self._target_seq_cls.from_parent(
-            id_value, self._store, settings, parent_pool=self
+            id_value,
+            self._store,
+            settings if settings is not None else self.settings,
+            parent_pool=self,
         )
 
     # ------------------------------------------------------------------
@@ -2139,6 +2138,7 @@ class SequencePool(
             if self._casts.temporal is not None
             else self._casts
         )
+        # object.__new__ bypasses target_pool_cls.__init__ (validation, resolution, ...)
         new_pool = object.__new__(target_pool_cls)
         SequencePool.__init__(new_pool, self._store, settings)
         # pylint: disable=protected-access
@@ -2196,8 +2196,19 @@ class SequencePool(
         """
         ephemeral = self._reinterpret_as(target_cls, settings, virtual_id)
         dest_path = ephemeral.save(destination=destination, overwrite=overwrite)
-        # TODO: FIX : PROPAGATE T0 ...
-        return target_cls(dest_path, **settings)
+        new_pool = target_cls(dest_path, **settings)
+        # Propagate the T0 strategy.
+        # The persisted store has all masks/casts baked in, so all other
+        # fields stay at their fresh-pool defaults.
+        new_pool._inject(
+            virtual_id=None,
+            id_mask=None,
+            row_mask=None,
+            has_soft_drops=False,
+            cast_recipe=SequenceCastRecipe(),
+            t0_setter=self._t0_setter,
+        )
+        return new_pool
 
     def _as_event_from_period(
         self,
