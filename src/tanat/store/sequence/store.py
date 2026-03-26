@@ -191,16 +191,6 @@ class SequenceStore(StaticStoreMixin):
     # Navigation
     # ------------------------------------------------------------------
 
-    def get_sorted_ids(self, id_cast: pl.DataType | None = None) -> list:
-        """All sequence IDs in stored order, optionally cast to *id_cast*.
-
-        .. warning::
-
-           The returned ``list`` loses rich Polars dtypes (e.g. ``Categorical`` → ``str``).
-           Prefer :meth:`get_id_lf` when the result feeds a Polars join.
-        """
-        return self.get_id_lf(id_cast=id_cast).collect().to_series().to_list()
-
     def get_id_lf(
         self,
         id_cast: pl.DataType | None = None,
