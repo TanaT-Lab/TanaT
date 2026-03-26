@@ -420,18 +420,40 @@ class SequenceStore(StaticStoreMixin):
         Cast overlays are applied after assembly - physical store is never touched.
         """
         lf = pl.concat(
-            [self._ids_col(), self.time_index(virtual_id), self.entity(virtual_id)],
+            [
+                self.get_id_lf(id_cast=id_cast, explode=True),
+                self.get_time_index(virtual_id, time_index_cast=time_index_cast),
+                self.entity(virtual_id),
+            ],
             how="horizontal",
         )
-        cast_schema: dict[str, pl.DataType] = {}
-        if id_cast is not None:
-            cast_schema[SCH.SEQ_ID] = id_cast
-        if time_index_cast is not None:
-            for col in self.time_index(virtual_id).collect_schema().names():
-                cast_schema[col] = time_index_cast
         if feature_casts:
-            cast_schema.update(feature_casts)
-        return apply_casts(lf, cast_schema) if cast_schema else lf
+            lf = apply_casts(lf, feature_casts)
+        return lf
+
+    def get_time_index(
+        self,
+        virtual_id: str | None = None,
+        *,
+        time_index_cast: pl.DataType | None = None,
+    ) -> pl.LazyFrame:
+        """Returns time-index columns only, with optional cast overlay.
+
+        Cheaper than :meth:`get_id_time_index` when the sequence ID
+        column is not needed.
+
+        Args:
+            virtual_id: Optional virtual context identifier.
+            time_index_cast: If set, all time columns are cast to this dtype.
+
+        Returns:
+            A :class:`polars.LazyFrame` of the time-index columns.
+        """
+        lf = self.time_index(virtual_id)
+        if time_index_cast is not None:
+            cast_schema = {col: time_index_cast for col in lf.collect_schema().names()}
+            lf = apply_casts(lf, cast_schema)
+        return lf
 
     def get_id_time_index(
         self,
@@ -445,17 +467,13 @@ class SequenceStore(StaticStoreMixin):
         Cheaper than :meth:`get_temporal_data` when entity features are not needed.
         Cast overlays are applied after assembly.
         """
-        lf = pl.concat(
-            [self._ids_col(), self.time_index(virtual_id)],
+        return pl.concat(
+            [
+                self.get_id_lf(id_cast=id_cast, explode=True),
+                self.get_time_index(virtual_id, time_index_cast=time_index_cast),
+            ],
             how="horizontal",
         )
-        cast_schema: dict[str, pl.DataType] = {}
-        if id_cast is not None:
-            cast_schema[SCH.SEQ_ID] = id_cast
-        if time_index_cast is not None:
-            for col in self.time_index(virtual_id).collect_schema().names():
-                cast_schema[col] = time_index_cast
-        return apply_casts(lf, cast_schema) if cast_schema else lf
 
     def get_entity_row(
         self,
@@ -645,7 +663,7 @@ class SequenceStore(StaticStoreMixin):
                 entity_col = apply_casts(entity_col, {duration: feature_cast})
             combined = pl.concat(
                 [
-                    self._ids_col(),
+                    self.get_id_lf(explode=True),
                     active_ti,
                     entity_col,
                 ],
@@ -695,7 +713,9 @@ class SequenceStore(StaticStoreMixin):
         active_ti = self.time_index(virtual_id)
         if time_index_cast is not None:
             active_ti = apply_casts(active_ti, {SCH.T_EVENT: time_index_cast})
-        combined = pl.concat([self._ids_col(), active_ti], how="horizontal")
+        combined = pl.concat(
+            [self.get_id_lf(explode=True), active_ti], how="horizontal"
+        )
         # Sequences are contiguous in the store: the last row of each sequence is the
         # one where the next row belongs to a different sequence (or doesn't exist).
         is_last = (pl.col(SCH.SEQ_ID).shift(-1) != pl.col(SCH.SEQ_ID)).fill_null(True)
