@@ -201,14 +201,34 @@ class SequenceStore(StaticStoreMixin):
         """
         return self.get_id_lf(id_cast=id_cast).collect().to_series().to_list()
 
-    def get_id_lf(self, id_cast: pl.DataType | None = None) -> pl.LazyFrame:
-        """All sequence IDs as a single-column lazy frame, optionally cast.
+    def get_id_lf(
+        self,
+        id_cast: pl.DataType | None = None,
+        *,
+        explode: bool = False,
+    ) -> pl.LazyFrame:
+        """Sequence IDs as a single-column lazy frame, optionally cast.
 
-        Preserves the physical dtype — stays lazy until collected.
+        Args:
+            id_cast: If set, the ID column is cast to this dtype.
+            explode: When ``False`` (default), returns one row per sequence
+                (unique IDs).  When ``True``, expands each ID by its entity
+                count so the result is row-aligned with :meth:`entity` and
+                :meth:`get_time_index`.
+
+        Returns:
+            A :class:`polars.LazyFrame` with a single column of sequence IDs.
         """
-        lf = self.sequence_index.select(SCH.SEQ_ID)
+        if explode:
+            lf = (
+                self.sequence_index.select([SCH.SEQ_ID, SCH.LENGTH])
+                .filter(pl.col(SCH.LENGTH) > 0)
+                .select(pl.col(SCH.SEQ_ID).repeat_by(pl.col(SCH.LENGTH)).explode())
+            )
+        else:
+            lf = self.sequence_index.select(SCH.SEQ_ID)
         if id_cast is not None:
-            lf = lf.with_columns(pl.col(SCH.SEQ_ID).cast(id_cast))
+            lf = apply_casts(lf, {SCH.SEQ_ID: id_cast})
         return lf
 
     def get_slice(
@@ -386,14 +406,6 @@ class SequenceStore(StaticStoreMixin):
     # ------------------------------------------------------------------
     # Assembly
     # ------------------------------------------------------------------
-
-    def _ids_col(self) -> pl.LazyFrame:
-        """Expands seq_id into one row per entity, aligned with entity rows."""
-        return (
-            self.sequence_index.select([SCH.SEQ_ID, SCH.LENGTH])
-            .filter(pl.col(SCH.LENGTH) > 0)
-            .select(pl.col(SCH.SEQ_ID).repeat_by(pl.col(SCH.LENGTH)).explode())
-        )
 
     def get_temporal_data(
         self,
