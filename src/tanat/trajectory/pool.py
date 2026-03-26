@@ -8,6 +8,7 @@ import random
 import shutil
 import uuid
 import warnings
+from dataclasses import replace
 from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Iterator, Literal
@@ -317,12 +318,14 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         else:
             effective_mask = None  # _build_trajectory falls back to self._alias_mask
 
+        # Validate static_features early, before iterating over all IDs.
+        # Build settings if static_features is overridden.
+        prebuilt: TrajectorySettings | None = None
+        if static_features is not None:
+            self.settings.validate_features(static_features)
+            prebuilt = replace(self.settings, static_features=static_features)
         return {
-            tid: self._build_trajectory(
-                tid,
-                static_features=static_features,
-                alias_mask=effective_mask,
-            )
+            tid: self._build_trajectory(tid, prebuilt, alias_mask=effective_mask)
             for tid in self.unique_ids
         }
 
@@ -453,8 +456,8 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
     def _build_trajectory(
         self,
         traj_id,
+        settings=None,
         *,
-        static_features: list[str] | None = None,
         alias_mask: set[str] | None = None,
     ) -> Trajectory:
         """Build a :class:`Trajectory` for *traj_id* without any validity check.
@@ -465,24 +468,17 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
 
         Args:
             traj_id: A trajectory ID already known to be in the view.
-            static_features: Override the pool-level static-feature list.
-                ``None`` → use :attr:`settings.static_features`.
+            settings: Pre-built :class:`TrajectorySettings` to use.
+                ``None`` → use :attr:`settings` as-is (no copy, no override).
             alias_mask: Override the pool-level alias mask.
                 ``None`` → use :attr:`_alias_mask`.
         """
-        sf = (
-            static_features
-            if static_features is not None
-            else self.settings.static_features
-        )
+        s = settings if settings is not None else self.settings
         mask = alias_mask if alias_mask is not None else self._alias_mask
         return Trajectory.from_parent(
             id_value=traj_id,
             store=self._store,
-            settings=TrajectorySettings(
-                id_column=self.settings.id_column,
-                static_features=sf,
-            ),
+            settings=s,
             parent_pool=self,
             alias_mask=mask,
         )
