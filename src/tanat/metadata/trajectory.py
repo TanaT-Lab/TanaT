@@ -16,7 +16,7 @@ from .feature import (
     CategoricalInfo,
     build_feature_metadata,
 )
-from .sequence import TemporalIndexInfo
+from .sequence import TimeIndexInfo
 
 if TYPE_CHECKING:
     from ..store.sequence.store import SequenceStore
@@ -29,7 +29,7 @@ class TrajectoryMetadata:
 
     Attributes:
         traj_id: Polars DataType of the trajectory ID column.
-        temporal: Aggregated temporal info across all linked stores.
+        time_index: Aggregated time index info across all linked stores.
             A :class:`TrajectoryStore` always has at least one linked store,
             so this field is never ``None``.
         static_features: List of :class:`FeatureInfo` for each
@@ -37,7 +37,7 @@ class TrajectoryMetadata:
     """
 
     traj_id: pl.DataType
-    temporal: TemporalIndexInfo
+    time_index: TimeIndexInfo
     static_features: list[FeatureInfo] | None
 
     def __str__(self) -> str:
@@ -45,7 +45,7 @@ class TrajectoryMetadata:
 
         id_str = str(self.traj_id).replace("DataType.", "")
         s += f"  Trajectory ID: {id_str}\n"
-        s += f"  Temporal Index: {self.temporal}\n\n"
+        s += f"  Time Index: {self.time_index}\n\n"
 
         if self.static_features:
             sf_section = format_feature_section(
@@ -62,9 +62,9 @@ class TrajectoryMetadata:
     # ------------------------------------------------------------------
 
     @classmethod
-    def infer_temporal(cls, seq_stores: dict[str, SequenceStore]) -> TemporalIndexInfo:
+    def infer_time_index(cls, seq_stores: dict[str, SequenceStore]) -> TimeIndexInfo:
         """
-        Aggregates the temporal range across all linked stores by taking
+        Aggregates the time index range across all linked stores by taking
         the global min/max.
 
         Raises:
@@ -74,16 +74,16 @@ class TrajectoryMetadata:
         stores = list(seq_stores.values())
         if not stores:
             raise ValueError(
-                "Cannot infer temporal metadata: no linked sequence stores found. "
+                "Cannot infer time index metadata: no linked sequence stores found. "
                 "A TrajectoryStore must have at least one store."
             )
 
-        infos = [TemporalIndexInfo.from_lazyframe(s.temporal()) for s in stores]
+        infos = [TimeIndexInfo.from_lazyframe(s.time_index()) for s in stores]
         ref = infos[0]
         all_mins = [i.min for i in infos if i.min is not None]
         all_maxes = [i.max for i in infos if i.max is not None]
 
-        return TemporalIndexInfo(
+        return TimeIndexInfo(
             dtype=ref.dtype,
             is_datetime=ref.is_datetime,
             min=min(all_mins) if all_mins else None,
@@ -126,7 +126,7 @@ class TrajectoryMetadata:
 
         return TrajectoryMetadata(
             traj_id=self.traj_id,
-            temporal=self.temporal,
+            time_index=self.time_index,
             static_features=sf,
         )
 
@@ -160,7 +160,7 @@ class TrajectoryMetadata:
         """Converts metadata to a JSON-serializable dictionary."""
         return {
             "traj_id": str(self.traj_id),
-            "temporal": self.temporal.to_json_dict(),
+            "time_index": self.time_index.to_json_dict(),
             "static_features": (
                 [f.to_json_dict() for f in self.static_features]
                 if self.static_features

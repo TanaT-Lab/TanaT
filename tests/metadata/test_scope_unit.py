@@ -9,7 +9,7 @@ import polars as pl
 import pytest
 
 from tanat.metadata.feature import NumericalInfo
-from tanat.metadata.sequence import SequenceMetadata, TemporalIndexInfo
+from tanat.metadata.sequence import SequenceMetadata, TimeIndexInfo
 from tanat.metadata.trajectory import TrajectoryMetadata
 
 # ---------------------------------------------------------------------------
@@ -18,13 +18,13 @@ from tanat.metadata.trajectory import TrajectoryMetadata
 
 
 @pytest.fixture
-def temporal() -> TemporalIndexInfo:
-    """Minimal timestep TemporalIndexInfo (no I/O)."""
-    return TemporalIndexInfo(dtype="Int64", is_datetime=False, min=0, max=100)
+def time_index() -> TimeIndexInfo:
+    """Minimal timestep TimeIndexInfo (no I/O)."""
+    return TimeIndexInfo(dtype="Int64", is_datetime=False, min=0, max=100)
 
 
 @pytest.fixture
-def seq_metadata(temporal: TemporalIndexInfo) -> SequenceMetadata:
+def seq_metadata(time_index: TimeIndexInfo) -> SequenceMetadata:
     """SequenceMetadata with 3 entity features and 2 static features."""
     entity = [
         NumericalInfo(name="heart_rate", dtype="Float64", min=45.0, max=180.0),
@@ -37,28 +37,28 @@ def seq_metadata(temporal: TemporalIndexInfo) -> SequenceMetadata:
     ]
     return SequenceMetadata(
         seq_id=pl.Int64,
-        temporal=temporal,
+        time_index=time_index,
         entity_features=entity,
         static_features=static,
     )
 
 
 @pytest.fixture
-def seq_metadata_no_static(temporal: TemporalIndexInfo) -> SequenceMetadata:
+def seq_metadata_no_static(time_index: TimeIndexInfo) -> SequenceMetadata:
     """SequenceMetadata without any static features (static_features=None)."""
     entity = [
         NumericalInfo(name="heart_rate", dtype="Float64", min=45.0, max=180.0),
     ]
     return SequenceMetadata(
         seq_id=pl.Int64,
-        temporal=temporal,
+        time_index=time_index,
         entity_features=entity,
         static_features=None,
     )
 
 
 @pytest.fixture
-def traj_metadata(temporal: TemporalIndexInfo) -> TrajectoryMetadata:
+def traj_metadata(time_index: TimeIndexInfo) -> TrajectoryMetadata:
     """TrajectoryMetadata with 3 static features."""
     static = [
         NumericalInfo(name="age", dtype="Float64", min=18.0, max=95.0),
@@ -67,7 +67,7 @@ def traj_metadata(temporal: TemporalIndexInfo) -> TrajectoryMetadata:
     ]
     return TrajectoryMetadata(
         traj_id=pl.Int64,
-        temporal=temporal,
+        time_index=time_index,
         static_features=static,
     )
 
@@ -126,7 +126,7 @@ class TestSequenceMetadataScope:
         """scope() must propagate seq_id and temporal unchanged."""
         scoped = seq_metadata.scope(entity_features=["heart_rate"])
         assert scoped.seq_id == seq_metadata.seq_id
-        assert scoped.temporal is seq_metadata.temporal
+        assert scoped.time_index is seq_metadata.time_index
 
     def test_scope_on_metadata_without_static(
         self, seq_metadata_no_static: SequenceMetadata
@@ -180,7 +180,7 @@ class TestTrajectoryMetadataScope:
         """scope() must propagate traj_id and temporal unchanged."""
         scoped = traj_metadata.scope(static_features=["age"])
         assert scoped.traj_id == traj_metadata.traj_id
-        assert scoped.temporal is traj_metadata.temporal
+        assert scoped.time_index is traj_metadata.time_index
 
     def test_idempotent(self, traj_metadata: TrajectoryMetadata) -> None:
         """scope(x).scope(x) must equal scope(x) (fast-path on the already-filtered result)."""

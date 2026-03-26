@@ -21,7 +21,7 @@
         'true_count': 1,
       }),
     ]),
-    'temporal': dict({
+    'time_index': dict({
       'is_datetime': True,
       'max': '2001-04-15 23:59:59',
       'min': '2000-01-18 00:00:00',
@@ -53,7 +53,7 @@
         'true_count': 0,
       }),
     ]),
-    'temporal': dict({
+    'time_index': dict({
       'is_datetime': True,
       'max': '2001-04-15 23:59:59',
       'min': '2000-01-18 00:00:00',
@@ -85,7 +85,7 @@
         'true_count': 1,
       }),
     ]),
-    'temporal': dict({
+    'time_index': dict({
       'is_datetime': False,
       'max': '470.99998842592595',
       'min': '17.0',
@@ -117,7 +117,7 @@
         'true_count': 0,
       }),
     ]),
-    'temporal': dict({
+    'time_index': dict({
       'is_datetime': False,
       'max': '470.99998842592595',
       'min': '17.0',
@@ -149,7 +149,7 @@
         'true_count': 40,
       }),
     ]),
-    'temporal': dict({
+    'time_index': dict({
       'is_datetime': True,
       'max': '2001-04-15 23:59:59',
       'min': '2000-01-18 00:00:00',
@@ -181,7 +181,7 @@
         'true_count': 40,
       }),
     ]),
-    'temporal': dict({
+    'time_index': dict({
       'is_datetime': False,
       'max': '470.99998842592595',
       'min': '17.0',

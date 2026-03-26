@@ -20,13 +20,13 @@ class SequenceCastRecipe:
 
     Attributes:
         id: Target type for the sequence ID column.
-        temporal: Target type for temporal columns.
+        time_index: Target type for time index columns.
         entity: Per-column casts for entity features.
         static: Per-column casts for static features (unused at Entity level).
     """
 
     id: pl.DataType | None = None
-    temporal: pl.DataType | None = None
+    time_index: pl.DataType | None = None
     entity: dict[str, pl.DataType] = field(default_factory=dict)
     static: dict[str, pl.DataType] = field(default_factory=dict)
 
@@ -34,7 +34,7 @@ class SequenceCastRecipe:
         """Returns ``True`` if no cast is defined."""
         return (
             self.id is None
-            and self.temporal is None
+            and self.time_index is None
             and not self.entity
             and not self.static
         )
@@ -94,8 +94,8 @@ class SequenceCastRecipe:
         """
         if self.id is not None:
             store.probe_id_cast(self.id)
-        if self.temporal is not None:
-            store.probe_temporal_cast(self.temporal)
+        if self.time_index is not None:
+            store.probe_time_cast(self.time_index)
         if self.entity:
             store.probe_entity_cast(self.entity)
         if self.static:

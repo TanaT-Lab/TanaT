@@ -56,7 +56,7 @@ class TestTrajectoryPoolCast:
         self, traj_pool: TrajectoryPool
     ) -> None:
         """cast_to_timestep raises TypeError on a datetime pool."""
-        if not traj_pool.metadata.temporal.is_datetime:
+        if not traj_pool.metadata.time_index.is_datetime:
             pytest.skip("only applies to datetime pools")
         with pytest.raises(TypeError):
             traj_pool.copy().cast_to_timestep(pl.Int64)
@@ -93,17 +93,17 @@ class TestTrajectoryPoolCastPropagation:
 
     def test_cast_to_datetime_propagates(self, traj_pool: TrajectoryPool) -> None:
         """cast_to_datetime('ms') propagates temporal unit to all child sequence pools."""
-        if not traj_pool.metadata.temporal.is_datetime:
+        if not traj_pool.metadata.time_index.is_datetime:
             pytest.skip("only applies to datetime pools")
         pool = traj_pool.copy()
         pool.cast_to_datetime("ms")
         for seq_pool in pool.sequence_pools.values():
             assert seq_pool.metadata.is_datetime
-            assert seq_pool.metadata.temporal.unit == "ms"
+            assert seq_pool.metadata.time_index.unit == "ms"
 
     def test_cast_to_timestep_propagates(self, traj_pool: TrajectoryPool) -> None:
         """cast_to_timestep propagates non-datetime flag to all child sequence pools."""
-        if traj_pool.metadata.temporal.is_datetime:
+        if traj_pool.metadata.time_index.is_datetime:
             pytest.skip("only applies to timestep pools")
         pool = traj_pool.copy()
         pool.cast_to_timestep(pl.Int64)

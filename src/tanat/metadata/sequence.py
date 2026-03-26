@@ -21,8 +21,8 @@ from tanat_utils.pretty_format import format_feature_section
 
 
 @dataclass(frozen=True)
-class TemporalIndexInfo:
-    """Metadata for the sequence temporal index (start/end columns)."""
+class TimeIndexInfo:
+    """Metadata for the sequence time index (time columns)."""
 
     dtype: str
     is_datetime: bool
@@ -32,10 +32,10 @@ class TemporalIndexInfo:
     time_zone: str | None = None
 
     @classmethod
-    def from_lazyframe(cls, lf: pl.LazyFrame) -> TemporalIndexInfo:
+    def from_lazyframe(cls, lf: pl.LazyFrame) -> TimeIndexInfo:
         """
-        Factory: builds a ``TemporalIndexInfo`` by inspecting **all**
-        columns of the temporal index LazyFrame.
+        Factory: builds a ``TimeIndexInfo`` by inspecting **all**
+        columns of the time index LazyFrame.
 
         Validates that:
         - Every column is a supported type (``pl.Datetime``, ``pl.Date``,
@@ -43,7 +43,7 @@ class TemporalIndexInfo:
         - All columns share the **same** base type (no mix of
           ``Datetime`` start with ``Date`` end, for example).
 
-        Also computes the **global min/max** across all temporal columns.
+        Also computes the **global min/max** across all time index columns.
 
         Raises:
             TypeError: If a column has an unsupported type or if
@@ -61,7 +61,7 @@ class TemporalIndexInfo:
                 or dtype.is_float()
             ):
                 raise TypeError(
-                    f"Unsupported temporal index type for column '{col_name}': {dtype}. "
+                    f"Unsupported time index type for column '{col_name}': {dtype}. "
                     "Expected pl.Datetime, pl.Date, or a numeric type (discrete timestep)."
                 )
 
@@ -69,8 +69,8 @@ class TemporalIndexInfo:
         if len(dtypes) > 1 and not all(d == dtypes[0] for d in dtypes):
             col_detail = ", ".join(f"{n}: {d}" for n, d in schema.items())
             raise TypeError(
-                f"Inconsistent temporal index types: {col_detail}. "
-                "All temporal columns must share the same type."
+                f"Inconsistent time index types: {col_detail}. "
+                "All time index columns must share the same type."
             )
 
         # --- Compute global min / max ---
@@ -108,7 +108,7 @@ class TemporalIndexInfo:
         s += f" [{self.min} → {self.max}]"
         return s
 
-    def is_schema_compatible(self, other: TemporalIndexInfo) -> bool:
+    def is_schema_compatible(self, other: TimeIndexInfo) -> bool:
         """
         Returns ``True`` if *other* has the same **schema** as this instance.
 
@@ -144,7 +144,7 @@ class SequenceMetadata:
     """
 
     seq_id: pl.DataType
-    temporal: TemporalIndexInfo
+    time_index: TimeIndexInfo
     entity_features: list[FeatureInfo]
     static_features: list[FeatureInfo] | None
 
@@ -184,7 +184,7 @@ class SequenceMetadata:
 
         return SequenceMetadata(
             seq_id=self.seq_id,
-            temporal=self.temporal,
+            time_index=self.time_index,
             entity_features=ef,
             static_features=sf,
         )
@@ -198,7 +198,7 @@ class SequenceMetadata:
         s += f"  Sequence ID: {id_str}\n"
 
         # Temporal
-        s += f"  Temporal Index: {self.temporal}\n\n"
+        s += f"  Time Index: {self.time_index}\n\n"
 
         ef_section = format_feature_section(
             "Entity Features",
@@ -223,9 +223,9 @@ class SequenceMetadata:
     # ------------------------------------------------------------------
 
     @classmethod
-    def infer_temporal(cls, temporal_index: pl.LazyFrame) -> TemporalIndexInfo:
-        """Returns a :class:`TemporalIndexInfo` built from the temporal index LazyFrame."""
-        return TemporalIndexInfo.from_lazyframe(temporal_index)
+    def infer_time_index(cls, time_index: pl.LazyFrame) -> TimeIndexInfo:
+        """Returns a :class:`TimeIndexInfo` built from the time index LazyFrame."""
+        return TimeIndexInfo.from_lazyframe(time_index)
 
     @classmethod
     def infer_entity_features(cls, entity_lf: pl.LazyFrame | None) -> list[FeatureInfo]:
@@ -269,16 +269,16 @@ class SequenceMetadata:
                 f"{context}"
             )
 
-    def assert_temporal_compatible_with(
+    def assert_time_index_compatible_with(
         self,
         other: SequenceMetadata,
         alias: str,
         *,
         context: str = "Temporal schemas must match.",
     ) -> None:
-        """Raises :class:`TypeError` if *other* has an incompatible temporal schema.
+        """Raises :class:`TypeError` if *other* has an incompatible time index schema.
 
-        Two temporal schemas are compatible when they share the same Datetime
+        Two time index schemas are compatible when they share the same Datetime
         unit and time_zone (or identical numeric dtype for timestep sequences).
         Range information (min/max) is **not** checked.
 
@@ -288,12 +288,12 @@ class SequenceMetadata:
             context: Sentence appended to the error message.
 
         Raises:
-            TypeError: If the temporal schemas are incompatible.
+            TypeError: If the time index schemas are incompatible.
         """
-        if not self.temporal.is_schema_compatible(other.temporal):
+        if not self.time_index.is_schema_compatible(other.time_index):
             raise TypeError(
-                f"'{alias}' has an incompatible temporal schema: "
-                f"expected {self.temporal.dtype}, got {other.temporal.dtype}. "
+                f"'{alias}' has an incompatible time index schema: "
+                f"expected {self.time_index.dtype}, got {other.time_index.dtype}. "
                 f"Unit and time_zone must match. {context}"
             )
 
@@ -351,8 +351,8 @@ class SequenceMetadata:
 
     @property
     def is_datetime(self) -> bool:
-        """Returns ``True`` if the temporal index is a Datetime type."""
-        return self.temporal.is_datetime
+        """Returns ``True`` if the time index is a Datetime type."""
+        return self.time_index.is_datetime
 
     def feature_info(self, name: str, is_static: bool = False) -> FeatureInfo | None:
         """Return the :class:`~tanat.metadata.feature.FeatureInfo` for *name*, or ``None``.
@@ -465,7 +465,7 @@ class SequenceMetadata:
         """Converts metadata to a JSON-serializable dictionary."""
         return {
             "seq_id": str(self.seq_id),
-            "temporal": self.temporal.to_json_dict(),
+            "time_index": self.time_index.to_json_dict(),
             "entity_features": [f.to_json_dict() for f in self.entity_features],
             "static_features": (
                 [f.to_json_dict() for f in self.static_features]

@@ -18,17 +18,17 @@ class TrajectoryCastRecipe:
 
     Attributes:
         id: Target type for the trajectory ID column.
-        temporal: Target type for temporal columns in linked sequence stores.
+        time_index: Target type for time index columns in linked sequence stores.
         static: Per-column casts for trajectory-level static features.
     """
 
     id: pl.DataType | None = None
-    temporal: pl.DataType | None = None
+    time_index: pl.DataType | None = None
     static: dict[str, pl.DataType] = field(default_factory=dict)
 
     def is_empty(self) -> bool:
         """Returns ``True`` if no cast is defined."""
-        return self.id is None and not self.static and self.temporal is None
+        return self.id is None and not self.static and self.time_index is None
 
     def with_fields(self, **kwargs) -> TrajectoryCastRecipe:
         """Return a new recipe with the given fields replaced.

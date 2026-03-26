@@ -205,7 +205,7 @@ class TestSequencePoolCastPropagation:
         pool.cast_to_datetime("ms")
         seq = pool[pool.unique_ids[0]]
         assert seq.metadata.is_datetime
-        assert seq.metadata.temporal.unit == "ms"
+        assert seq.metadata.time_index.unit == "ms"
 
     def test_cast_to_timestep_propagates(
         self, pools_dict: dict, pool_type: str
