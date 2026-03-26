@@ -244,7 +244,7 @@ class Sequence(
 
         # Temporal range for this specific sequence
         # avoid using metadata propagated from parent pool.
-        df = self._time_index_lf().select(t_cols).collect()
+        df = self._id_time_index_lf().select(t_cols).collect()
         if len(t_cols) == 1:
             t_min = df[t_cols[0]].min()
             t_max = df[t_cols[0]].max()
