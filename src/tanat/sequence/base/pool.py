@@ -187,37 +187,49 @@ class SequencePool(
         self._casts = SequenceCastRecipe()  # baked into the written store
         self.clear_cache()
 
-    def _inject(
-        self,
+    @classmethod
+    def _construct(
+        cls,
         *,
+        store: SequenceStore,
+        settings: SequenceSettings | dict,
+        cast_recipe: SequenceCastRecipe,
         virtual_id: str | None,
         id_mask: set | None,
         row_mask: pl.Series | None,
         has_soft_drops: bool,
-        cast_recipe: SequenceCastRecipe,
         t0_setter: T0Setter,
     ) -> SequencePool:
-        """Inject pool-level view state post-``__init__``, bypassing cast probes.
+        """Construct a pool of type *cls* without going through ``__init__``.
 
-        **Not part of the public API**.
+        Bypasses all store probing and feature validation: *settings* and
+        *cast_recipe* must already be fully resolved.
+
+        Called by :meth:`copy` and :meth:`_reinterpret_as`.
 
         Args:
+            store: Already-resolved :class:`~tanat.store.sequence.store.SequenceStore`.
+            settings: Fully-resolved :class:`SequenceSettings` (no re-validation).
+            cast_recipe: Already-probed :class:`SequenceCastRecipe`.
             virtual_id: Forked virtual context UUID (or ``None``).
             id_mask: Set of sequence IDs to expose (or ``None`` for all).
             row_mask: Row-level boolean mask (or ``None``).
             has_soft_drops: Whether soft-dropped sequences exist.
-            cast_recipe: Cast recipe to apply directly, bypassing the probe
-                executed in ``__init__``.
             t0_setter: T0 strategy to propagate from a parent pool.
         """
-        self._virtual_id = virtual_id
-        self._gc_state[1] = virtual_id
-        self._id_mask = id_mask
-        self._row_mask = row_mask
-        self._has_soft_drops = has_soft_drops
-        self._casts = cast_recipe
-        self._t0_setter = t0_setter
-        return self
+        pool = object.__new__(cls)
+        pool._store = store
+        CachableSettings.__init__(pool, settings=settings)
+        pool._locked = False
+        pool._casts = cast_recipe
+        pool._t0_setter = t0_setter
+        pool._gc_state = [store, virtual_id]
+        weakref.finalize(pool, SequencePool._finalize_cleanup, pool._gc_state)
+        pool._virtual_id = virtual_id
+        pool._id_mask = id_mask
+        pool._row_mask = row_mask
+        pool._has_soft_drops = has_soft_drops
+        return pool
 
     # ------------------------------------------------------------------
     # Properties
@@ -1114,15 +1126,15 @@ class SequencePool(
         :meth:`t0_data` on the copy.
         """
         # pylint: disable=protected-access
-        return self.__class__(
+        # _construct bypasses XXXSequencePool.__init__ (validation, resolution, ...).
+        return self.__class__._construct(
             store=self._store,
-            **asdict(self.settings),
-        )._inject(
+            settings=self.settings,
+            cast_recipe=self._casts,
             virtual_id=self._store.fork_virtual_context(self._virtual_id),
             id_mask=set(self._id_mask) if self._id_mask is not None else None,
             row_mask=self._row_mask.clone() if self._row_mask is not None else None,
             has_soft_drops=self._has_soft_drops,
-            cast_recipe=self._casts,
             t0_setter=self._t0_setter,
         )
 
@@ -2141,19 +2153,18 @@ class SequencePool(
             if self._casts.time_index is not None
             else self._casts
         )
-        # object.__new__ bypasses target_pool_cls.__init__ (validation, resolution, ...)
-        new_pool = object.__new__(target_pool_cls)
-        SequencePool.__init__(new_pool, self._store, settings)
         # pylint: disable=protected-access
-        new_pool._inject(
+        # _construct bypasses target_pool_cls.__init__ (validation, resolution, ...).
+        return target_pool_cls._construct(
+            store=self._store,
+            settings=settings,
+            cast_recipe=cast_for_new,
             virtual_id=virtual_id,
             id_mask=self._id_mask,
             row_mask=self._row_mask,
             has_soft_drops=self._has_soft_drops,
-            cast_recipe=cast_for_new,
             t0_setter=self._t0_setter,
         )
-        return new_pool
 
     def _prepare_dest(self, destination: str | Path, overwrite: bool) -> Path:
         """Resolve *destination* to an absolute ``Path`` and make room for output.
@@ -2199,19 +2210,19 @@ class SequencePool(
         """
         ephemeral = self._reinterpret_as(target_cls, settings, virtual_id)
         dest_path = ephemeral.save(destination=destination, overwrite=overwrite)
-        new_pool = target_cls(dest_path, **settings)
-        # Propagate the T0 strategy.
-        # The persisted store has all masks/casts baked in, so all other
-        # fields stay at their fresh-pool defaults.
-        new_pool._inject(
+        # Bypass __init__: the written store is clean (all features physical, no
+        # virtual context, no masks).  _construct avoids redundant validation and
+        # probe.  T0 strategy is propagated; everything else is at fresh defaults.
+        return target_cls._construct(
+            store=self._resolve_store(dest_path),
+            settings=settings,
+            cast_recipe=SequenceCastRecipe(),
             virtual_id=None,
             id_mask=None,
             row_mask=None,
             has_soft_drops=False,
-            cast_recipe=SequenceCastRecipe(),
             t0_setter=self._t0_setter,
         )
-        return new_pool
 
     def _as_event_from_period(
         self,

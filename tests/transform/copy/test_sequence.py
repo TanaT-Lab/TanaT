@@ -64,3 +64,42 @@ class TestSequencePoolCopy:
         copy = pool.copy()
         copy.drop_features(["flag_valid"], is_static=False)
         assert "flag_valid" in pool.settings.entity_features
+
+
+@pytest.mark.parametrize("pool_type", ["interval", "event", "state"])
+class TestSequencePoolCopyAfterVirtualFeatures:
+    """
+    Regression: copy() must not raise when the pool already carries virtual features.
+    """
+
+    def test_copy_with_virtual_static_does_not_raise(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """copy() must not raise KeyError when the pool has virtual static features."""
+        pool = pools_dict[pool_type].copy()
+        df = pl.DataFrame({"id": pool.unique_ids, "virt_copy_stat": [1.0] * len(pool)})
+        pool.add_static_features(df)
+        copy = pool.copy()  # must not raise
+        assert "virt_copy_stat" in copy.settings.static_features
+
+    def test_copy_with_virtual_static_data_readable(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """Virtual static feature is accessible via static_data() on the copy."""
+        pool = pools_dict[pool_type].copy()
+        df = pl.DataFrame({"id": pool.unique_ids, "virt_readable": [7.0] * len(pool)})
+        pool.add_static_features(df)
+        copy = pool.copy()
+        sd = copy.static_data(output_format="polars")
+        assert sd is not None
+        assert "virt_readable" in sd.columns
+
+    def test_copy_with_virtual_entity_does_not_raise(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """copy() must not raise when the pool has virtual entity features."""
+        pool = pools_dict[pool_type].copy()
+        n_rows = pool.temporal_data(output_format="polars").height
+        pool.add_entity_features(pl.DataFrame({"virt_copy_entity": [0.5] * n_rows}))
+        copy = pool.copy()  # must not raise
+        assert "virt_copy_entity" in copy.settings.entity_features

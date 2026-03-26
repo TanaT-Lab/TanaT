@@ -179,35 +179,48 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         self._pools = None  # force rebuild against new/updated store
         self.clear_cache()
 
-    def _inject(
-        self,
+    @classmethod
+    def _construct(
+        cls,
         *,
+        store: TrajectoryStore,
+        settings: TrajectorySettings,
+        cast_recipe: TrajectoryCastRecipe,
         virtual_id: str | None,
         id_mask: set | None,
         alias_mask: set[str] | None,
         has_soft_drops: bool,
         pools: dict | None,
     ) -> TrajectoryPool:
-        """Inject pool-level view state post-``__init__``, bypassing cast probes.
+        """Construct a :class:`TrajectoryPool` without going through ``__init__``.
 
-        Used by :meth:`copy` to transfer a forked view context without
-        re-probing casts that were already validated at construction time.
-        Returns ``self`` for fluent chaining.
+        Bypasses all store probing and feature validation: *settings* and
+        *cast_recipe* must already be fully resolved.
+
+        Called by :meth:`copy`.
 
         Args:
+            store: Shared :class:`TrajectoryStore` backing the new pool.
+            settings: Already-resolved :class:`TrajectorySettings` (no re-validation).
+            cast_recipe: Already-probed :class:`TrajectoryCastRecipe`.
             virtual_id: Forked virtual context UUID (or ``None``).
             id_mask: Set of trajectory IDs to expose (or ``None`` for all).
             alias_mask: Set of sequence-store aliases to expose (or ``None`` for all).
             has_soft_drops: Whether soft-dropped trajectories exist.
             pools: Pre-built sequence pool registry (or ``None`` to rebuild lazily).
         """
-        self._virtual_id = virtual_id
-        self._gc_state[1] = virtual_id
-        self._id_mask = id_mask
-        self._alias_mask = alias_mask
-        self._has_soft_drops = has_soft_drops
-        self._pools = pools
-        return self
+        pool = object.__new__(cls)
+        pool._store = store
+        CachableSettings.__init__(pool, settings=settings)
+        pool._casts = cast_recipe
+        pool._gc_state = [store, virtual_id]
+        weakref.finalize(pool, TrajectoryPool._finalize_cleanup, pool._gc_state)
+        pool._virtual_id = virtual_id
+        pool._id_mask = id_mask
+        pool._alias_mask = alias_mask
+        pool._has_soft_drops = has_soft_drops
+        pool._pools = pools
+        return pool
 
     # ------------------------------------------------------------------
     # View
@@ -813,12 +826,12 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         else:
             copied_pools = None
 
-        return TrajectoryPool(
+        # pylint: disable=protected-access
+        # _construct bypasses TrajectoryPool.__init__ (validation, resolution, ...).
+        return TrajectoryPool._construct(
             store=self._store,
-            id_column=self.settings.id_column,
-            static_features=list(self.settings.static_features),
+            settings=self.settings,
             cast_recipe=self._casts,
-        )._inject(
             virtual_id=self._store.fork_virtual_context(self._virtual_id),
             id_mask=set(self._id_mask) if self._id_mask is not None else None,
             alias_mask=set(self._alias_mask) if self._alias_mask is not None else None,

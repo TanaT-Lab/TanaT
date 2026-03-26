@@ -55,3 +55,33 @@ class TestTrajectoryPoolCopy:
         copy = traj_pool.copy()
         copy.subset(copy.unique_ids[:2])
         assert len(traj_pool) == original_len
+
+
+class TestTrajectoryPoolCopyAfterVirtualFeatures:
+    """
+    Regression: copy() must not raise when the pool already carries virtual features.
+    """
+
+    def test_copy_with_virtual_static_does_not_raise(
+        self, traj_pool: TrajectoryPool
+    ) -> None:
+        """copy() must not raise KeyError when the pool has virtual static features."""
+        pool = traj_pool.copy()
+        df = pl.DataFrame({"id": pool.unique_ids, "virt_copy_traj": [1.0] * len(pool)})
+        pool.add_static_features(df)
+        copy = pool.copy()  # must not raise
+        assert "virt_copy_traj" in copy.settings.static_features
+
+    def test_copy_with_virtual_static_data_readable(
+        self, traj_pool: TrajectoryPool
+    ) -> None:
+        """Virtual static feature is accessible via static_data() on the copy."""
+        pool = traj_pool.copy()
+        df = pl.DataFrame(
+            {"id": pool.unique_ids, "virt_traj_readable": [9.0] * len(pool)}
+        )
+        pool.add_static_features(df)
+        copy = pool.copy()
+        sd = copy.static_data(output_format="polars")
+        assert sd is not None
+        assert "virt_traj_readable" in sd.columns
