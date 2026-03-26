@@ -127,34 +127,22 @@ class SequenceViewMixin:
                 static_features=self.settings.static_features,
             )
 
-        # TODO : review code for potential simplification with utilties ...
-        # seq_id dtype: from cast recipe if set, else store schema
-        seq_id_dtype = self._casts.id
-        if seq_id_dtype is None:
-            seq_id_dtype = self._store.seq_id_dtype
+        seq_id_dtype = self._casts.id or self._store.seq_id_dtype
+        id_col = self.settings.id_column
 
-        sequence_lf = self._get_data_from_store(is_static=False)
-        sequence_lf = self._apply_masks(sequence_lf, is_static=False)
+        time_index = self._id_time_index_lf().select(self.settings.get_time_columns())
+        entity_lf = self._temporal_data_lf().select(self.settings.entity_features)
 
-        # Time index and entity slices from the single assembled LF.
-        ti_colnames = self._store.time_index(self._virtual_id).collect_schema().names()
-        temporal_lf = sequence_lf.select(ti_colnames)
-        entity_lf = sequence_lf.select(self.settings.entity_features)
-
-        # Static: casts + masks, then drop ID column directly (rename is useless here).
-        static_infos = None
-        static_lf = self._get_data_from_store(is_static=True)
-        if static_lf is not None:
-            static_lf = self._apply_masks(static_lf, is_static=True)
-            static_features = self.settings.static_features
-            if static_features:
-                static_infos = SequenceMetadata.infer_static_features(
-                    static_lf.select(static_features)
-                )
+        static_lf = self._static_data_lf()
+        static_infos = (
+            SequenceMetadata.infer_static_features(static_lf.drop(id_col))
+            if static_lf is not None
+            else None
+        )
 
         return SequenceMetadata(
             seq_id=seq_id_dtype,
-            time_index=SequenceMetadata.infer_time_index(temporal_lf),
+            time_index=SequenceMetadata.infer_time_index(time_index),
             entity_features=SequenceMetadata.infer_entity_features(entity_lf),
             static_features=static_infos,
         )
@@ -202,8 +190,8 @@ class SequenceViewMixin:
         lf = self._select_columns(lf, valid_features, is_static=False)
         return self._rename_columns(lf, is_static=False)
 
-    def _time_index_lf(self) -> pl.LazyFrame:
-        """Return ``id + time index`` columns only as a :class:`~polars.LazyFrame`, masks applied.
+    def _id_time_index_lf(self) -> pl.LazyFrame:
+        """Return ``id + time index`` columns as a :class:`~polars.LazyFrame`, masks applied.
 
         Cheaper than :meth:`_temporal_data_lf` when entity features are not needed.
         Works regardless of the temporal type (datetime, integer timestep, etc.).
@@ -366,9 +354,8 @@ class SequenceViewMixin:
         id_col = self.settings.id_column
         t_col = self.settings.get_time_columns()[0]
 
-        # TODO : refactor to use cheaper methode
         temporal_lf = (
-            self._temporal_data_lf()
+            self._id_time_index_lf()
             .select([id_col, t_col])
             .with_columns(
                 pl.int_range(pl.len()).over(id_col).alias("__rn__"),
