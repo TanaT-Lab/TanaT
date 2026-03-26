@@ -32,7 +32,7 @@ from ..core.path import resolve_path
 from ..sequence.base.pool import BinSize, SequencePool
 from ..sequence.base._utils import merge_optional_frames, resolve_ids_to_add
 from ..core import registry as _registry
-from ..store.common.utils import normalise_to_lazyframe
+from ..store.base.utils import normalise_to_lazyframe
 from .cast import TrajectoryCastRecipe
 from .settings import TrajectorySettings
 from .trajectory import Trajectory

@@ -28,7 +28,7 @@ from tanat_utils.pretty_format import (
 )
 
 from ...core.path import resolve_path
-from ...store.common.utils import normalise_to_lazyframe, check_no_reserved_names
+from ...store.base.utils import normalise_to_lazyframe, check_no_reserved_names
 from ...store.sequence.builder.base import SequenceStoreBuilder
 from .cast import SequenceCastRecipe
 from .sequence import Sequence

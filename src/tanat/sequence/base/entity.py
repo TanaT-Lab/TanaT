@@ -13,7 +13,7 @@ from tanat_utils import Registrable
 from tanat_utils.pretty_format import format_header, format_section, format_kv
 
 from ...metadata.feature import FeatureInfo, build_feature_metadata
-from ...store.common.utils import apply_casts
+from ...store.base.utils import apply_casts
 from ...store.sequence.store import SequenceStore
 from .cast import SequenceCastRecipe
 from ._utils import resolve_store
