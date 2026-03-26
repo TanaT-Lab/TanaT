@@ -32,8 +32,8 @@ class SequenceStoreBuilder(ABC, Registrable, DisplayMixin):
 
     Each ``add_*`` call declares:
 
-    * ``id_column``   - which source column is the sequence ID
-    * temporal kwargs - which column(s) are the temporal dimension
+    * ``id_column``      - which source column is the sequence ID
+    * time index kwargs  - which column(s) are the time index dimension
     * ``features``    - feature columns to extract
 
     The builder renames every source directly to ``SCH.*`` internal names,
@@ -45,18 +45,18 @@ class SequenceStoreBuilder(ABC, Registrable, DisplayMixin):
     _REGISTER = {}
     _TYPE_SUBMODULE = "type"
 
-    # Subclasses declare the mapping from temporal kwarg name to SCH.* constant,
+    # Subclasses declare the mapping from time index kwarg name to SCH.* constant,
     # e.g. {"time_column": SCH.T_EVENT} or {"start_column": SCH.T_START, ...}.
-    _TEMPORAL_SCHEMA_MAP: dict[str, str] = {}
+    _TIME_INDEX_SCHEMA_MAP: dict[str, str] = {}
 
     def __init__(
         self,
     ) -> None:
         self._entity_entries: list[dict] = []
         self._static_entries: list[dict] = []
-        # Temporal dtype reference set by the first entity source; compared against
+        # Time index dtype reference set by the first entity source; compared against
         # subsequent ones to detect silent coercions by diagonal_relaxed concat.
-        self._temporal_dtypes: dict[str, pl.DataType] | None = None
+        self._time_index_dtypes: dict[str, pl.DataType] | None = None
 
     # ------------------------------------------------------------------
     # Source registration - implemented by typed subclasses
@@ -70,7 +70,7 @@ class SequenceStoreBuilder(ABC, Registrable, DisplayMixin):
         id_column: str,
         features: list[str],
         is_static: bool = False,
-        **temporal,
+        **time_index_kwargs,
     ) -> SequenceStoreBuilder:
         """Register an in-memory Polars / Pandas DataFrame."""
 
@@ -121,7 +121,7 @@ class SequenceStoreBuilder(ABC, Registrable, DisplayMixin):
         Prepare the entity ``LazyFrame`` before writing.
 
         Implementors must at minimum sort by ``SEQ_ID`` and the relevant
-        temporal column(s).  Subclasses may also enrich the frame here
+        time column(s).  Subclasses may also enrich the frame here
         (e.g. deriving ``T_END`` for state sequences) or run validation
         checks before the data reaches the write pipeline.
         """
@@ -184,7 +184,7 @@ class SequenceStoreBuilder(ABC, Registrable, DisplayMixin):
         :meth:`_to_internal` renaming.  The caller provides frames already in
         ``SCH.*`` internal names:
 
-        * ``entity_lf``: ``SEQ_ID | temporal_cols | feature_cols``
+        * ``entity_lf``: ``SEQ_ID | time_cols | feature_cols``
         * ``static_lf``: ``SEQ_ID | static_cols``  (optional)
 
         Intended for :meth:`~tanat.sequence.base.pool.SequencePool.save` so
@@ -197,7 +197,7 @@ class SequenceStoreBuilder(ABC, Registrable, DisplayMixin):
             static_lf:  Optional static LazyFrame in ``SCH.*`` names
                 (with ``SEQ_ID`` column included).
             presorted:  Skip the :meth:`_prepare_entity` step when frames are already
-                ordered by ``SEQ_ID`` then by temporal column within each
+                ordered by ``SEQ_ID`` then by time column within each
                 sequence (always the case for frames read from an existing store).
             exist_ok:   Overwrite an existing store if ``True``.
 
@@ -240,7 +240,7 @@ class SequenceStoreBuilder(ABC, Registrable, DisplayMixin):
         Files written:
 
         * ``sequence_index.arrow``  -- ``_seq_id | offset | length``
-        * ``temporal_index.arrow``  -- whichever ``SCH.T_*`` cols are present
+        * ``time_index.arrow``      -- whichever ``SCH.T_*`` cols are present
         * ``entity_features.arrow`` -- every non-internal column
         * ``static_features.arrow`` -- (optional) static feature columns
         * ``core.json``             -- container type + counts (immutable)
@@ -253,15 +253,15 @@ class SequenceStoreBuilder(ABC, Registrable, DisplayMixin):
         LOGGER.info("ETL starting -> %s", store_path)
 
         step3_desc = (
-            "Writing entity, temporal & static features"
+            "Writing entity, time index & static features"
             if static_lf is not None
-            else "Writing entity & temporal features"
+            else "Writing entity & time index features"
         )
         seq_type = self.__class__.get_registration_name().capitalize()
         self._display_header(f"{seq_type} SequenceStore")
 
         self._display_step(1, 4, "Sorting & preparing data")
-        entity_lf, temporal_cols, entity_cols, master_ids = self._etl_prepare(
+        entity_lf, time_cols, entity_cols, master_ids = self._etl_prepare(
             entity_lf, static_lf, presorted
         )
 
@@ -271,15 +271,15 @@ class SequenceStoreBuilder(ABC, Registrable, DisplayMixin):
         )
 
         self._display_step(3, 4, step3_desc)
-        temporal_lf, entity_feature_lf, static_lf = self._etl_write_features(
-            store_path, entity_lf, static_lf, temporal_cols, entity_cols, master_ids
+        time_index_lf, entity_feature_lf, static_lf = self._etl_write_features(
+            store_path, entity_lf, static_lf, time_cols, entity_cols, master_ids
         )
 
         self._display_step(4, 4, "Computing & writing metadata")
         self._etl_write_metadata(
             store_path,
             sequence_index_df,
-            temporal_lf,
+            time_index_lf,
             entity_feature_lf,
             static_lf,
             n_sequences,
@@ -306,18 +306,18 @@ class SequenceStoreBuilder(ABC, Registrable, DisplayMixin):
         presorted: bool,
     ) -> tuple[pl.LazyFrame, list[str], list[str], pl.LazyFrame]:
         """Sort/enrich the entity frame, derive column lists, and build the master ID set."""
-        # Sort by SEQ_ID + temporal columns; subclasses may also enrich or validate
+        # Sort by SEQ_ID + time columns; subclasses may also enrich or validate
         # the frame (e.g. deriving T_END for states).
         # Skipped when presorted=True (frames come from an existing store).
         if not presorted:
             entity_lf = self._prepare_entity(entity_lf)
         schema_names = set(entity_lf.collect_schema().names())
-        temporal_cols = [c for c in SCH.temporal_columns() if c in schema_names]
+        time_cols = [c for c in SCH.time_index_columns() if c in schema_names]
         entity_cols = [c for c in schema_names if c not in SCH.internal_columns()]
         # Master seq_id list: sorted union of every ID present across all sources.
         # This is the authority — sequence_index and static are both aligned to it.
         master_ids = self._master_ids(entity_lf, static_lf)
-        return entity_lf, temporal_cols, entity_cols, master_ids
+        return entity_lf, time_cols, entity_cols, master_ids
 
     def _etl_build_index(
         self,
@@ -339,25 +339,25 @@ class SequenceStoreBuilder(ABC, Registrable, DisplayMixin):
         store_path: Path,
         entity_lf: pl.LazyFrame,
         static_lf: pl.LazyFrame | None,
-        temporal_cols: list[str],
+        time_cols: list[str],
         entity_cols: list[str],
         master_ids: pl.LazyFrame,
     ) -> tuple[pl.LazyFrame, pl.LazyFrame, pl.LazyFrame | None]:
-        """Sink temporal, entity (and optional static) feature files to *store_path*."""
+        """Sink time index, entity (and optional static) feature files to *store_path*."""
         # Entity files: already sorted, never collected as a whole
-        temporal_lf = entity_lf.select(temporal_cols)
+        time_index = entity_lf.select(time_cols)
         entity_feature_lf = entity_lf.select(entity_cols)
-        temporal_lf.sink_ipc(store_path / SCH.Files.TEMPORAL_INDEX)
+        time_index.sink_ipc(store_path / SCH.Files.TIME_INDEX)
         entity_feature_lf.sink_ipc(store_path / SCH.Files.ENTITY_FEATURES)
         if static_lf is not None:
             static_lf = self._write_static(store_path, master_ids, static_lf)
-        return temporal_lf, entity_feature_lf, static_lf
+        return time_index, entity_feature_lf, static_lf
 
     def _etl_write_metadata(
         self,
         store_path: Path,
         sequence_index_df: pl.DataFrame,
-        temporal_lf: pl.LazyFrame,
+        time_index_lf: pl.LazyFrame,
         entity_feature_lf: pl.LazyFrame,
         static_lf: pl.LazyFrame | None,
         n_sequences: int,
@@ -372,7 +372,7 @@ class SequenceStoreBuilder(ABC, Registrable, DisplayMixin):
         )
         metadata = self._get_metadata(
             sequence_index=sequence_index_df,
-            temporal_index=temporal_lf,
+            time_index=time_index_lf,
             entity_features=entity_feature_lf,
             static_features=static_lf,
         )
@@ -460,14 +460,14 @@ class SequenceStoreBuilder(ABC, Registrable, DisplayMixin):
     def _get_metadata(
         self,
         sequence_index: pl.LazyFrame,
-        temporal_index: pl.LazyFrame,
+        time_index: pl.LazyFrame,
         entity_features: pl.LazyFrame,
         static_features: pl.LazyFrame | None,
     ) -> SequenceMetadata:
         """Build :class:`SequenceMetadata` from the live lazy frames."""
         return SequenceMetadata(
             seq_id=sequence_index.collect_schema()[SCH.SEQ_ID],
-            temporal=SequenceMetadata.infer_temporal(temporal_index),
+            time_index=SequenceMetadata.infer_time_index(time_index),
             entity_features=SequenceMetadata.infer_entity_features(entity_features),
             static_features=SequenceMetadata.infer_static_features(static_features),
         )
@@ -483,17 +483,17 @@ class SequenceStoreBuilder(ABC, Registrable, DisplayMixin):
         id_column: str,
         features: list[str],
         is_static: bool,
-        temporal_kwargs: dict,
+        time_index_kwargs: dict,
     ) -> None:
         """Validate that all declared columns exist in *source*."""
         required = [id_column] + list(features)
         if not is_static:
-            for key, val in temporal_kwargs.items():
+            for key, val in time_index_kwargs.items():
                 if val is None:
                     raise ValueError(
                         f"'{key}' is required for entity sources but was not provided."
                     )
-            required += list(temporal_kwargs.values())
+            required += list(time_index_kwargs.values())
         available = set(source.schema().names())
         missing = [c for c in required if c not in available]
         if missing:
@@ -509,43 +509,43 @@ class SequenceStoreBuilder(ABC, Registrable, DisplayMixin):
         id_column: str,
         features: list[str],
         is_static: bool,
-        temporal_kwargs: dict,
+        time_index_kwargs: dict,
     ) -> SequenceStoreBuilder:
         """Append the source entry to the build queue."""
         entry = {
             "source": source,
             "id_column": id_column,
             "features": list(features),
-            "temporal_kwargs": {
-                k: v for k, v in temporal_kwargs.items() if v is not None
+            "time_index_kwargs": {
+                k: v for k, v in time_index_kwargs.items() if v is not None
             },
         }
         if not is_static:
-            self._warn_temporal_dtype_mismatch(source, entry)
+            self._warn_time_index_dtype_mismatch(source, entry)
         (self._static_entries if is_static else self._entity_entries).append(entry)
         return self
 
-    def _warn_temporal_dtype_mismatch(self, source, entry: dict) -> None:
-        """Warn when the incoming source's temporal dtypes differ from the first registered source.
+    def _warn_time_index_dtype_mismatch(self, source, entry: dict) -> None:
+        """Warn when the incoming source's time index dtypes differ from the first registered source.
 
         The first entity source sets the reference dtypes.  Every subsequent
-        ``add_*`` call compares its temporal columns against that reference.
+        ``add_*`` call compares its time index columns against that reference.
         Called at registration time so the user gets immediate feedback.
         """
         schema = source.schema()
         incoming = {
             internal_col: schema[src_col]
-            for kwarg, internal_col in self._TEMPORAL_SCHEMA_MAP.items()
-            if (src_col := entry["temporal_kwargs"].get(kwarg)) and src_col in schema
+            for kwarg, internal_col in self._TIME_INDEX_SCHEMA_MAP.items()
+            if (src_col := entry["time_index_kwargs"].get(kwarg)) and src_col in schema
         }
-        if self._temporal_dtypes is None:
-            self._temporal_dtypes = incoming
+        if self._time_index_dtypes is None:
+            self._time_index_dtypes = incoming
             return
         for col, dtype in incoming.items():
-            ref = self._temporal_dtypes.get(col)
+            ref = self._time_index_dtypes.get(col)
             if ref is not None and type(ref) is not type(dtype):
                 LOGGER.warning(
-                    "Temporal dtype mismatch detected on %r: %s (reference) vs %s (new source). "
+                    "Time index dtype mismatch detected on %r: %s (reference) vs %s (new source). "
                     "At build time Polars will silently coerce both to a common supertype - "
                     "cast to a consistent dtype before registering if this is unintended.",
                     col,
@@ -567,19 +567,19 @@ class SequenceStoreBuilder(ABC, Registrable, DisplayMixin):
         if entry["id_column"] != SCH.SEQ_ID:
             rename[entry["id_column"]] = SCH.SEQ_ID
 
-        # Rename each temporal column if it was provided and not already named correctly
-        for kwarg_name, internal_name in self._TEMPORAL_SCHEMA_MAP.items():
-            src_col = entry["temporal_kwargs"].get(kwarg_name)
+        # Rename each time column if it was provided and not already named correctly
+        for kwarg_name, internal_name in self._TIME_INDEX_SCHEMA_MAP.items():
+            src_col = entry["time_index_kwargs"].get(kwarg_name)
             if src_col is not None and src_col != internal_name:
                 rename[src_col] = internal_name
 
-        # Only select temporal columns that were actually provided by the caller.
-        temporal_cols = [
+        # Only select time columns that were actually provided by the caller.
+        time_cols = [
             internal_name
-            for kwarg_name, internal_name in self._TEMPORAL_SCHEMA_MAP.items()
-            if kwarg_name in entry["temporal_kwargs"]
+            for kwarg_name, internal_name in self._TIME_INDEX_SCHEMA_MAP.items()
+            if kwarg_name in entry["time_index_kwargs"]
         ]
-        select_cols = [SCH.SEQ_ID] + temporal_cols + entry["features"]
+        select_cols = [SCH.SEQ_ID] + time_cols + entry["features"]
         if rename:
             lf = lf.rename(rename)
         return lf.select(select_cols)

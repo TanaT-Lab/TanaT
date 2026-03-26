@@ -22,7 +22,7 @@ class IntervalSequenceStoreBuilder(SequenceStoreBuilder, register_name="interval
     interval).
     """
 
-    _TEMPORAL_SCHEMA_MAP = {"start_column": SCH.T_START, "end_column": SCH.T_END}
+    _TIME_INDEX_SCHEMA_MAP = {"start_column": SCH.T_START, "end_column": SCH.T_END}
 
     def __init__(self, *, sort_anchor: str = "start") -> None:
         if sort_anchor not in ("start", "end", "middle"):
@@ -49,7 +49,7 @@ class IntervalSequenceStoreBuilder(SequenceStoreBuilder, register_name="interval
     ) -> IntervalSequenceStoreBuilder:
         """Register an in-memory Polars / Pandas DataFrame."""
         features = [features] if isinstance(features, str) else list(features)
-        temporal = (
+        ti_kwargs = (
             {}
             if is_static
             else {"start_column": start_column, "end_column": end_column}
@@ -60,14 +60,14 @@ class IntervalSequenceStoreBuilder(SequenceStoreBuilder, register_name="interval
             id_column=id_column,
             features=features,
             is_static=is_static,
-            temporal_kwargs=temporal,
+            time_index_kwargs=ti_kwargs,
         )
         return self._stage(
             source,
             id_column=id_column,
             features=features,
             is_static=is_static,
-            temporal_kwargs=temporal,
+            time_index_kwargs=ti_kwargs,
         )
 
     def add_csv(
@@ -83,7 +83,7 @@ class IntervalSequenceStoreBuilder(SequenceStoreBuilder, register_name="interval
     ) -> IntervalSequenceStoreBuilder:
         """Register a CSV file."""
         features = [features] if isinstance(features, str) else list(features)
-        temporal = (
+        ti_kwargs = (
             {}
             if is_static
             else {"start_column": start_column, "end_column": end_column}
@@ -94,14 +94,14 @@ class IntervalSequenceStoreBuilder(SequenceStoreBuilder, register_name="interval
             id_column=id_column,
             features=features,
             is_static=is_static,
-            temporal_kwargs=temporal,
+            time_index_kwargs=ti_kwargs,
         )
         return self._stage(
             source,
             id_column=id_column,
             features=features,
             is_static=is_static,
-            temporal_kwargs=temporal,
+            time_index_kwargs=ti_kwargs,
         )
 
     def add_parquet(
@@ -117,7 +117,7 @@ class IntervalSequenceStoreBuilder(SequenceStoreBuilder, register_name="interval
     ) -> IntervalSequenceStoreBuilder:
         """Register a Parquet file (glob patterns supported)."""
         features = [features] if isinstance(features, str) else list(features)
-        temporal = (
+        ti_kwargs = (
             {}
             if is_static
             else {"start_column": start_column, "end_column": end_column}
@@ -128,14 +128,14 @@ class IntervalSequenceStoreBuilder(SequenceStoreBuilder, register_name="interval
             id_column=id_column,
             features=features,
             is_static=is_static,
-            temporal_kwargs=temporal,
+            time_index_kwargs=ti_kwargs,
         )
         return self._stage(
             source,
             id_column=id_column,
             features=features,
             is_static=is_static,
-            temporal_kwargs=temporal,
+            time_index_kwargs=ti_kwargs,
         )
 
     def add_sql(
@@ -152,7 +152,7 @@ class IntervalSequenceStoreBuilder(SequenceStoreBuilder, register_name="interval
     ) -> IntervalSequenceStoreBuilder:
         """Register a SQL query (requires ``connectorx``)."""
         features = [features] if isinstance(features, str) else list(features)
-        temporal = (
+        ti_kwargs = (
             {}
             if is_static
             else {"start_column": start_column, "end_column": end_column}
@@ -163,14 +163,14 @@ class IntervalSequenceStoreBuilder(SequenceStoreBuilder, register_name="interval
             id_column=id_column,
             features=features,
             is_static=is_static,
-            temporal_kwargs=temporal,
+            time_index_kwargs=ti_kwargs,
         )
         return self._stage(
             source,
             id_column=id_column,
             features=features,
             is_static=is_static,
-            temporal_kwargs=temporal,
+            time_index_kwargs=ti_kwargs,
         )
 
     # ------------------------------------------------------------------
@@ -182,7 +182,7 @@ class IntervalSequenceStoreBuilder(SequenceStoreBuilder, register_name="interval
 
         ``"middle"`` sorts by the interval midpoint
         ``(T_START + T_END) / 2``, cast to ``Int64`` to support both
-        numeric and datetime temporal indexes.
+        numeric and datetime time indexes.
         """
         if self._sort_anchor == "start":
             return lf.sort([SCH.SEQ_ID, SCH.T_START])

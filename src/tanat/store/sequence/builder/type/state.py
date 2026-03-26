@@ -36,7 +36,7 @@ class StateSequenceStoreBuilder(SequenceStoreBuilder, register_name="state"):
     cost of a full ``collect()`` is unacceptable.
     """
 
-    _TEMPORAL_SCHEMA_MAP = {"start_column": SCH.T_START, "end_column": SCH.T_END}
+    _TIME_INDEX_SCHEMA_MAP = {"start_column": SCH.T_START, "end_column": SCH.T_END}
 
     def __init__(
         self,
@@ -66,25 +66,25 @@ class StateSequenceStoreBuilder(SequenceStoreBuilder, register_name="state"):
         """Register an in-memory Polars / Pandas DataFrame."""
         features = [features] if isinstance(features, str) else list(features)
         if is_static:
-            temporal = {}
+            ti_kwargs = {}
         else:
-            temporal = {"start_column": start_column}
+            ti_kwargs = {"start_column": start_column}
             if end_column is not None:
-                temporal["end_column"] = end_column
+                ti_kwargs["end_column"] = end_column
         source = AbstractSource.get_registered("dataframe")(data)
         self._validate_source(
             source,
             id_column=id_column,
             features=features,
             is_static=is_static,
-            temporal_kwargs=temporal,
+            time_index_kwargs=ti_kwargs,
         )
         return self._stage(
             source,
             id_column=id_column,
             features=features,
             is_static=is_static,
-            temporal_kwargs=temporal,
+            time_index_kwargs=ti_kwargs,
         )
 
     def add_csv(
@@ -101,25 +101,25 @@ class StateSequenceStoreBuilder(SequenceStoreBuilder, register_name="state"):
         """Register a CSV file."""
         features = [features] if isinstance(features, str) else list(features)
         if is_static:
-            temporal = {}
+            ti_kwargs = {}
         else:
-            temporal = {"start_column": start_column}
+            ti_kwargs = {"start_column": start_column}
             if end_column is not None:
-                temporal["end_column"] = end_column
+                ti_kwargs["end_column"] = end_column
         source = AbstractSource.get_registered("csv")(path, **reader_kwargs)
         self._validate_source(
             source,
             id_column=id_column,
             features=features,
             is_static=is_static,
-            temporal_kwargs=temporal,
+            time_index_kwargs=ti_kwargs,
         )
         return self._stage(
             source,
             id_column=id_column,
             features=features,
             is_static=is_static,
-            temporal_kwargs=temporal,
+            time_index_kwargs=ti_kwargs,
         )
 
     def add_parquet(
@@ -136,25 +136,25 @@ class StateSequenceStoreBuilder(SequenceStoreBuilder, register_name="state"):
         """Register a Parquet file (glob patterns supported)."""
         features = [features] if isinstance(features, str) else list(features)
         if is_static:
-            temporal = {}
+            ti_kwargs = {}
         else:
-            temporal = {"start_column": start_column}
+            ti_kwargs = {"start_column": start_column}
             if end_column is not None:
-                temporal["end_column"] = end_column
+                ti_kwargs["end_column"] = end_column
         source = AbstractSource.get_registered("parquet")(path, **reader_kwargs)
         self._validate_source(
             source,
             id_column=id_column,
             features=features,
             is_static=is_static,
-            temporal_kwargs=temporal,
+            time_index_kwargs=ti_kwargs,
         )
         return self._stage(
             source,
             id_column=id_column,
             features=features,
             is_static=is_static,
-            temporal_kwargs=temporal,
+            time_index_kwargs=ti_kwargs,
         )
 
     def add_sql(
@@ -172,25 +172,25 @@ class StateSequenceStoreBuilder(SequenceStoreBuilder, register_name="state"):
         """Register a SQL query (requires ``connectorx``)."""
         features = [features] if isinstance(features, str) else list(features)
         if is_static:
-            temporal = {}
+            ti_kwargs = {}
         else:
-            temporal = {"start_column": start_column}
+            ti_kwargs = {"start_column": start_column}
             if end_column is not None:
-                temporal["end_column"] = end_column
+                ti_kwargs["end_column"] = end_column
         source = AbstractSource.get_registered("sql")(connection, query, **sql_kwargs)
         self._validate_source(
             source,
             id_column=id_column,
             features=features,
             is_static=is_static,
-            temporal_kwargs=temporal,
+            time_index_kwargs=ti_kwargs,
         )
         return self._stage(
             source,
             id_column=id_column,
             features=features,
             is_static=is_static,
-            temporal_kwargs=temporal,
+            time_index_kwargs=ti_kwargs,
         )
 
     # ------------------------------------------------------------------

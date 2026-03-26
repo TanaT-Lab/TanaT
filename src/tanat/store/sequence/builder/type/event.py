@@ -19,7 +19,7 @@ class EventSequenceStoreBuilder(SequenceStoreBuilder, register_name="event"):
     Exposes ``time_column`` explicitly on every ``add_*`` call.
     """
 
-    _TEMPORAL_SCHEMA_MAP = {"time_column": SCH.T_EVENT}
+    _TIME_INDEX_SCHEMA_MAP = {"time_column": SCH.T_EVENT}
 
     # ------------------------------------------------------------------
     # Source registration
@@ -36,21 +36,21 @@ class EventSequenceStoreBuilder(SequenceStoreBuilder, register_name="event"):
     ) -> EventSequenceStoreBuilder:
         """Register an in-memory Polars / Pandas DataFrame."""
         features = [features] if isinstance(features, str) else list(features)
-        temporal = {} if is_static else {"time_column": time_column}
+        ti_kwargs = {} if is_static else {"time_column": time_column}
         source = AbstractSource.get_registered("dataframe")(data)
         self._validate_source(
             source,
             id_column=id_column,
             features=features,
             is_static=is_static,
-            temporal_kwargs=temporal,
+            time_index_kwargs=ti_kwargs,
         )
         return self._stage(
             source,
             id_column=id_column,
             features=features,
             is_static=is_static,
-            temporal_kwargs=temporal,
+            time_index_kwargs=ti_kwargs,
         )
 
     def add_csv(
@@ -65,21 +65,21 @@ class EventSequenceStoreBuilder(SequenceStoreBuilder, register_name="event"):
     ) -> EventSequenceStoreBuilder:
         """Register a CSV file."""
         features = [features] if isinstance(features, str) else list(features)
-        temporal = {} if is_static else {"time_column": time_column}
+        ti_kwargs = {} if is_static else {"time_column": time_column}
         source = AbstractSource.get_registered("csv")(path, **reader_kwargs)
         self._validate_source(
             source,
             id_column=id_column,
             features=features,
             is_static=is_static,
-            temporal_kwargs=temporal,
+            time_index_kwargs=ti_kwargs,
         )
         return self._stage(
             source,
             id_column=id_column,
             features=features,
             is_static=is_static,
-            temporal_kwargs=temporal,
+            time_index_kwargs=ti_kwargs,
         )
 
     def add_parquet(
@@ -94,21 +94,21 @@ class EventSequenceStoreBuilder(SequenceStoreBuilder, register_name="event"):
     ) -> EventSequenceStoreBuilder:
         """Register a Parquet file (glob patterns supported)."""
         features = [features] if isinstance(features, str) else list(features)
-        temporal = {} if is_static else {"time_column": time_column}
+        ti_kwargs = {} if is_static else {"time_column": time_column}
         source = AbstractSource.get_registered("parquet")(path, **reader_kwargs)
         self._validate_source(
             source,
             id_column=id_column,
             features=features,
             is_static=is_static,
-            temporal_kwargs=temporal,
+            time_index_kwargs=ti_kwargs,
         )
         return self._stage(
             source,
             id_column=id_column,
             features=features,
             is_static=is_static,
-            temporal_kwargs=temporal,
+            time_index_kwargs=ti_kwargs,
         )
 
     def add_sql(
@@ -124,21 +124,21 @@ class EventSequenceStoreBuilder(SequenceStoreBuilder, register_name="event"):
     ) -> EventSequenceStoreBuilder:
         """Register a SQL query (requires ``connectorx``)."""
         features = [features] if isinstance(features, str) else list(features)
-        temporal = {} if is_static else {"time_column": time_column}
+        ti_kwargs = {} if is_static else {"time_column": time_column}
         source = AbstractSource.get_registered("sql")(connection, query, **sql_kwargs)
         self._validate_source(
             source,
             id_column=id_column,
             features=features,
             is_static=is_static,
-            temporal_kwargs=temporal,
+            time_index_kwargs=ti_kwargs,
         )
         return self._stage(
             source,
             id_column=id_column,
             features=features,
             is_static=is_static,
-            temporal_kwargs=temporal,
+            time_index_kwargs=ti_kwargs,
         )
 
     # ------------------------------------------------------------------
