@@ -15,6 +15,6 @@ class EventSequenceSettings(SequenceSettings):
     id_column: str
     time_column: str
 
-    def get_temporal_columns(self) -> list[str]:
-        """Returns temporal columns for Event sequences [time]."""
+    def get_time_columns(self) -> list[str]:
+        """Returns time index columns for Event sequences [time]."""
         return [self.time_column]

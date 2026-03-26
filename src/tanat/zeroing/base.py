@@ -80,7 +80,7 @@ class T0Setter(ABC, Registrable):
         The ``position`` type is auto-discovered on first call.
 
         Args:
-            is_event: ``True`` when the target has a single temporal column.
+            is_event: ``True`` when the target has a single time column.
                 Used to pre-set ``anchor`` so that :meth:`_guard_anchor` does
                 not emit a spurious warning on the implicit default.
         """
@@ -147,8 +147,8 @@ class T0Setter(ABC, Registrable):
         Args:
             anchor: ``"start"`` / ``None`` → start column; ``"end"`` → end
                     column; ``"middle"`` → midpoint (dtype-aware arithmetic).
-            cols:   Temporal column names from
-                    ``target.settings.get_temporal_columns()``.
+            cols:   Time column names from
+                    ``target.settings.get_time_columns()``.
                     Single-element list (event) → anchor is ignored.
             is_datetime: Flag from ``target.metadata.is_datetime``. Controls
                     the midpoint formula when ``anchor == "middle"``:
@@ -181,7 +181,7 @@ class T0Setter(ABC, Registrable):
 
         Args:
             anchor: Raw anchor value to normalise.
-            is_event: ``True`` when the pool has a single temporal column.
+            is_event: ``True`` when the pool has a single time column.
             pool_type: Registration name of the pool (used in the warning
                 message).  Pass ``""`` when unknown.
             stacklevel: Passed to :func:`warnings.warn` so the warning points
@@ -193,7 +193,7 @@ class T0Setter(ABC, Registrable):
         if is_event and anchor is not None:
             warnings.warn(
                 f"anchor={anchor!r} has no effect on event pools "
-                "(single temporal column). The argument will be ignored.",
+                "(single time column). The argument will be ignored.",
                 UserWarning,
                 stacklevel=stacklevel,
             )

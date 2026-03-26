@@ -30,7 +30,7 @@ class UnsupportedSequenceTypeError(TanaTException, ValueError):
 
 
 class IncompatibleDisplayUnitError(TanaTException, ValueError):
-    """Raised when display_unit is incompatible with the pool's temporal index.
+    """Raised when display_unit is incompatible with the pool's time index.
 
     Two incompatible situations:
 

@@ -119,7 +119,7 @@ class StateSequencePool(SequencePool, register_name="state"):
         bin_col: str = "__bin__",
     ) -> pl.LazyFrame:
         """Explodes each state across all bins it spans: [bin_start, bin_end] inclusive."""
-        start_col, end_col = self.settings.get_temporal_columns()
+        start_col, end_col = self.settings.get_time_columns()
         return (
             lf.with_columns(
                 [

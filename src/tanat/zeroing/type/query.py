@@ -20,7 +20,7 @@ class QueryT0Settings:
     """Settings for the query-based T0 strategy.
 
     The *query* expression is evaluated against the full sequence row set
-    (temporal columns + entity features), so it can reference any of those
+    (time columns + entity features), so it can reference any of those
     columns.
     """
 
@@ -35,11 +35,11 @@ class QueryT0Setter(T0Setter, register_name="query"):
     """T0 = timestamp of the first (or last) entity row matching *query*.
 
     * ``query``: any ``pl.Expr`` that evaluates to a boolean Series on any
-      column of the sequence data (temporal columns **or** entity features),
+      column of the sequence data (time columns **or** entity features),
       e.g. ``pl.col("event") == "admission"`` or ``pl.col("t_start") > threshold``.
     * ``use_first=True`` (default): earliest matching row per sequence.
     * ``use_first=False``: latest matching row.
-    * ``anchor``: which temporal column to read (``"start"`` / ``"end"``).
+    * ``anchor``: which time column to read (``"start"`` / ``"end"``).
       For event sequences the anchor is ignored.
 
     Sequences with no matching row receive ``_t0 = null``.
@@ -62,14 +62,14 @@ class QueryT0Setter(T0Setter, register_name="query"):
         return f"query, anchor={self.settings.anchor}"
 
     def _compute_t0(self, target: SequencePool | Sequence, id_col: str) -> pl.LazyFrame:
-        cols = target.settings.get_temporal_columns()
+        cols = target.settings.get_time_columns()
         t_expr = self._t0_temporal_expr(
             self.settings.anchor, cols, target.metadata.is_datetime
         )
-        # Full sequence data (temporal + entity features), masks applied.
+        # Full temporal data (time cols + entity features), masks applied.
         # Row numbers are stable within each sequence (physical order preserved).
         # pylint: disable=protected-access
-        lf = target._sequence_data_lf().with_columns(
+        lf = target._temporal_data_lf().with_columns(
             pl.int_range(pl.len()).over(id_col).alias("__rn__"),
         )
         matched = lf.filter(self.settings.query)

@@ -72,7 +72,7 @@ class TrajectoryStoreBuilder(DisplayMixin):
             TypeError: If *pool* is not a SequencePool.
             ValueError: If the alias is already registered and *overwrite*
                 is ``False``.
-            TypeError: If the pool's schema (ID dtype or temporal type)
+            TypeError: If the pool's schema (ID dtype or time index type)
                 is incompatible with already-registered pools.
         """
         if not isinstance(pool, SequencePool):
@@ -89,10 +89,10 @@ class TrajectoryStoreBuilder(DisplayMixin):
                     alias,
                     context="All sequence pools in a TrajectoryPool must share the same ID type.",
                 )
-                pool.metadata.assert_temporal_compatible_with(
+                pool.metadata.assert_time_index_compatible_with(
                     other_pool.metadata,
                     alias,
-                    context="All sequence pools in a TrajectoryPool must share the same temporal schema.",
+                    context="All sequence pools in a TrajectoryPool must share the same time index schema.",
                 )
                 break
 
@@ -331,7 +331,7 @@ class TrajectoryStoreBuilder(DisplayMixin):
 
         * ``trajectory_index.arrow``  -- traj_id presence-map across linked stores
         * ``core.json``               -- container type + counts + store links
-        * ``metadata.json``           -- computed temporal / feature metadata
+        * ``metadata.json``           -- computed time index / feature metadata
         """
         LOGGER.info("Building trajectory store -> %s", resolved)
 
@@ -520,7 +520,7 @@ class TrajectoryStoreBuilder(DisplayMixin):
         """Build :class:`TrajectoryMetadata` from *index_df*, *seq_stores*, and *static_lf*."""
         return TrajectoryMetadata(
             traj_id=index_df.schema[TSCH.TRAJ_ID],
-            temporal=TrajectoryMetadata.infer_temporal(seq_stores),
+            time_index=TrajectoryMetadata.infer_time_index(seq_stores),
             static_features=TrajectoryMetadata.infer_static(static_lf),
         )
 

@@ -108,7 +108,7 @@ class IntervalSequencePool(SequencePool, register_name="interval"):
         bin_col: str = "__bin__",
     ) -> pl.LazyFrame:
         """Explodes each interval across all bins it overlaps: [bin_start, bin_end] inclusive."""
-        start_col, end_col = self.settings.get_temporal_columns()
+        start_col, end_col = self.settings.get_time_columns()
         return (
             lf.with_columns(
                 [

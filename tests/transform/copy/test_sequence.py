@@ -36,7 +36,7 @@ class TestSequencePoolCopy:
         """add_entity_features on copy does not expose the column on the original."""
         pool = pools_dict[pool_type]
         copy = pool.copy()
-        n = copy.sequence_data(output_format="polars").height
+        n = copy.temporal_data(output_format="polars").height
         copy.add_entity_features(pl.DataFrame({"copy_only": [1.0] * n}))
         assert "copy_only" not in pool.settings.entity_features
 
@@ -55,7 +55,7 @@ class TestSequencePoolCopy:
         pool = pools_dict[pool_type]
         copy = pool.copy()
         copy.cast_features({"status": pl.Categorical})
-        original_schema = pool.sequence_data(output_format="polars").schema
+        original_schema = pool.temporal_data(output_format="polars").schema
         assert original_schema["status"] != pl.Categorical
 
     def test_drop_on_copy_isolated(self, pools_dict: dict, pool_type: str) -> None:

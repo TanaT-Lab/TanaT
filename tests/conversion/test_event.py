@@ -59,9 +59,9 @@ class TestEventPoolAsInterval:
     def test_row_count_preserved(self, pools_dict: dict) -> None:
         """Conversion does not add or remove rows."""
         pool = pools_dict["event"]
-        n = pool.sequence_data(output_format="polars").height
+        n = pool.temporal_data(output_format="polars").height
         converted = pool.as_interval(duration=_duration(pool))
-        assert converted.sequence_data(output_format="polars").height == n
+        assert converted.temporal_data(output_format="polars").height == n
 
     def test_unique_ids_preserved(self, pools_dict: dict) -> None:
         """All sequence IDs from the source appear in the converted pool."""
@@ -70,12 +70,12 @@ class TestEventPoolAsInterval:
         assert set(converted.unique_ids) == set(pool.unique_ids)
 
     def test_custom_start_end_column_names(self, pools_dict: dict) -> None:
-        """start_column / end_column control the output temporal column names."""
+        """start_column / end_column control the output time column names."""
         pool = pools_dict["event"]
         converted = pool.as_interval(
             duration=_duration(pool), start_column="t_start", end_column="t_end"
         )
-        cols = converted.sequence_data(output_format="polars").columns
+        cols = converted.temporal_data(output_format="polars").columns
         assert "t_start" in cols
         assert "t_end" in cols
 
@@ -108,10 +108,10 @@ class TestEventPoolAsInterval:
             pool.cast_features({"duration": pl.Duration("ms")})
         converted = pool.as_interval(duration="duration")
         assert isinstance(converted, IntervalSequencePool)
-        df = converted.sequence_data(output_format="polars")
+        df = converted.temporal_data(output_format="polars")
         assert snapshot == df.select(sorted(df.columns))
-        assert converted.sequence_data(output_format="polars").height == (
-            pool.sequence_data(output_format="polars").height
+        assert converted.temporal_data(output_format="polars").height == (
+            pool.temporal_data(output_format="polars").height
         )
 
     def test_feature_col_duration_uncast_raises(self, pools_dict: dict) -> None:
@@ -147,7 +147,7 @@ class TestEventPoolAsInterval:
             duration=_duration(pool), start_column="start", end_column="end"
         )
         assert snapshot == sorted(
-            converted.sequence_data(output_format="polars").columns
+            converted.temporal_data(output_format="polars").columns
         )
 
 
@@ -172,14 +172,14 @@ class TestEventPoolAsState:
     def test_row_count_preserved(self, pools_dict: dict) -> None:
         """Conversion does not add or remove rows."""
         pool = pools_dict["event"]
-        n = pool.sequence_data(output_format="polars").height
-        assert pool.as_state().sequence_data(output_format="polars").height == n
+        n = pool.temporal_data(output_format="polars").height
+        assert pool.as_state().temporal_data(output_format="polars").height == n
 
     def test_last_end_null_when_none(self, pools_dict: dict) -> None:
         """end_value=None → the last event per sequence gets a null end."""
         pool = pools_dict["event"]
         converted = pool.as_state(end_value=None, end_column="end")
-        data = converted.sequence_data(output_format="polars")
+        data = converted.temporal_data(output_format="polars")
         n_ids = data[pool.settings.id_column].n_unique()
         null_count = data["end"].is_null().sum()
         assert null_count == n_ids
@@ -189,7 +189,7 @@ class TestEventPoolAsState:
         pool = pools_dict["event"]
         converted = pool.as_state(end_value=_sentinel(pool), end_column="end")
         assert (
-            converted.sequence_data(output_format="polars")["end"].is_null().sum() == 0
+            converted.temporal_data(output_format="polars")["end"].is_null().sum() == 0
         )
 
     def test_entity_features_preserved(self, pools_dict: dict) -> None:
@@ -283,7 +283,7 @@ class TestEventPoolTemporalCast:
     When cast_to_timestep(Int64) is set on a Float64 timestep pool, the forked
     virtual temporal index must be written as Int64 (not as the raw Float64
     stored on disk).  The resulting pool must carry no pending temporal cast
-    (recipe.temporal is None), since the cast was already materialised in the fork.
+    (recipe.time_index is None), since the cast was already materialised in the fork.
     """
 
     # -- as_interval ----------------------------------------------------------
@@ -292,7 +292,7 @@ class TestEventPoolTemporalCast:
         """start/end come out as Int64 when cast_to_timestep(Int64) is pending."""
         pool = event_pool_ts.copy()
         pool.cast_to_timestep(pl.Int64)
-        df = pool.as_interval(duration=7).sequence_data(output_format="polars")
+        df = pool.as_interval(duration=7).temporal_data(output_format="polars")
         assert df["start"].dtype == pl.Int64
         assert df["end"].dtype == pl.Int64
 
@@ -302,7 +302,7 @@ class TestEventPoolTemporalCast:
         """end = start + duration for every row (scalar integer duration)."""
         pool = event_pool_ts.copy()
         pool.cast_to_timestep(pl.Int64)
-        df = pool.as_interval(duration=7).sequence_data(output_format="polars")
+        df = pool.as_interval(duration=7).temporal_data(output_format="polars")
         assert ((df["end"] - df["start"]) == 7).all()
 
     def test_as_interval_no_pending_cast(
@@ -312,7 +312,7 @@ class TestEventPoolTemporalCast:
         pool = event_pool_ts.copy()
         pool.cast_to_timestep(pl.Int64)
         # pylint: disable=protected-access
-        assert pool.as_interval(duration=7)._casts.temporal is None
+        assert pool.as_interval(duration=7)._casts.time_index is None
 
     # -- as_state -------------------------------------------------------------
 
@@ -320,7 +320,7 @@ class TestEventPoolTemporalCast:
         """start/end come out as Int64 when cast_to_timestep(Int64) is pending."""
         pool = event_pool_ts.copy()
         pool.cast_to_timestep(pl.Int64)
-        df = pool.as_state().sequence_data(output_format="polars")
+        df = pool.as_state().temporal_data(output_format="polars")
         assert df["start"].dtype == pl.Int64
         assert df["end"].dtype == pl.Int64
 
@@ -329,7 +329,7 @@ class TestEventPoolTemporalCast:
         pool = event_pool_ts.copy()
         pool.cast_to_timestep(pl.Int64)
         # pylint: disable=protected-access
-        assert pool.as_state()._casts.temporal is None
+        assert pool.as_state()._casts.time_index is None
 
     # -- common ---------------------------------------------------------------
 
@@ -337,12 +337,12 @@ class TestEventPoolTemporalCast:
         """Cast + conversion does not add or remove rows."""
         pool = event_pool_ts.copy()
         pool.cast_to_timestep(pl.Int64)
-        n = pool.sequence_data(output_format="polars").height
+        n = pool.temporal_data(output_format="polars").height
         assert (
-            pool.as_interval(duration=7).sequence_data(output_format="polars").height
+            pool.as_interval(duration=7).temporal_data(output_format="polars").height
             == n
         )
-        assert pool.as_state().sequence_data(output_format="polars").height == n
+        assert pool.as_state().temporal_data(output_format="polars").height == n
 
 
 # ---------------------------------------------------------------------------

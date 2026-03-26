@@ -4,7 +4,7 @@ Pure-Polars data preparation for DistributionVizBuilder.
 
 Functions
 ---------
-rename_temporal_columns
+rename_time_index_columns
     Rename raw start/end columns to ``__START__`` / ``__END__``.
 assign_time_bins
     Cross-join each segment against a generated bin axis; keep only bins the
@@ -18,29 +18,28 @@ from __future__ import annotations
 import polars as pl
 
 
-def rename_temporal_columns(
+def rename_time_index_columns(
     lf: pl.LazyFrame,
-    temporal_cols: list[str],
+    time_cols: list[str],
 ) -> pl.LazyFrame:
-    """Rename the two temporal boundary columns to internal names.
+    """Rename the two time index boundary columns to internal names.
 
     Args:
         lf: Input LazyFrame.
-        temporal_cols: Exactly two column names ``[start_col, end_col]``.
+        time_cols: Exactly two time index column names ``[start_col, end_col]``.
 
     Returns:
         LazyFrame with the boundary columns renamed to
         ``__START__`` and ``__END__``.
 
     Raises:
-        ValueError: If *temporal_cols* does not contain exactly two entries.
+        ValueError: If *time_cols* does not contain exactly two entries.
     """
-    if len(temporal_cols) != 2:
+    if len(time_cols) != 2:
         raise ValueError(
-            f"Expected exactly 2 temporal columns, got {len(temporal_cols)}: "
-            f"{temporal_cols!r}."
+            f"Expected exactly 2 time columns, got {len(time_cols)}: " f"{time_cols!r}."
         )
-    start_col, end_col = temporal_cols
+    start_col, end_col = time_cols
     return lf.rename({start_col: "__START__", end_col: "__END__"})
 
 
@@ -63,7 +62,7 @@ def assign_time_bins(
         lf: LazyFrame with ``__START__``, ``__END__``, and ``__LABEL__`` columns.
         bin_size: Polars duration string (e.g. ``"1d"`` or ``"12h"``) for
             datetime pools, or a numeric step for timestep pools.
-        is_datetime: ``True`` when the pool uses ``Datetime`` temporal columns.
+        is_datetime: ``True`` when the pool uses ``Datetime`` time columns.
 
     Returns:
         LazyFrame with ``__TIME_BIN__`` added and one row per

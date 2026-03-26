@@ -183,14 +183,14 @@ class TrajectoryStore(StaticStoreMixin):
             n_rows,
         )
 
-    def probe_temporal_cast(self, dtype: pl.DataType, n_rows: int = 10) -> None:
+    def probe_time_cast(self, dtype: pl.DataType, n_rows: int = 10) -> None:
         """
-        Validates casting temporal columns to *dtype* against the first
+        Validates casting time index columns to *dtype* against the first
         linked sequence store.
 
-        All sequence stores are guaranteed to share the same temporal
+        All sequence stores are guaranteed to share the same time index
         schema by the build-time compatibility check
-        (:meth:`SequenceMetadata.assert_id_compatible_with` and :meth:`~SequenceMetadata.assert_temporal_compatible_with`), so probing
+        (:meth:`SequenceMetadata.assert_id_compatible_with` and :meth:`~SequenceMetadata.assert_time_index_compatible_with`), so probing
         one is sufficient.
 
         Args:
@@ -199,15 +199,15 @@ class TrajectoryStore(StaticStoreMixin):
 
         Raises:
             RuntimeError: If no sequence stores are linked.
-            TypeError: If the cast is incompatible with the temporal data.
+            TypeError: If the cast is incompatible with the time index data.
         """
         stores = self.sequence_stores
         if not stores:
             raise RuntimeError(
-                "No sequence stores linked - cannot probe temporal cast."
+                "No sequence stores linked - cannot probe time index cast."
             )
         first_store = next(iter(stores.values()))
-        first_store.probe_temporal_cast(dtype, n_rows)
+        first_store.probe_time_cast(dtype, n_rows)
 
     def clear_virtual_context(self, virtual_id: str) -> None:
         """Removes a virtual context directory and all its feature files."""

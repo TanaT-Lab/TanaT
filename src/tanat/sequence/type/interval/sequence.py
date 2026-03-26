@@ -78,6 +78,6 @@ class IntervalSequence(Sequence, register_name="interval"):
         return [
             pl.len().alias("length"),
             _n_unique_entities_expr(settings.entity_features),
-            _temporal_span_expr(settings.get_temporal_columns()),
+            _temporal_span_expr(settings.get_time_columns()),
             *_duration_stats_exprs(settings.start_column, settings.end_column),
         ]

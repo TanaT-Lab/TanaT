@@ -172,11 +172,11 @@ class BarplotVizBuilder(BaseSequenceVizBuilder, register_name="barplot"):
             raise UnsupportedShowAsError("duration", type(sequence_or_pool).__name__)
 
         if show_as == "duration":
-            temporal = sequence_or_pool.metadata.temporal
+            ti = sequence_or_pool.metadata.time_index
             display_unit = self.settings.aesthetics.display_unit
-            if temporal.is_datetime and display_unit is None:
+            if ti.is_datetime and display_unit is None:
                 raise IncompatibleDisplayUnitError(None, is_datetime=True)
-            if not temporal.is_datetime and display_unit is not None:
+            if not ti.is_datetime and display_unit is not None:
                 raise IncompatibleDisplayUnitError(display_unit, is_datetime=False)
 
         # Build the feature list; include facet_by for entity facets
@@ -186,7 +186,7 @@ class BarplotVizBuilder(BaseSequenceVizBuilder, register_name="barplot"):
             features.append(facet_by)
 
         # Fetch sequence data as LazyFrame
-        lf = sequence_or_pool._sequence_data_lf(features=features)
+        lf = sequence_or_pool._temporal_data_lf(features=features)
 
         # Rename ID column (needed for static-facet join; harmless otherwise)
         if facet_by:
@@ -241,8 +241,8 @@ class BarplotVizBuilder(BaseSequenceVizBuilder, register_name="barplot"):
             return aggregate_rate(lf, label_col, facet_col=facet_col)
 
         # DURATION (Interval or State pools only)
-        temporal_cols = sequence_or_pool.settings.get_temporal_columns()
-        start_col, end_col = temporal_cols[0], temporal_cols[1]
+        time_cols = sequence_or_pool.settings.get_time_columns()
+        start_col, end_col = time_cols[0], time_cols[1]
         return aggregate_duration(
             lf,
             label_col,

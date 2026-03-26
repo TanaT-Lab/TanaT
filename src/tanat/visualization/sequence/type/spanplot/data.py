@@ -11,29 +11,29 @@ from ...base.literals import DisplayUnit
 from ...base.utils import MS_PER_DISPLAY_UNIT
 
 
-def rename_temporal_columns(
+def rename_time_index_columns(
     lf: pl.LazyFrame,
-    temporal_cols: list[str],
+    time_cols: list[str],
 ) -> pl.LazyFrame:
-    """Rename the two temporal columns to ``__START__`` and ``__END__``.
+    """Rename the two time index columns to ``__START__`` and ``__END__``.
 
     Args:
         lf: Input LazyFrame.
-        temporal_cols: List of exactly two temporal column names (start, end).
+        time_cols: List of exactly two time index column names (start, end).
 
     Returns:
-        LazyFrame with temporal columns renamed to ``__START__`` and ``__END__``.
+        LazyFrame with time index columns renamed to ``__START__`` and ``__END__``.
 
     Raises:
-        ValueError: If *temporal_cols* does not contain exactly 2 elements.
+        ValueError: If *time_cols* does not contain exactly 2 elements.
     """
-    if len(temporal_cols) != 2:
+    if len(time_cols) != 2:
         raise ValueError(
-            f"spanplot requires exactly 2 temporal columns (start + end), "
-            f"got {len(temporal_cols)}: {temporal_cols}. "
+            f"spanplot requires exactly 2 time index columns (start + end), "
+            f"got {len(time_cols)}: {time_cols}. "
             "Only state and interval sequences expose a duration."
         )
-    return lf.rename({temporal_cols[0]: "__START__", temporal_cols[1]: "__END__"})
+    return lf.rename({time_cols[0]: "__START__", time_cols[1]: "__END__"})
 
 
 def extract_durations(
@@ -48,7 +48,7 @@ def extract_durations(
     - *display_unit=<unit>*: datetime difference converted to the requested
       unit via total milliseconds.
 
-    The caller is responsible for ensuring consistency between the temporal
+    The caller is responsible for ensuring consistency between the time
     column dtype and *display_unit* (see ``IncompatibleDisplayUnitError``).
 
     Args:

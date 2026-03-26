@@ -122,7 +122,7 @@ class TestTrajectoryIncompatiblePools:
 
     def test_dt_then_ts_raises(self, interval_pool, interval_pool_ts) -> None:
         """Adding a timestep pool after a datetime pool raises TypeError."""
-        with pytest.raises(TypeError, match="temporal schema"):
+        with pytest.raises(TypeError, match="time index schema"):
             (
                 TrajectoryPool.builder()
                 .add("dt_pool", interval_pool)
@@ -131,7 +131,7 @@ class TestTrajectoryIncompatiblePools:
 
     def test_ts_then_dt_raises(self, interval_pool_ts, interval_pool) -> None:
         """Adding a datetime pool after a timestep pool raises TypeError."""
-        with pytest.raises(TypeError, match="temporal schema"):
+        with pytest.raises(TypeError, match="time index schema"):
             (
                 TrajectoryPool.builder()
                 .add("ts_pool", interval_pool_ts)
@@ -140,7 +140,7 @@ class TestTrajectoryIncompatiblePools:
 
     def test_dt_event_then_ts_state_raises(self, event_pool, state_pool_ts) -> None:
         """Mixing different sequence types with different temporal schemas still raises TypeError."""
-        with pytest.raises(TypeError, match="temporal schema"):
+        with pytest.raises(TypeError, match="time index schema"):
             (
                 TrajectoryPool.builder()
                 .add("events_dt", event_pool)

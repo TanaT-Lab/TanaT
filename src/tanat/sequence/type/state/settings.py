@@ -19,6 +19,6 @@ class StateSequenceSettings(SequenceSettings):
     start_column: str
     end_column: str
 
-    def get_temporal_columns(self) -> list[str]:
-        """Returns temporal columns for State sequences [start, end]."""
+    def get_time_columns(self) -> list[str]:
+        """Returns time index columns for State sequences [start, end]."""
         return [self.start_column, self.end_column]

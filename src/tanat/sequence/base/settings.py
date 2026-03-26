@@ -51,9 +51,9 @@ class SequenceSettings(ABC):
         return sorted(dict.fromkeys(v))
 
     @abstractmethod
-    def get_temporal_columns(self) -> list[str]:
+    def get_time_columns(self) -> list[str]:
         """
-        Returns a list of temporal columns configured for this sequence type.
+        Returns a list of time index columns configured for this sequence type.
         """
 
     def get_column_rename_map(self, is_static: bool = False) -> dict[str, str]:
@@ -61,7 +61,7 @@ class SequenceSettings(ABC):
         Returns a mapping from store internal column names
         (``StoreSchema``) to user-facing column names.
 
-        Inferred from ``get_temporal_columns()``:
+        Inferred from ``get_time_columns()``:
         - 1 column  → ``T_EVENT``
         - 2 columns → ``T_START``, ``T_END`` (in order)
         """
@@ -69,12 +69,12 @@ class SequenceSettings(ABC):
         if is_static:
             return rename_map
 
-        temporal = self.get_temporal_columns()
-        if len(temporal) == 1:
-            rename_map[SCH.T_EVENT] = temporal[0]
-        elif len(temporal) == 2:
-            rename_map[SCH.T_START] = temporal[0]
-            rename_map[SCH.T_END] = temporal[1]
+        t_cols = self.get_time_columns()
+        if len(t_cols) == 1:
+            rename_map[SCH.T_EVENT] = t_cols[0]
+        elif len(t_cols) == 2:
+            rename_map[SCH.T_START] = t_cols[0]
+            rename_map[SCH.T_END] = t_cols[1]
         return rename_map
 
     def available_features(self, is_static: bool = False) -> list[str]:
@@ -147,7 +147,7 @@ class SequenceSettings(ABC):
 
         Compatibility rules:
         - id_column must be identical
-        - temporal_columns must be identical
+        - time index columns must be identical
         - entity_features must be identical or a subset (no extra features)
         - static_features must be identical or a subset (no extra features)
 
@@ -165,13 +165,11 @@ class SequenceSettings(ABC):
                 f"id_column mismatch: '{self.id_column}' != '{other.id_column}'"
             )
 
-        # Check temporal columns
-        self_temporal = set(self.get_temporal_columns())
-        other_temporal = set(other.get_temporal_columns())
-        if self_temporal != other_temporal:
-            errors.append(
-                f"temporal_columns mismatch: {self_temporal} != {other_temporal}"
-            )
+        # Check time index columns
+        self_ti = set(self.get_time_columns())
+        other_ti = set(other.get_time_columns())
+        if self_ti != other_ti:
+            errors.append(f"time_index mismatch: {self_ti} != {other_ti}")
 
         # Check features (must be subset or equal - no extra features allowed)
         for feature_type, self_feat, other_feat in [

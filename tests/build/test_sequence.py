@@ -28,9 +28,9 @@ class TestSequencePoolFromFixtures:
         """Pool size matches snapshot."""
         assert len(pools_dict[pool_type]) == snapshot
 
-    def test_sequence_data_schema(self, pools_dict, pool_type, snapshot) -> None:
-        """sequence_data() column schema matches snapshot."""
-        df = pools_dict[pool_type].sequence_data(output_format="polars")
+    def test_temporal_data_schema(self, pools_dict, pool_type, snapshot) -> None:
+        """temporal_data() column schema matches snapshot."""
+        df = pools_dict[pool_type].temporal_data(output_format="polars")
         assert dict(df.schema) == snapshot
 
     def test_static_data_schema(self, pools_dict, pool_type, snapshot) -> None:
@@ -63,7 +63,7 @@ class TestBuildFromDataFrame:
         )
         pool = IntervalSequencePool(store=store)
         assert len(pool) == snapshot
-        assert dict(pool.sequence_data(output_format="polars").schema) == snapshot
+        assert dict(pool.temporal_data(output_format="polars").schema) == snapshot
 
     def test_event_pool(self, sequence_df_fixture, tmp_path: Path, snapshot) -> None:
         """EventSequencePool built from a DataFrame has the expected length and schema."""
@@ -79,7 +79,7 @@ class TestBuildFromDataFrame:
         )
         pool = EventSequencePool(store=store)
         assert len(pool) == snapshot
-        assert dict(pool.sequence_data(output_format="polars").schema) == snapshot
+        assert dict(pool.temporal_data(output_format="polars").schema) == snapshot
 
     def test_state_pool(self, sequence_df_fixture, tmp_path: Path, snapshot) -> None:
         """StateSequencePool built from a DataFrame has the expected length and schema."""
@@ -95,7 +95,7 @@ class TestBuildFromDataFrame:
         )
         pool = StateSequencePool(store=store)
         assert len(pool) == snapshot
-        assert dict(pool.sequence_data(output_format="polars").schema) == snapshot
+        assert dict(pool.temporal_data(output_format="polars").schema) == snapshot
 
     def test_with_static(
         self, static_df_fixture, sequence_data_pl, tmp_path: Path, snapshot
@@ -152,7 +152,7 @@ class TestBuildFromSQL:
         )
         pool = IntervalSequencePool(store=store)
         assert len(pool) == snapshot
-        assert dict(pool.sequence_data(output_format="polars").schema) == snapshot
+        assert dict(pool.temporal_data(output_format="polars").schema) == snapshot
 
     def test_event_pool(self, sqlite_db: str, tmp_path: Path, snapshot) -> None:
         """EventSequencePool built from SQL has the expected length and schema."""
@@ -169,7 +169,7 @@ class TestBuildFromSQL:
         )
         pool = EventSequencePool(store=store)
         assert len(pool) == snapshot
-        assert dict(pool.sequence_data(output_format="polars").schema) == snapshot
+        assert dict(pool.temporal_data(output_format="polars").schema) == snapshot
 
     def test_state_pool(self, sqlite_db: str, tmp_path: Path, snapshot) -> None:
         """StateSequencePool built from SQL has the expected length and schema."""
@@ -186,7 +186,7 @@ class TestBuildFromSQL:
         )
         pool = StateSequencePool(store=store)
         assert len(pool) == snapshot
-        assert dict(pool.sequence_data(output_format="polars").schema) == snapshot
+        assert dict(pool.temporal_data(output_format="polars").schema) == snapshot
 
     def test_with_static(self, sqlite_db: str, tmp_path: Path, snapshot) -> None:
         """Static schema is exposed after registering static via add_sql()."""
@@ -229,7 +229,7 @@ class TestBuilderOptions:
     def test_interval_sort_anchor(
         self, sequence_data_pl, tmp_path: Path, anchor: str, snapshot
     ) -> None:
-        """sequence_data() row order reflects the chosen sort_anchor, locked by snapshot."""
+        """temporal_data() row order reflects the chosen sort_anchor, locked by snapshot."""
         store = (
             IntervalSequencePool.builder(sort_anchor=anchor)
             .add_dataframe(
@@ -241,7 +241,7 @@ class TestBuilderOptions:
             )
             .build(tmp_path / f"interval_{anchor}")
         )
-        df = IntervalSequencePool(store=store).sequence_data(output_format="polars")
+        df = IntervalSequencePool(store=store).temporal_data(output_format="polars")
         assert snapshot == df
 
     def test_interval_sort_anchor_invalid(self) -> None:
@@ -252,7 +252,7 @@ class TestBuilderOptions:
     # --- StateSequencePool: end_value ---
 
     def test_state_without_end_column_last_null(self, tmp_path: Path, snapshot) -> None:
-        """Without end_column and no end_value, sequence_data() shows null end for last state."""
+        """Without end_column and no end_value, temporal_data() shows null end for last state."""
         df = pl.DataFrame(
             {"id": [1, 1, 2], "start": [0.0, 1.0, 0.0], "value": ["a", "b", "x"]}
         )
@@ -266,11 +266,11 @@ class TestBuilderOptions:
             )
             .build(tmp_path / "state_no_end")
         )
-        data = StateSequencePool(store=store).sequence_data(output_format="polars")
+        data = StateSequencePool(store=store).temporal_data(output_format="polars")
         assert snapshot == data
 
     def test_state_end_value_fills_last_end(self, tmp_path: Path, snapshot) -> None:
-        """end_value sentinel appears in sequence_data() for the last state of every entity."""
+        """end_value sentinel appears in temporal_data() for the last state of every entity."""
         df = pl.DataFrame(
             {"id": [1, 1, 2], "start": [0.0, 1.0, 0.0], "value": ["a", "b", "x"]}
         )
@@ -284,7 +284,7 @@ class TestBuilderOptions:
             )
             .build(tmp_path / "state_end_value")
         )
-        data = StateSequencePool(store=store).sequence_data(output_format="polars")
+        data = StateSequencePool(store=store).temporal_data(output_format="polars")
         assert snapshot == data
 
     # --- StateSequencePool: validate_continuity ---
@@ -317,7 +317,7 @@ class TestBuilderOptions:
             )
 
     def test_state_continuity_skip_builds(self, tmp_path: Path, snapshot) -> None:
-        """validate_continuity=False accepts non-contiguous data; sequence_data() locked by snapshot."""
+        """validate_continuity=False accepts non-contiguous data; temporal_data() locked by snapshot."""
         df = pl.DataFrame(
             {
                 "id": [1, 1, 1],
@@ -341,5 +341,5 @@ class TestBuilderOptions:
             )
             .build(tmp_path / "state_skip_continuity")
         )
-        data = StateSequencePool(store=store).sequence_data(output_format="polars")
+        data = StateSequencePool(store=store).temporal_data(output_format="polars")
         assert snapshot == data

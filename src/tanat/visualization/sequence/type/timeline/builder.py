@@ -14,7 +14,7 @@ from ...base.utils import rename_id_column, resolve_label, drop_null_labels
 from .data import (
     assign_y_positions,
     build_y_tick_map,
-    rename_temporal_columns,
+    rename_time_index_columns,
 )
 from .settings import TimelineSettings
 
@@ -166,7 +166,7 @@ class TimelineVizBuilder(BaseSequenceVizBuilder, register_name="timeline"):
             )
 
         id_col = sequence_or_pool.settings.id_column
-        temporal_cols = sequence_or_pool.settings.get_temporal_columns()
+        time_cols = sequence_or_pool.settings.get_time_columns()
 
         # Include facet_by in features for entity (non-static) facets
         is_static_facet = self.settings.facet.is_static
@@ -174,9 +174,9 @@ class TimelineVizBuilder(BaseSequenceVizBuilder, register_name="timeline"):
         if facet_by and not is_static_facet:
             features.append(facet_by)
 
-        lf = sequence_or_pool._sequence_data_lf(features=features)
+        lf = sequence_or_pool._temporal_data_lf(features=features)
         lf = rename_id_column(lf, id_col)
-        lf = rename_temporal_columns(lf, temporal_cols)
+        lf = rename_time_index_columns(lf, time_cols)
         lf = resolve_label(lf, entity_feature)
 
         if drop_na:

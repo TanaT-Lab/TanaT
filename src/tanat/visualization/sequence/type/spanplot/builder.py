@@ -18,7 +18,7 @@ from ...base.exceptions import (
 )
 from .data import (
     extract_durations,
-    rename_temporal_columns,
+    rename_time_index_columns,
     sort_ids,
     sort_labels,
 )
@@ -189,16 +189,16 @@ class SpanplotVizBuilder(BaseSequenceVizBuilder, register_name="spanplot"):
                 pool_type, compatible_types=self._COMPATIBLE_TYPES
             )
 
-        # Validate display_unit vs temporal type
-        temporal = sequence_or_pool.metadata.temporal
+        # Validate display_unit vs time index type
+        ti = sequence_or_pool.metadata.time_index
         display_unit = self.settings.aesthetics.display_unit
-        if temporal.is_datetime and display_unit is None:
+        if ti.is_datetime and display_unit is None:
             raise IncompatibleDisplayUnitError(None, is_datetime=True)
-        if not temporal.is_datetime and display_unit is not None:
+        if not ti.is_datetime and display_unit is not None:
             raise IncompatibleDisplayUnitError(display_unit, is_datetime=False)
 
         id_col = sequence_or_pool.settings.id_column
-        temporal_cols = sequence_or_pool.settings.get_temporal_columns()
+        time_cols = sequence_or_pool.settings.get_time_columns()
 
         # Include facet_by in features for entity (non-static) facets
         is_static_facet = self.settings.facet.is_static
@@ -206,9 +206,9 @@ class SpanplotVizBuilder(BaseSequenceVizBuilder, register_name="spanplot"):
         if facet_by and not is_static_facet:
             features.append(facet_by)
 
-        lf = sequence_or_pool._sequence_data_lf(features=features)
+        lf = sequence_or_pool._temporal_data_lf(features=features)
         lf = rename_id_column(lf, id_col)
-        lf = rename_temporal_columns(lf, temporal_cols)
+        lf = rename_time_index_columns(lf, time_cols)
         lf = resolve_label(lf, entity_feature)
 
         if drop_na:

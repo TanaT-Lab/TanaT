@@ -18,7 +18,7 @@ class StoreSchema:
     OFFSET: Final[str] = "offset"
     LENGTH: Final[str] = "length"
 
-    # --- Temporal index columns ---
+    # --- Time index columns ---
     T_START: Final[str] = "_t_start"
     T_END: Final[str] = "_t_end"
     T_EVENT: Final[str] = "_t_event"
@@ -34,18 +34,18 @@ class StoreSchema:
         CORE = "core.json"
         METADATA = "metadata.json"
         SEQUENCE_INDEX = "sequence_index.arrow"
-        TEMPORAL_INDEX = "temporal_index.arrow"
+        TIME_INDEX = "time_index.arrow"
         ENTITY_FEATURES = "entity_features.arrow"
         STATIC_FEATURES = "static_features.arrow"
 
     # --- Column-set helpers ---
 
     @classmethod
-    def temporal_columns(cls) -> list[str]:
-        """All possible temporal column names, in canonical order (start → end → event)."""
+    def time_index_columns(cls) -> list[str]:
+        """All possible time index column names, in canonical order (start → end → event)."""
         return [cls.T_START, cls.T_END, cls.T_EVENT]
 
     @classmethod
     def internal_columns(cls) -> frozenset[str]:
         """All internal (non-feature) column names."""
-        return frozenset({cls.SEQ_ID, cls.ROW_IDX, *cls.temporal_columns()})
+        return frozenset({cls.SEQ_ID, cls.ROW_IDX, *cls.time_index_columns()})

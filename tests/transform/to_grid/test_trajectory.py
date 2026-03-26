@@ -13,7 +13,7 @@ _MAX_BINS = 5
 
 def _bin_size(pool: TrajectoryPool) -> str | int:
     """Return an appropriate bin_size for the pool's temporal encoding."""
-    return "1D" if pool.metadata.temporal.is_datetime else 1
+    return "1D" if pool.metadata.time_index.is_datetime else 1
 
 
 class TestTrajectoryPoolToGrid:

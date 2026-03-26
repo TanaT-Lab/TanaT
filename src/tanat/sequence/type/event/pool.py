@@ -98,7 +98,7 @@ class EventSequencePool(SequencePool, register_name="event"):
         bin_col: str = "__bin__",
     ) -> pl.LazyFrame:
         """One bin per row (single event timestamp)."""
-        time_col = self.settings.get_temporal_columns()[0]
+        time_col = self.settings.get_time_columns()[0]
         return lf.with_columns(
             self._to_bin_expr(time_col, t_min, bin_size_native, is_datetime).alias(
                 bin_col
@@ -137,7 +137,7 @@ class EventSequencePool(SequencePool, register_name="event"):
         """Convert this event pool to an interval pool by computing ``_t_end``.
 
         Each event timestamp becomes ``_t_start``; ``_t_end`` is computed as
-        ``_t_start + duration``. The resulting temporal index is stored as a
+        ``_t_start + duration``. The resulting time index is stored as a
         virtual override (ephemeral) or written to a new persistent store.
 
         Args:
@@ -158,13 +158,13 @@ class EventSequencePool(SequencePool, register_name="event"):
         # validate duration
         if isinstance(duration, str):
             self.settings.validate_features([duration], is_static=False)
-            # Type check: the feature column must be compatible with the temporal index
+            # Type check: the feature column must be compatible with the time index
             if self.metadata.is_datetime:
                 if not self.metadata.is_duration_feature(duration):
                     got = self.metadata.feature_info(duration).dtype
                     raise TypeError(
                         f"Duration column {duration!r} must be of type pl.Duration "
-                        "when the temporal index is Datetime. "
+                        "when the time index is Datetime. "
                         f"Got: {got}."
                     )
             else:
@@ -172,19 +172,19 @@ class EventSequencePool(SequencePool, register_name="event"):
                     got = self.metadata.feature_info(duration).dtype
                     raise TypeError(
                         f"Duration column {duration!r} must be numeric "
-                        "when the temporal index is a timestep (non-Datetime). "
+                        "when the time index is a timestep (non-Datetime). "
                         f"Got: {got}."
                     )
         elif isinstance(duration, (int, float)):
             if self.metadata.is_datetime:
                 raise ValueError(
-                    "Numeric duration is not valid for datetime temporal index. "
+                    "Numeric duration is not valid for datetime time index. "
                     "Use a timedelta or an entity feature column instead."
                 )
         elif isinstance(duration, timedelta):
             if not self.metadata.is_datetime:
                 raise ValueError(
-                    "Timedelta duration is not valid for numeric temporal index. "
+                    "Timedelta duration is not valid for numeric time index. "
                     "Use a numeric scalar or an entity feature column instead."
                 )
         else:
@@ -231,7 +231,7 @@ class EventSequencePool(SequencePool, register_name="event"):
                     got = self.metadata.feature_info(end_value, is_static=True).dtype
                     raise TypeError(
                         f"end_value column {end_value!r} must be a Datetime-compatible type "
-                        "when the temporal index is Datetime. "
+                        "when the time index is Datetime. "
                         f"Got: {got}."
                     )
             else:
@@ -239,7 +239,7 @@ class EventSequencePool(SequencePool, register_name="event"):
                     got = self.metadata.feature_info(end_value, is_static=True).dtype
                     raise TypeError(
                         f"end_value column {end_value!r} must be numeric "
-                        "when the temporal index is a timestep (non-Datetime). "
+                        "when the time index is a timestep (non-Datetime). "
                         f"Got: {got}."
                     )
         return self._as_state_impl(
@@ -266,7 +266,7 @@ class EventSequencePool(SequencePool, register_name="event"):
             self._virtual_id,
             duration,
             feature_cast=feature_cast,
-            temporal_cast=self._casts.temporal,
+            time_index_cast=self._casts.time_index,
         )
         new_settings = {
             "id_column": self.settings.id_column,
@@ -297,7 +297,7 @@ class EventSequencePool(SequencePool, register_name="event"):
         new_uuid = self._store._fork_event_to_state(
             self._virtual_id,
             end_value,
-            temporal_cast=self._casts.temporal,
+            time_index_cast=self._casts.time_index,
             static_cast=static_cast,
         )
         new_settings = {

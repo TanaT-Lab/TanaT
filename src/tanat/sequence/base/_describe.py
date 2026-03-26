@@ -24,16 +24,16 @@ def _n_unique_entities_expr(entity_features: list[str]) -> pl.Expr:
     return pl.struct(entity_features).n_unique().alias("n_unique_entities")
 
 
-def _temporal_span_expr(temporal_cols: list[str]) -> pl.Expr:
+def _temporal_span_expr(time_cols: list[str]) -> pl.Expr:
     """Time elapsed between the earliest start and the latest end.
 
     - 1 column  (event):           ``max(time) - min(time)``
     - 2 columns (state/interval):  ``max(end)  - min(start)``
     """
-    if len(temporal_cols) == 1:
-        col = temporal_cols[0]
+    if len(time_cols) == 1:
+        col = time_cols[0]
         return (pl.col(col).max() - pl.col(col).min()).alias("temporal_span")
-    start_col, end_col = temporal_cols
+    start_col, end_col = time_cols
     return (pl.col(end_col).max() - pl.col(start_col).min()).alias("temporal_span")
 
 

@@ -126,8 +126,8 @@ class TrajectoryViewMixin:
         if traj_id_dtype is None:
             traj_id_dtype = self._store.traj_id_dtype
 
-        # Temporal: aggregate across visible sequence stores.
-        temporal = TrajectoryMetadata.infer_temporal(
+        # Time index: aggregate across visible sequence stores.
+        time_index = TrajectoryMetadata.infer_time_index(
             {alias: self._store.sequence_stores[alias] for alias in self._store_aliases}
         )
 
@@ -140,7 +140,7 @@ class TrajectoryViewMixin:
 
         return TrajectoryMetadata(
             traj_id=traj_id_dtype,
-            temporal=temporal,
+            time_index=time_index,
             static_features=TrajectoryMetadata.infer_static(static_lf),
         )
 

@@ -240,9 +240,9 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             # pylint: disable=protected-access
             # Align id_column with the trajectory-level user-facing name.
             pool.update_settings(id_column=self.settings.id_column)
-            # Propagate id/temporal casts - already validated at trajectory level.
+            # Propagate id/time index casts - already validated at trajectory level.
             pool._casts = pool._casts.with_fields(
-                id=self._casts.id, temporal=self._casts.temporal
+                id=self._casts.id, time_index=self._casts.time_index
             )
             # Propagate trajectory-level ID mask as a silent intersection.
             # IDs absent from this sub-pool's store are silently excluded.
@@ -257,7 +257,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         return result
 
     def _sync_pool_casts(self) -> None:
-        """Propagate trajectory-level id/temporal casts to existing pool objects.
+        """Propagate trajectory-level id/time index casts to existing pool objects.
 
         Called **in-place** after :meth:`cast_id`, :meth:`cast_to_datetime`,
         or :meth:`cast_to_timestep` so that pool objects are updated without
@@ -271,9 +271,9 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             return
         for pool in self._pools.values():
             # pylint: disable=protected-access
-            # Propagate id/temporal casts - already validated at trajectory level.
+            # Propagate id/time index casts - already validated at trajectory level.
             pool._casts = pool._casts.with_fields(
-                id=self._casts.id, temporal=self._casts.temporal
+                id=self._casts.id, time_index=self._casts.time_index
             )
             pool.clear_cache()
 
@@ -403,8 +403,8 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             format_kv("Store", str(self._store.root_path)),
             format_kv("id_column", self.settings.id_column),
         ]
-        temporal = [
-            format_kv("Type", str(meta.temporal)),
+        ti_section = [
+            format_kv("Type", str(meta.time_index)),
         ]
         seq_bullets = [
             format_bullet(alias, repr(pool)) for alias, pool in pools.items()
@@ -415,7 +415,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             "",
             format_section("Overview", overview),
             "",
-            format_section("Temporal", temporal),
+            format_section("Time Index", ti_section),
             "",
             format_section(f"Sequences ({len(pools)})", seq_bullets),
         ]
@@ -1030,7 +1030,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
 
     def cast_to_datetime(self, unit: str = "us", time_zone: str | None = None) -> None:
         """
-        Casts temporal columns to Datetime across all linked sequence pools.
+        Casts time columns to Datetime across all linked sequence pools.
 
         All sequence stores are guaranteed to share the same temporal
         schema (enforced at build time), so a single probe against the
@@ -1052,16 +1052,14 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
                 f"Invalid time unit: {unit!r}. Must be one of 's', 'ms', 'us', 'ns'."
             )
         target_dtype = pl.Datetime(unit, time_zone)
-        self._store.probe_temporal_cast(
-            target_dtype
-        )  # one probe - all stores homogeneous
-        self._casts = self._casts.with_fields(temporal=target_dtype)
+        self._store.probe_time_cast(target_dtype)  # one probe - all stores homogeneous
+        self._casts = self._casts.with_fields(time_index=target_dtype)
         self._sync_pool_casts()
         self.clear_cache()
 
     def cast_to_timestep(self, dtype: pl.DataType = pl.Int64) -> None:
         """
-        Casts temporal columns to numeric-based timesteps across all linked
+        Casts time columns to numeric-based timesteps across all linked
         sequence pools.
 
         All sequence stores are guaranteed to share the same temporal
@@ -1080,13 +1078,16 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         """
         if not dtype.is_integer():
             raise TypeError(f"Target dtype must be an integer type, got {dtype}")
-        if self.metadata.temporal is not None and self.metadata.temporal.is_datetime:
+        if (
+            self.metadata.time_index is not None
+            and self.metadata.time_index.is_datetime
+        ):
             raise TypeError(
                 "Temporal data is in Datetime format - "
                 "conversion to timestep is not supported."
             )
-        self._store.probe_temporal_cast(dtype)  # one probe - all stores homogeneous
-        self._casts = self._casts.with_fields(temporal=dtype)
+        self._store.probe_time_cast(dtype)  # one probe - all stores homogeneous
+        self._casts = self._casts.with_fields(time_index=dtype)
         self._sync_pool_casts()
         self.clear_cache()
 
@@ -1184,10 +1185,10 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
                 alias=alias,
                 context=f"Cannot extend TrajectoryPool: alias '{alias}' has different ID dtypes.",
             )
-            sub_self.metadata.assert_temporal_compatible_with(
+            sub_self.metadata.assert_time_index_compatible_with(
                 sub_other_meta,
                 alias=alias,
-                context=f"Cannot extend TrajectoryPool: alias '{alias}' has different temporal schemas.",
+                context=f"Cannot extend TrajectoryPool: alias '{alias}' has different time index schemas.",
             )
             extra_feats = sub_self.metadata.assert_features_compatible_with(
                 sub_other_meta,
@@ -1397,7 +1398,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
 
     @staticmethod
     def _resolve_bin_size_native(bin_size: BinSize, is_datetime: bool) -> int | float:
-        """Convert *bin_size* to the temporal column's native unit.
+        """Convert *bin_size* to the time column's native unit.
 
         Raises :exc:`TypeError` immediately (no I/O) when the type does not
         match the temporal kind.
@@ -1440,8 +1441,8 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         for alias, feats in features.items():
             pool = self.sequence_pools[alias]  # pylint: disable=protected-access
             feats_list = [feats] if isinstance(feats, str) else feats
-            temporal_cols = (
-                pool.settings.get_temporal_columns()
+            time_cols = (
+                pool.settings.get_time_columns()
             )  # pylint: disable=protected-access
             id_col_pool = pool.settings.id_column
             valid = pool.settings.validate_features(
@@ -1449,21 +1450,21 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             )  # pylint: disable=protected-access
             frame, feat_cols_alias = (
                 pool._build_entity_frame(  # pylint: disable=protected-access
-                    valid, temporal_cols, id_col_pool, ohe
+                    valid, time_cols, id_col_pool, ohe
                 )
             )
             if alias_id_col is None:
                 alias_id_col = id_col_pool
 
             stats = frame.select(
-                [pl.col(c).min().alias(f"min_{c}") for c in temporal_cols]
-                + [pl.col(c).max().alias(f"max_{c}") for c in temporal_cols]
+                [pl.col(c).min().alias(f"min_{c}") for c in time_cols]
+                + [pl.col(c).max().alias(f"max_{c}") for c in time_cols]
             ).row(0, named=True)
             all_t_mins.append(
-                min(v for c in temporal_cols if (v := stats[f"min_{c}"]) is not None)
+                min(v for c in time_cols if (v := stats[f"min_{c}"]) is not None)
             )
             all_t_maxs.append(
-                max(v for c in temporal_cols if (v := stats[f"max_{c}"]) is not None)
+                max(v for c in time_cols if (v := stats[f"max_{c}"]) is not None)
             )
             alias_cache[alias] = (frame, feat_cols_alias)
 
@@ -1589,7 +1590,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
                     }
 
             bin_size: Width of each bin.  The expected type depends on the
-                temporal column type:
+                time column type:
 
                 - **Datetime sequences** (``pl.Datetime`` / ``pl.Date``):
                   a duration string parsed by :class:`pandas.Timedelta`;
@@ -1597,7 +1598,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
                   ``"30min"``, ``"12h"``, ``"1d"``, ``"90s"``,
                   ``"2h30min"``, ``"1W"``.
                 - **Timestep sequences** (numeric column): an ``int`` or
-                  ``float`` in the same unit as the temporal column.
+                  ``float`` in the same unit as the time column.
                   E.g. if the column holds integer timesteps, ``bin_size=2``
                   produces bins of size 2 timesteps.
 
@@ -1638,6 +1639,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             ValueError: If *bin_size* would produce too many bins and
                 *max_bins* is not set.
         """
+        # TODO : fix output format !
         # ------------------------------------------------------------------ #
         # Step 1 - Validate aliases
         # ------------------------------------------------------------------ #
@@ -1651,7 +1653,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         # ------------------------------------------------------------------ #
         # Step 2 - Resolve temporal type + convert bin_size (fail fast, no I/O)
         # ------------------------------------------------------------------ #
-        is_datetime: bool = self.metadata.temporal.is_datetime
+        is_datetime: bool = self.metadata.time_index.is_datetime
         bin_size_native = self._resolve_bin_size_native(bin_size, is_datetime)
 
         # ------------------------------------------------------------------ #

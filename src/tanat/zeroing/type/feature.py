@@ -26,7 +26,7 @@ class FeatureT0Setter(T0Setter, register_name="feature"):
     """T0 = value of a static feature column, one value per sequence.
 
     The named feature must exist in the pool's static features and its dtype
-    must exactly match the pool's temporal index dtype.
+    must exactly match the pool's time index dtype.
     """
 
     def __init__(self, *, feature: str):
@@ -45,11 +45,11 @@ class FeatureT0Setter(T0Setter, register_name="feature"):
 
         # Validate dtype compatibility: feature dtype must match temporal dtype.
         feat_info = target.metadata.feature_info(feature, is_static=True)
-        temporal_dtype = target.metadata.temporal.dtype
+        temporal_dtype = target.metadata.time_index.dtype
         if feat_info is not None and feat_info.dtype != temporal_dtype:
             raise TypeError(
                 f"Static feature '{feature}' has dtype {feat_info.dtype!r} but the pool's "
-                f"temporal index has dtype {temporal_dtype!r}. "
+                f"time index has dtype {temporal_dtype!r}. "
                 f"Use pool.cast_features({{'{feature}': <target_dtype>}}, is_static=True) "
                 "to align the feature dtype before calling set_t0()."
             )

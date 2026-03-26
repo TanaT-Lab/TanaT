@@ -77,7 +77,7 @@ class SequenceStore(StaticStoreMixin):
         required = [
             SCH.Files.CORE,
             SCH.Files.SEQUENCE_INDEX,
-            SCH.Files.TEMPORAL_INDEX,
+            SCH.Files.TIME_INDEX,
             SCH.Files.ENTITY_FEATURES,
         ]
         for fname in required:
@@ -143,49 +143,49 @@ class SequenceStore(StaticStoreMixin):
         """Navigation index (seq_id, offset, length) - physical, no cast overlay."""
         return pl.scan_ipc(self._root_path / SCH.Files.SEQUENCE_INDEX)
 
-    def temporal(self, virtual_id: str | None = None) -> pl.LazyFrame:
-        """Temporal rows, with optional virtual override.
+    def time_index(self, virtual_id: str | None = None) -> pl.LazyFrame:
+        """Time-index rows (``_t_event`` or ``_t_start`` / ``_t_end``), with optional virtual override.
 
-        When *virtual_id* is given and ``tmp/<virtual_id>/temporal_index.arrow``
-        exists, the virtual temporal index is returned **instead of** the
+        When *virtual_id* is given and ``tmp/<virtual_id>/time_index.arrow``
+        exists, the virtual time index is returned **instead of** the
         physical one (full replacement - the whole temporal structure changes
         during type conversions).  Falls back to the physical file when the
         virtual override is absent.
 
-        When *virtual_id* is ``None``, always returns the physical temporal.
+        When *virtual_id* is ``None``, always returns the physical time index.
 
         Args:
             virtual_id: Optional virtual context identifier.
 
         Returns:
-            A :class:`polars.LazyFrame` of the temporal rows.
+            A :class:`polars.LazyFrame` of the time-index rows.
         """
         if virtual_id is None:
-            return pl.scan_ipc(self._root_path / SCH.Files.TEMPORAL_INDEX)
-        virtual_temporal = self._virtual.temporal(virtual_id)
-        if virtual_temporal is not None:
-            return virtual_temporal
-        return pl.scan_ipc(self._root_path / SCH.Files.TEMPORAL_INDEX)
+            return pl.scan_ipc(self._root_path / SCH.Files.TIME_INDEX)
+        virtual_ti = self._virtual.time_index(virtual_id)
+        if virtual_ti is not None:
+            return virtual_ti
+        return pl.scan_ipc(self._root_path / SCH.Files.TIME_INDEX)
 
-    def write_virtual_temporal(
+    def write_virtual_time_index(
         self,
         virtual_id: str,
-        temporal_lf: pl.LazyFrame,
+        time_index_lf: pl.LazyFrame,
     ) -> None:
-        """Write a virtual temporal override for *virtual_id*.
+        """Write a virtual time-index override for *virtual_id*.
 
         Creates ``tmp/<virtual_id>/`` if it does not exist, then writes
-        *temporal_lf* as ``temporal_index.arrow`` there.  A subsequent call
-        to :meth:`temporal` with the same *virtual_id* will return this
-        override instead of the physical temporal.
+        *time_index_lf* as ``time_index.arrow`` there.  A subsequent call
+        to :meth:`time_index` with the same *virtual_id* will return this
+        override instead of the physical time index.
 
         Args:
             virtual_id: Virtual context identifier (a UUID string).
-            temporal_lf: LazyFrame containing the new temporal columns
+            time_index_lf: LazyFrame containing the new time columns
                 (``_t_start`` + ``_t_end`` for period types, or ``_t_event``
                 for event types).
         """
-        self._virtual.write_temporal(virtual_id, temporal_lf)
+        self._virtual.write_time_index(virtual_id, time_index_lf)
 
     # ------------------------------------------------------------------
     # Navigation
@@ -285,19 +285,19 @@ class SequenceStore(StaticStoreMixin):
         """
         probe_cast(self.sequence_index.select(SCH.SEQ_ID), {SCH.SEQ_ID: dtype}, n_rows)
 
-    def probe_temporal_cast(self, dtype: pl.DataType, n_rows: int = 10) -> None:
+    def probe_time_cast(self, dtype: pl.DataType, n_rows: int = 10) -> None:
         """
-        Validates casting all temporal columns to *dtype*.
+        Validates casting all time columns to *dtype*.
 
-        Only columns actually present in ``temporal_index.arrow`` are
+        Only columns actually present in ``time_index.arrow`` are
         checked (the schema is read from the IPC footer - no full scan).
 
         Args:
             dtype: Target Polars DataType.
             n_rows: Sample size (default: 10).
         """
-        t_lf = self.temporal()
-        t_names = SCH.temporal_columns()
+        t_lf = self.time_index()
+        t_names = SCH.time_index_columns()
         present = [c for c in t_lf.collect_schema().names() if c in t_names]
         if present:
             probe_cast(t_lf, {c: dtype for c in present}, n_rows)
@@ -309,13 +309,13 @@ class SequenceStore(StaticStoreMixin):
         Returns the structural column names for a data access call.
 
         Always includes the sequence ID column.  For entity data
-        (non-static) also includes the temporal columns actually
-        present in this store's temporal index (physical or virtual).
+        (non-static) also includes the time columns actually
+        present in this store's time index (physical or virtual).
         """
         cols = [SCH.SEQ_ID]
         if not is_static:
-            schema_names = set(self.temporal(virtual_id).collect_schema().names())
-            cols += [c for c in SCH.temporal_columns() if c in schema_names]
+            schema_names = set(self.time_index(virtual_id).collect_schema().names())
+            cols += [c for c in SCH.time_index_columns() if c in schema_names]
         return cols
 
     # ------------------------------------------------------------------
@@ -374,7 +374,7 @@ class SequenceStore(StaticStoreMixin):
         static_lf = self.static(virtual_id)
         result = SequenceMetadata(
             seq_id=self.sequence_index.collect_schema()[SCH.SEQ_ID],
-            temporal=SequenceMetadata.infer_temporal(self.temporal()),
+            time_index=SequenceMetadata.infer_time_index(self.time_index()),
             entity_features=SequenceMetadata.infer_entity_features(entity_lf),
             static_features=SequenceMetadata.infer_static_features(static_lf),
         )
@@ -395,54 +395,54 @@ class SequenceStore(StaticStoreMixin):
             .select(pl.col(SCH.SEQ_ID).repeat_by(pl.col(SCH.LENGTH)).explode())
         )
 
-    def get_sequence_data(
-        self,
-        virtual_id: str | None = None,
-        *,
-        id_cast: pl.DataType | None = None,
-        temporal_cast: pl.DataType | None = None,
-        feature_casts: dict[str, pl.DataType] | None = None,
-    ) -> pl.LazyFrame:
-        """Returns the full sequence data: seq_id + temporal + entity features.
-
-        Cast overlays are applied after assembly - physical store is never touched.
-        """
-        lf = pl.concat(
-            [self._ids_col(), self.temporal(virtual_id), self.entity(virtual_id)],
-            how="horizontal",
-        )
-        cast_schema: dict[str, pl.DataType] = {}
-        if id_cast is not None:
-            cast_schema[SCH.SEQ_ID] = id_cast
-        if temporal_cast is not None:
-            for col in self.temporal(virtual_id).collect_schema().names():
-                cast_schema[col] = temporal_cast
-        if feature_casts:
-            cast_schema.update(feature_casts)
-        return apply_casts(lf, cast_schema) if cast_schema else lf
-
     def get_temporal_data(
         self,
         virtual_id: str | None = None,
         *,
         id_cast: pl.DataType | None = None,
-        temporal_cast: pl.DataType | None = None,
+        time_index_cast: pl.DataType | None = None,
+        feature_casts: dict[str, pl.DataType] | None = None,
     ) -> pl.LazyFrame:
-        """Returns seq_id + temporal columns only (no entity features).
+        """Returns the full temporal data: seq_id + time index + entity features.
 
-        Cheaper than :meth:`get_sequence_data` when entity features are not
-        needed. Cast overlays are applied after assembly.
+        Cast overlays are applied after assembly - physical store is never touched.
         """
         lf = pl.concat(
-            [self._ids_col(), self.temporal(virtual_id)],
+            [self._ids_col(), self.time_index(virtual_id), self.entity(virtual_id)],
             how="horizontal",
         )
         cast_schema: dict[str, pl.DataType] = {}
         if id_cast is not None:
             cast_schema[SCH.SEQ_ID] = id_cast
-        if temporal_cast is not None:
-            for col in self.temporal(virtual_id).collect_schema().names():
-                cast_schema[col] = temporal_cast
+        if time_index_cast is not None:
+            for col in self.time_index(virtual_id).collect_schema().names():
+                cast_schema[col] = time_index_cast
+        if feature_casts:
+            cast_schema.update(feature_casts)
+        return apply_casts(lf, cast_schema) if cast_schema else lf
+
+    def get_id_time_index(
+        self,
+        virtual_id: str | None = None,
+        *,
+        id_cast: pl.DataType | None = None,
+        time_index_cast: pl.DataType | None = None,
+    ) -> pl.LazyFrame:
+        """Returns seq_id + time-index columns only (no entity features).
+
+        Cheaper than :meth:`get_temporal_data` when entity features are not needed.
+        Cast overlays are applied after assembly.
+        """
+        lf = pl.concat(
+            [self._ids_col(), self.time_index(virtual_id)],
+            how="horizontal",
+        )
+        cast_schema: dict[str, pl.DataType] = {}
+        if id_cast is not None:
+            cast_schema[SCH.SEQ_ID] = id_cast
+        if time_index_cast is not None:
+            for col in self.time_index(virtual_id).collect_schema().names():
+                cast_schema[col] = time_index_cast
         return apply_casts(lf, cast_schema) if cast_schema else lf
 
     def get_entity_row(
@@ -457,7 +457,7 @@ class SequenceStore(StaticStoreMixin):
         """
         Returns the feature values for the entity at *rank* within *id_value*.
 
-        Only feature columns are returned - ``_seq_id``, temporal and
+        Only feature columns are returned - ``_seq_id``, time and
         transient columns are stripped internally.  Column selection is
         the responsibility of the caller (Entity).
 
@@ -484,16 +484,16 @@ class SequenceStore(StaticStoreMixin):
             return row.collect().row(0, named=True)
         return apply_casts(row, feature_casts).collect().row(0, named=True)
 
-    def get_temporal_at(
+    def get_time_at(
         self,
         id_value,
         rank: int,
         *,
-        temporal_cast: pl.DataType | None = None,
+        time_index_cast: pl.DataType | None = None,
         id_cast: pl.DataType | None = None,
     ):
         """
-        Returns the temporal value(s) for the entity at *rank* within *id_value*.
+        Returns the time-index value(s) for the entity at *rank* within *id_value*.
 
         Returns a single scalar for event sequences, or a two-element
         list ``[start, end]`` for interval sequences.
@@ -503,14 +503,14 @@ class SequenceStore(StaticStoreMixin):
         offset, _ = self.get_slice(id_value, id_cast=id_cast)
         physical_rank = offset + rank
         lf = (
-            self.temporal()
+            self.time_index()
             .with_row_index(SCH.ROW_IDX)
             .filter(pl.col(SCH.ROW_IDX) == physical_rank)
             .drop(SCH.ROW_IDX)
         )
-        if temporal_cast is not None:
+        if time_index_cast is not None:
             cols = lf.collect_schema().names()
-            lf = apply_casts(lf, dict.fromkeys(cols, temporal_cast))
+            lf = apply_casts(lf, dict.fromkeys(cols, time_index_cast))
         row = lf.collect().row(0, named=True)
         values = list(row.values())
         return values[0] if len(values) == 1 else values
@@ -553,7 +553,7 @@ class SequenceStore(StaticStoreMixin):
     ) -> list[str]:
         """Add positional entity features to a virtual store context.
 
-        Computes the expected row count from the temporal index and delegates
+        Computes the expected row count from the time index and delegates
         height validation to :meth:`VirtualStore.add_entity_features`.
 
         Args:
@@ -569,7 +569,7 @@ class SequenceStore(StaticStoreMixin):
             SCH.internal_columns(),
             context="internal sequence store columns",
         )
-        expected_height = self.temporal().select(pl.len()).collect().item()
+        expected_height = self.time_index().select(pl.len()).collect().item()
         return self._virtual.add_entity_features(
             virtual_id=virtual_id,
             df=lf,
@@ -599,7 +599,7 @@ class SequenceStore(StaticStoreMixin):
         virtual_id: str | None,
         duration: timedelta | int | float | str,
         feature_cast: pl.DataType | None = None,
-        temporal_cast: pl.DataType | None = None,
+        time_index_cast: pl.DataType | None = None,
     ) -> str:
         """Fork a virtual context with ``(_t_start, _t_end)`` computed from an event index.
 
@@ -614,8 +614,8 @@ class SequenceStore(StaticStoreMixin):
             feature_cast: Resolved dtype for the duration column (``str`` case only).
                 Applied to that column before the arithmetic so that, e.g., an
                 ``Int64`` column can be promoted to ``Duration`` on the fly.
-            temporal_cast: Resolved dtype for the temporal column.  Applied to
-                ``_t_event`` before the arithmetic so the forked virtual temporal
+            time_index_cast: Resolved dtype for the time column.  Applied to
+                ``_t_event`` before the arithmetic so the forked virtual time index
                 is written in the user-declared dtype.
 
         Returns:
@@ -624,9 +624,9 @@ class SequenceStore(StaticStoreMixin):
         LOGGER.debug(
             "Fork event -> interval (virtual_id=%r, duration=%r)", virtual_id, duration
         )
-        active_temporal = self.temporal(virtual_id)
-        if temporal_cast is not None:
-            active_temporal = apply_casts(active_temporal, {SCH.T_EVENT: temporal_cast})
+        active_ti = self.time_index(virtual_id)
+        if time_index_cast is not None:
+            active_ti = apply_casts(active_ti, {SCH.T_EVENT: time_index_cast})
         if isinstance(duration, str):
             entity_col = self.entity(virtual_id).select(pl.col(duration))
             if feature_cast is not None:
@@ -634,29 +634,29 @@ class SequenceStore(StaticStoreMixin):
             combined = pl.concat(
                 [
                     self._ids_col(),
-                    active_temporal,
+                    active_ti,
                     entity_col,
                 ],
                 how="horizontal",
             )
-            temporal_lf = combined.select(
+            new_ti = combined.select(
                 pl.col(SCH.T_EVENT).alias(SCH.T_START),
                 (pl.col(SCH.T_EVENT) + pl.col(duration)).alias(SCH.T_END),
             )
         else:
-            temporal_lf = active_temporal.select(
+            new_ti = active_ti.select(
                 pl.col(SCH.T_EVENT).alias(SCH.T_START),
                 (pl.col(SCH.T_EVENT) + pl.lit(duration)).alias(SCH.T_END),
             )
         new_uuid = self.fork_virtual_context(virtual_id) or self._virtual.new_context()
-        self.write_virtual_temporal(new_uuid, temporal_lf)
+        self.write_virtual_time_index(new_uuid, new_ti)
         return new_uuid
 
     def _fork_event_to_state(
         self,
         virtual_id: str | None,
         end_value: datetime | int | float | str | None,
-        temporal_cast: pl.DataType | None = None,
+        time_index_cast: pl.DataType | None = None,
         static_cast: pl.DataType | None = None,
     ) -> str:
         """Fork a virtual context with ``(_t_start, _t_end)`` where ``_t_end`` is the next event start.
@@ -669,8 +669,8 @@ class SequenceStore(StaticStoreMixin):
             virtual_id: Active virtual context to inherit from (``None`` → physical only).
             end_value: Fill value for the last row's ``_t_end``, or ``None``.
                 A ``str`` names a static feature column whose per-sequence value is used.
-            temporal_cast: Resolved dtype for the temporal column.  Applied to
-                ``_t_event`` before the shift so the forked virtual temporal is
+            time_index_cast: Resolved dtype for the time column.  Applied to
+                ``_t_event`` before the shift so the forked virtual time index is
                 written in the user-declared dtype.
             static_cast: Resolved dtype for the static end_value column (``str`` case only).
 
@@ -680,10 +680,10 @@ class SequenceStore(StaticStoreMixin):
         LOGGER.debug(
             "Fork event -> state (virtual_id=%r, end_value=%r)", virtual_id, end_value
         )
-        active_temporal = self.temporal(virtual_id)
-        if temporal_cast is not None:
-            active_temporal = apply_casts(active_temporal, {SCH.T_EVENT: temporal_cast})
-        combined = pl.concat([self._ids_col(), active_temporal], how="horizontal")
+        active_ti = self.time_index(virtual_id)
+        if time_index_cast is not None:
+            active_ti = apply_casts(active_ti, {SCH.T_EVENT: time_index_cast})
+        combined = pl.concat([self._ids_col(), active_ti], how="horizontal")
         # Sequences are contiguous in the store: the last row of each sequence is the
         # one where the next row belongs to a different sequence (or doesn't exist).
         is_last = (pl.col(SCH.SEQ_ID).shift(-1) != pl.col(SCH.SEQ_ID)).fill_null(True)
@@ -693,7 +693,7 @@ class SequenceStore(StaticStoreMixin):
             )
             if static_cast is not None:
                 static_col = apply_casts(static_col, {end_value: static_cast})
-            temporal_lf = (
+            new_ti = (
                 combined.join(static_col, on=SCH.SEQ_ID, how="left")
                 .select(
                     pl.col(SCH.SEQ_ID),
@@ -710,30 +710,30 @@ class SequenceStore(StaticStoreMixin):
                 .drop([SCH.SEQ_ID, end_value])
             )
         else:
-            temporal_lf = combined.select(
+            new_ti = combined.select(
                 pl.col(SCH.SEQ_ID),
                 pl.col(SCH.T_EVENT).alias(SCH.T_START),
                 pl.col(SCH.T_EVENT).shift(-1).over(SCH.SEQ_ID).alias(SCH.T_END),
             )
             if end_value is not None:
-                temporal_lf = temporal_lf.with_columns(
+                new_ti = new_ti.with_columns(
                     pl.when(is_last)
                     .then(pl.lit(end_value))
                     .otherwise(pl.col(SCH.T_END))
                     .alias(SCH.T_END)
                 )
-            temporal_lf = temporal_lf.drop(SCH.SEQ_ID)
+            new_ti = new_ti.drop(SCH.SEQ_ID)
         new_uuid = self.fork_virtual_context(virtual_id) or self._virtual.new_context()
-        self.write_virtual_temporal(new_uuid, temporal_lf)
+        self.write_virtual_time_index(new_uuid, new_ti)
         return new_uuid
 
     def _fork_period_to_event(
         self,
         virtual_id: str | None,
         anchor: str,
-        temporal_cast: pl.DataType | None = None,
+        time_index_cast: pl.DataType | None = None,
     ) -> str:
-        """Fork a virtual context with ``_t_event`` projected from a period temporal index.
+        """Fork a virtual context with ``_t_event`` projected from a period time index.
 
         - ``'start'``:  ``_t_event = _t_start``
         - ``'end'``:    ``_t_event = _t_end``
@@ -743,9 +743,9 @@ class SequenceStore(StaticStoreMixin):
         Args:
             virtual_id: Active virtual context to inherit from (``None`` → physical only).
             anchor: One of ``'start'``, ``'end'``, ``'middle'``.
-            temporal_cast: Resolved dtype for the temporal columns.  Applied to
+            time_index_cast: Resolved dtype for the time columns.  Applied to
                 ``_t_start`` and ``_t_end`` before projection so the forked
-                virtual temporal is written in the user-declared dtype.
+                virtual time index is written in the user-declared dtype.
 
         Returns:
             UUID of the new forked context.
@@ -753,28 +753,28 @@ class SequenceStore(StaticStoreMixin):
         LOGGER.debug(
             "Fork period -> event (virtual_id=%r, anchor=%r)", virtual_id, anchor
         )
-        active_temporal = self.temporal(virtual_id)
-        if temporal_cast is not None:
-            active_temporal = apply_casts(
-                active_temporal,
-                {SCH.T_START: temporal_cast, SCH.T_END: temporal_cast},
+        active_ti = self.time_index(virtual_id)
+        if time_index_cast is not None:
+            active_ti = apply_casts(
+                active_ti,
+                {SCH.T_START: time_index_cast, SCH.T_END: time_index_cast},
             )
         if anchor == "start":
-            temporal_lf = active_temporal.select(pl.col(SCH.T_START).alias(SCH.T_EVENT))
+            new_ti = active_ti.select(pl.col(SCH.T_START).alias(SCH.T_EVENT))
         elif anchor == "end":
-            temporal_lf = active_temporal.select(pl.col(SCH.T_END).alias(SCH.T_EVENT))
+            new_ti = active_ti.select(pl.col(SCH.T_END).alias(SCH.T_EVENT))
         else:  # middle
-            # Use temporal_cast when provided (avoids a schema collect on the lazy frame).
+            # Use time_index_cast when provided (avoids a schema collect on the lazy frame).
             col_type = (
-                temporal_cast
-                if temporal_cast is not None
-                else active_temporal.collect_schema()[SCH.T_START]
+                time_index_cast
+                if time_index_cast is not None
+                else active_ti.collect_schema()[SCH.T_START]
             )
             if isinstance(col_type, (pl.Datetime, pl.Date)):
                 # Polars forbids adding two absolute timestamps (`start + end`),
                 # so the midpoint must be expressed as `start + (end - start) / 2`
                 # where `(end - start)` produces a Duration that can be added back.
-                temporal_lf = active_temporal.select(
+                new_ti = active_ti.select(
                     (
                         pl.col(SCH.T_START)
                         + (pl.col(SCH.T_END) - pl.col(SCH.T_START)) / 2
@@ -786,9 +786,9 @@ class SequenceStore(StaticStoreMixin):
                 midpoint = (pl.col(SCH.T_START) + pl.col(SCH.T_END)) / 2
                 if not isinstance(col_type, (pl.Float32, pl.Float64)):
                     midpoint = midpoint.cast(col_type)
-                temporal_lf = active_temporal.select(midpoint.alias(SCH.T_EVENT))
+                new_ti = active_ti.select(midpoint.alias(SCH.T_EVENT))
         new_uuid = self.fork_virtual_context(virtual_id) or self._virtual.new_context()
-        self.write_virtual_temporal(new_uuid, temporal_lf)
+        self.write_virtual_time_index(new_uuid, new_ti)
         return new_uuid
 
     # ------------------------------------------------------------------
@@ -886,7 +886,7 @@ class SequenceStore(StaticStoreMixin):
             exist_ok: If True, allows the target directory to already exist.
         """
         target.mkdir(parents=True, exist_ok=exist_ok)
-        for fname in (SCH.Files.SEQUENCE_INDEX, SCH.Files.TEMPORAL_INDEX):
+        for fname in (SCH.Files.SEQUENCE_INDEX, SCH.Files.TIME_INDEX):
             src = self._root_path / fname
             if src.exists():
                 shutil.copy2(src, target / fname)

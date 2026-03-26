@@ -240,11 +240,11 @@ class Sequence(
     def __str__(self) -> str:
         cls = type(self).__name__
         meta = self.metadata
-        t_cols = self.settings.get_temporal_columns()
+        t_cols = self.settings.get_time_columns()
 
         # Temporal range for this specific sequence
         # avoid using metadata propagated from parent pool.
-        df = self._temporal_data_lf().select(t_cols).collect()
+        df = self._time_index_lf().select(t_cols).collect()
         if len(t_cols) == 1:
             t_min = df[t_cols[0]].min()
             t_max = df[t_cols[0]].max()
@@ -259,7 +259,7 @@ class Sequence(
             format_kv("Sequence ID", str(self._id_value)),
             format_kv("Length", str(len(self))),
         ]
-        temporal = [
+        ti_section = [
             format_kv("Range", f"{t_min} → {t_max}"),
             format_kv("t0", t0_desc),
         ]
@@ -269,7 +269,7 @@ class Sequence(
             "",
             format_section("Overview", overview),
             "",
-            format_section("Temporal", temporal),
+            format_section("Time Index", ti_section),
         ]
 
         ef_section = format_feature_section(
@@ -350,16 +350,22 @@ class Sequence(
     # Data access
     # ------------------------------------------------------------------
 
-    def sequence_data(
+    def temporal_data(
         self,
         features: list[str] | str | None = None,
         output_format: Literal["pandas", "polars"] = "pandas",
     ) -> pd.DataFrame | pl.DataFrame:
-        """
-        Return temporal data for this sequence.
+        """Return temporal data for this sequence.
+
+        Each row is one **entity**: the atomic observation of this sequence
+        (an event, a state, or a time-step).  Each entity carries the sequence
+        ID, its temporal position (one column for events, two for intervals),
+        and **entity features**: the per-row measurements that vary along the
+        sequence (e.g. heart rate, label, sensor value).
 
         Args:
-            features: Feature name(s) to include (``None`` -> all).
+            features: Entity feature name(s) to include.
+                ``None`` → all entity features.
             output_format: ``"pandas"`` (default) or ``"polars"``.
 
         Returns:
@@ -369,11 +375,11 @@ class Sequence(
         Examples::
 
             seq = pool[42]
-            df = seq.sequence_data()                    # pandas, all features
-            df = seq.sequence_data("heart_rate")        # single feature
-            df = seq.sequence_data(output_format="polars")
+            df = seq.temporal_data()                    # pandas, all features
+            df = seq.temporal_data("heart_rate")        # single feature
+            df = seq.temporal_data(output_format="polars")
         """
-        df = self._sequence_data_df(features)
+        df = self._temporal_data_df(features)
         if output_format == "polars":
             return df
         if output_format == "pandas":

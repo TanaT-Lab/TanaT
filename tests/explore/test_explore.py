@@ -36,11 +36,11 @@ class TestSequencePool:
         """First five unique IDs match snapshot (verifies ordering and ID type)."""
         assert snapshot == pools_dict[pool_type].unique_ids[:5]
 
-    def test_sequence_data_schema(
+    def test_temporal_data_schema(
         self, pools_dict: dict, pool_type: str, snapshot
     ) -> None:
-        """sequence_data() column schema matches snapshot."""
-        df = pools_dict[pool_type].sequence_data(output_format="polars")
+        """temporal_data() column schema matches snapshot."""
+        df = pools_dict[pool_type].temporal_data(output_format="polars")
         assert snapshot == dict(df.schema)
 
     def test_static_data_schema(
@@ -79,11 +79,11 @@ class TestSequence:
         pool = pools_dict[pool_type]
         assert len(pool[pool.unique_ids[0]]) == snapshot
 
-    def test_sequence_data(self, pools_dict: dict, pool_type: str, snapshot) -> None:
-        """sequence_data() for the first sequence matches snapshot."""
+    def test_temporal_data(self, pools_dict: dict, pool_type: str, snapshot) -> None:
+        """temporal_data() for the first sequence matches snapshot."""
         pool = pools_dict[pool_type]
         seq = pool[pool.unique_ids[0]]
-        df = seq.sequence_data(output_format="polars")
+        df = seq.temporal_data(output_format="polars")
         assert snapshot == df.select(sorted(df.columns))
 
 
@@ -166,10 +166,10 @@ class TestTrajectory:
         traj: Trajectory = traj_pool[first_id]
         assert traj.id_value == first_id
 
-    def test_sub_sequence_data(self, traj_pool: TrajectoryPool, snapshot) -> None:
-        """sequence_data() on the 'intervals' sub-sequence of the first trajectory matches snapshot."""
+    def test_sub_temporal_data(self, traj_pool: TrajectoryPool, snapshot) -> None:
+        """temporal_data() on the 'intervals' sub-sequence of the first trajectory matches snapshot."""
         traj: Trajectory = traj_pool[traj_pool.unique_ids[0]]
-        df = traj["intervals"].sequence_data(output_format="polars")
+        df = traj["intervals"].temporal_data(output_format="polars")
         assert snapshot == df.select(sorted(df.columns))
 
 

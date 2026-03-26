@@ -33,7 +33,7 @@ class TestSequencePoolSave:
     ) -> None:
         """is_dirty is False after a successful save."""
         pool = pools_dict[pool_type].copy()
-        n = pool.sequence_data(output_format="polars").height
+        n = pool.temporal_data(output_format="polars").height
         pool.add_entity_features(pl.DataFrame({"tmp": [0.0] * n}))
         assert pool.is_dirty
         pool.save(tmp_path.name, overwrite=True)
@@ -48,26 +48,26 @@ class TestSequencePoolSave:
     ) -> None:
         """Column added via add_entity_features is present in the reloaded pool."""
         pool = pools_dict[pool_type].copy()
-        n = pool.sequence_data(output_format="polars").height
+        n = pool.temporal_data(output_format="polars").height
         pool.add_entity_features(pl.DataFrame({"saved_feat": [1.0] * n}))
         store_name = tmp_path.name
         pool.save(store_name, overwrite=True)
 
         reloaded = get_workspace()[store_name]
-        assert "saved_feat" in reloaded.sequence_data(output_format="polars").columns
+        assert "saved_feat" in reloaded.temporal_data(output_format="polars").columns
 
     def test_save_persists_entity_feature_values(
         self, pools_dict: dict, pool_type: str, tmp_path: Path
     ) -> None:
         """Values of a persisted entity feature survive the save / reload cycle."""
         pool = pools_dict[pool_type].copy()
-        n = pool.sequence_data(output_format="polars").height
+        n = pool.temporal_data(output_format="polars").height
         pool.add_entity_features(pl.DataFrame({"constant": [42.0] * n}))
         store_name = tmp_path.name
         pool.save(store_name, overwrite=True)
 
         reloaded = get_workspace()[store_name]
-        col = reloaded.sequence_data(output_format="polars")["constant"]
+        col = reloaded.temporal_data(output_format="polars")["constant"]
         assert col.drop_nulls().min() == 42.0
         assert col.drop_nulls().max() == 42.0
 
@@ -111,7 +111,7 @@ class TestSequencePoolSave:
 
         reloaded = get_workspace()[store_name]
         assert (
-            "flag_valid" not in reloaded.sequence_data(output_format="polars").columns
+            "flag_valid" not in reloaded.temporal_data(output_format="polars").columns
         )
 
     def test_save_materialises_static_drop(
@@ -145,6 +145,6 @@ class TestSequencePoolSave:
 
         reloaded = get_workspace()[store_name]
         assert (
-            reloaded.sequence_data(output_format="polars").schema["status"]
+            reloaded.temporal_data(output_format="polars").schema["status"]
             == pl.Categorical
         )

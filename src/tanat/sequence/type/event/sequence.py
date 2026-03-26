@@ -71,7 +71,7 @@ class EventSequence(Sequence, register_name="event"):
         return [
             pl.len().alias("length"),
             _n_unique_entities_expr(settings.entity_features),
-            _temporal_span_expr(settings.get_temporal_columns()),
+            _temporal_span_expr(settings.get_time_columns()),
             _median_gap_expr(settings.time_column),
             _gap_std_expr(settings.time_column),
         ]

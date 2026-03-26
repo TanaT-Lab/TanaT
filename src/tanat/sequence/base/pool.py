@@ -252,15 +252,15 @@ class SequencePool(
     def __str__(self) -> str:
         cls = type(self).__name__
         meta = self.metadata
-        t_cols = self.settings.get_temporal_columns()
+        t_cols = self.settings.get_time_columns()
 
         overview = [
             format_kv("Sequences", f"{len(self):,}"),
             format_kv("Store", str(self._store.root_path)),
             format_kv("id_column", self.settings.id_column),
         ]
-        temporal = [
-            format_kv("Type", str(meta.temporal)),
+        ti_section = [
+            format_kv("Type", str(meta.time_index)),
             format_kv("Columns", str(t_cols)),
             format_kv("t0", self._t0_setter.strategy_summary),
         ]
@@ -270,7 +270,7 @@ class SequencePool(
             "",
             format_section("Overview", overview),
             "",
-            format_section("Temporal", temporal),
+            format_section("Time Index", ti_section),
         ]
 
         ef_section = format_feature_section(
@@ -332,7 +332,7 @@ class SequencePool(
         df = self._t0_setter.df
         if df is None:
             # No explicit set_t0() yet: trigger default (position=0) lazily.
-            # compute(self) uses _sequence_data_lf() → already respects _id_mask.
+            # compute(self) uses _temporal_data_lf() → already respects _id_mask.
             self._t0_setter.compute(self)
             df = self._t0_setter.df
         elif self._id_mask is not None:
@@ -391,7 +391,7 @@ class SequencePool(
             position: Row index (0-based; negative indexing supported).
             direct:   Scalar value or ``{seq_id: value}`` dict.
             feature:  Static feature column name.
-            query:    Polars boolean expression on any sequence column (temporal columns or entity features).
+            query:    Polars boolean expression on any sequence column (time columns or entity features).
             anchor:   Which end of each interval/state row to use as the
                       reference timestamp for the floor lookup:
 
@@ -403,7 +403,7 @@ class SequencePool(
                       :exc:`UserWarning` and defaults to ``"start"``.
                       Passing ``anchor=`` on an event pool emits a
                       :exc:`UserWarning` and the value is ignored (single
-                      temporal column, anchor is irrelevant).
+                      time column, anchor is irrelevant).
             use_first: For the *query* strategy, whether to take the first
                 (``True``) or last (``False``) matching row.
 
@@ -467,7 +467,7 @@ class SequencePool(
         Examples::
 
             seqs = pool.get_sequences()
-            print(seqs[42].sequence_data())
+            print(seqs[42].temporal_data())
         """
         # Validate feature names early, before iterating over all IDs.
         if entity_features is not None:
@@ -501,7 +501,7 @@ class SequencePool(
         Examples::
 
             seq = pool[42]
-            seq.sequence_data()
+            seq.temporal_data()
         """
 
         if id_value not in self.unique_ids:
@@ -608,32 +608,37 @@ class SequencePool(
     # Data access
     # ------------------------------------------------------------------
 
-    def sequence_data(
+    def temporal_data(
         self,
         features: list[str] | str | None = None,
         output_format: Literal["pandas", "polars"] = "pandas",
     ) -> pd.DataFrame | pl.DataFrame:
-        """
-        Return all temporal data for the sequences visible in this pool.
+        """Return temporal data for all sequences visible in this pool.
+
+        Each row is one **entity**: the atomic observation of a sequence
+        (an event, a state, or a time-step).  Each entity carries the sequence
+        ID, its temporal position (one column for events, two for intervals),
+        and **entity features**: the per-row measurements that vary along the
+        sequence (e.g. heart rate, label, sensor value).
 
         Args:
-            features: Feature name(s) to include (``None`` -> all entity
-                features).
+            features: Entity feature name(s) to include.
+                ``None`` → all entity features.
             output_format: ``"pandas"`` (default) or ``"polars"``.
 
         Returns:
-            Long-format DataFrame with columns ``[id, temporal..., feature...]``
+            Long-format DataFrame with columns ``[id, temporal…, feature…]``
             covering every visible sequence.
 
         Examples::
 
-            df = pool.sequence_data()                    # pandas, all features
-            df = pool.sequence_data("heart_rate")        # single feature
-            df = pool.sequence_data(["a", "b"], output_format="polars")
+            df = pool.temporal_data()                    # pandas, all features
+            df = pool.temporal_data("heart_rate")        # single feature
+            df = pool.temporal_data(["a", "b"], output_format="polars")
             # Restrict to a subset of IDs:
-            df = pool.subset([1, 2, 3]).sequence_data()
+            df = pool.subset([1, 2, 3]).temporal_data()
         """
-        df = self._sequence_data_df(features)
+        df = self._temporal_data_df(features)
         if output_format == "polars":
             return df
         if output_format == "pandas":
@@ -735,13 +740,11 @@ class SequencePool(
             lf = lf.drop(id_col)
 
         # Guard: feature names must not collide with temporal or id column names.
-        temporal_reserved = frozenset(
-            {id_col} | set(self.settings.get_temporal_columns())
-        )
+        temporal_reserved = frozenset({id_col} | set(self.settings.get_time_columns()))
         check_no_reserved_names(
             lf.collect_schema().names(),
             temporal_reserved,
-            context="id / temporal columns",
+            context="id / time columns",
         )
 
         # Early collision detection via settings
@@ -997,7 +1000,7 @@ class SequencePool(
         if is_static:
             df = self.static_data(features=valid, output_format="polars")
         else:
-            df = self.sequence_data(features=valid, output_format="polars")
+            df = self.temporal_data(features=valid, output_format="polars")
 
         result = df.to_dummies(columns=valid, drop_first=drop_first)
 
@@ -1294,7 +1297,7 @@ class SequencePool(
 
     def cast_to_datetime(self, unit: str = "us", time_zone: str | None = None):
         """
-        Cast temporal columns to Datetime.
+        Cast time columns to Datetime.
 
         Args:
             unit: The datetime resolution ("s", "ms", "us", "ns").
@@ -1307,13 +1310,13 @@ class SequencePool(
                 f"Invalid time unit: {unit}. Must be one of 's', 'ms', 'us', 'ns'."
             )
         target_dtype = pl.Datetime(unit, time_zone)
-        self._store.probe_temporal_cast(target_dtype)
-        self._casts = self._casts.with_fields(temporal=target_dtype)
+        self._store.probe_time_cast(target_dtype)
+        self._casts = self._casts.with_fields(time_index=target_dtype)
         self.clear_cache()
 
     def cast_to_timestep(self, dtype: pl.DataType = pl.Int64):
         """
-        Cast temporal columns to numeric-based timesteps.
+        Cast time columns to numeric-based timesteps.
 
         Args:
             dtype: The target numeric type (e.g., pl.UInt32, pl.Int64).
@@ -1326,10 +1329,10 @@ class SequencePool(
         self._check_not_locked("cast_to_timestep")
         if not dtype.is_integer():
             raise TypeError(f"Target dtype must be an integer type, got {dtype}")
-        if self.metadata.temporal.is_datetime:
+        if self.metadata.time_index.is_datetime:
             raise TypeError("Conversion from Datetime to Timestep is not supported.")
-        self._store.probe_temporal_cast(dtype)
-        self._casts = self._casts.with_fields(temporal=dtype)
+        self._store.probe_time_cast(dtype)
+        self._casts = self._casts.with_fields(time_index=dtype)
         self.clear_cache()
 
     def drop_features(
@@ -1343,7 +1346,7 @@ class SequencePool(
         Removes features from the current view.
 
         By default, this is a **soft drop**: features are removed from the
-        Pool settings so they no longer appear in ``sequence_data()``,
+        Pool settings so they no longer appear in ``temporal_data()``,
         ``static_data()`` or ``metadata``, but the underlying files are
         left untouched.
 
@@ -1378,7 +1381,7 @@ class SequencePool(
     def _to_bin_expr(
         col: str, t_min, bin_size_native: int | float, is_datetime: bool
     ) -> pl.Expr:
-        """Converts a temporal column to an integer bin index (relative to *t_min*)."""
+        """Converts a time column to an integer bin index (relative to *t_min*)."""
         if is_datetime:
             return (
                 (pl.col(col) - pl.lit(t_min)).dt.total_microseconds() // bin_size_native
@@ -1413,7 +1416,7 @@ class SequencePool(
         """Validate and normalise *feature* and *overlap_rule*.
 
         Returns:
-            ``(valid_features, temporal_cols, id_col)``
+            ``(valid_features, time_cols, id_col)``
 
         Note:
             Categorical dtype enforcement for ``ohe=True`` is delegated to
@@ -1433,14 +1436,14 @@ class SequencePool(
 
         return (
             valid_features,
-            self.settings.get_temporal_columns(),
+            self.settings.get_time_columns(),
             self.settings.id_column,
         )
 
     def _build_entity_frame(
         self,
         features: list[str],
-        temporal_cols: list[str],
+        time_cols: list[str],
         id_col: str,
         ohe: bool,
     ) -> tuple[pl.DataFrame, list[str]]:
@@ -1452,7 +1455,7 @@ class SequencePool(
 
         Args:
             features: Already-validated feature names to include.
-            temporal_cols: Temporal column names (excluded from the returned
+            time_cols: Time column names (excluded from the returned
                 *feat_cols* on the OHE path).
             id_col: ID column name (also excluded from *feat_cols* on OHE path).
             ohe: If ``True``, one-hot encode *features* before returning.
@@ -1463,7 +1466,7 @@ class SequencePool(
         """
         if ohe:
             frame = self.to_dummies(features, output_format="polars")
-            temporal_set = set(temporal_cols)
+            temporal_set = set(time_cols)
             feat_cols = [
                 c for c in frame.columns if c != id_col and c not in temporal_set
             ]
@@ -1479,7 +1482,7 @@ class SequencePool(
     def _resolve_bin_params(
         self,
         frame: pl.DataFrame,
-        temporal_cols: list[str],
+        time_cols: list[str],
         bin_size: BinSize,
         max_bins: int | None,
     ) -> tuple[Any, bool, int | float]:
@@ -1494,24 +1497,24 @@ class SequencePool(
         """
         # Null check + stats
         stats_row = frame.select(
-            [pl.col(c).null_count().alias(f"null_{c}") for c in temporal_cols]
-            + [pl.col(c).min().alias(f"min_{c}") for c in temporal_cols]
-            + [pl.col(c).max().alias(f"max_{c}") for c in temporal_cols]
+            [pl.col(c).null_count().alias(f"null_{c}") for c in time_cols]
+            + [pl.col(c).min().alias(f"min_{c}") for c in time_cols]
+            + [pl.col(c).max().alias(f"max_{c}") for c in time_cols]
         ).row(0, named=True)
 
-        bad_cols = [c for c in temporal_cols if stats_row[f"null_{c}"] > 0]
+        bad_cols = [c for c in time_cols if stats_row[f"null_{c}"] > 0]
         if bad_cols:
             raise ValueError(
-                f"Temporal columns contain null values: {bad_cols}. "
+                f"Time columns contain null values: {bad_cols}. "
                 "Fill or drop them before discretizing."
             )
 
-        t_min = min(stats_row[f"min_{c}"] for c in temporal_cols)
-        t_max = max(stats_row[f"max_{c}"] for c in temporal_cols)
+        t_min = min(stats_row[f"min_{c}"] for c in time_cols)
+        t_max = max(stats_row[f"max_{c}"] for c in time_cols)
         if t_min is None or t_max is None:
             raise ValueError("Cannot discretize: pool is empty.")
 
-        is_datetime = self.metadata.temporal.is_datetime
+        is_datetime = self.metadata.time_index.is_datetime
 
         if is_datetime:
             if not isinstance(bin_size, str):
@@ -1619,12 +1622,12 @@ class SequencePool(
         Args:
             frame: Already-masked, already-renamed entity LazyFrame (or
                 eager DataFrame for OHE path).  Must contain the id column,
-                temporal columns and *feat_cols*.
+                time columns and *feat_cols*.
             feat_cols: Feature columns to project (post-OHE names if
                 ``ohe=True`` was applied by the caller).
             t_min: Origin of the time axis.
-            bin_size_native: Bin width in the temporal column's native unit.
-            is_datetime: ``True`` if the temporal column is a Datetime type.
+            bin_size_native: Bin width in the time column's native unit.
+            is_datetime: ``True`` if the time column is a Datetime type.
             max_bins: Maximum bins; ``None`` → inferred from data.
             fill_value: Value for empty bins (default ``None`` keeps nulls).
             overlap_rule: Polars aggregation name for conflict resolution.
@@ -1684,7 +1687,7 @@ class SequencePool(
         Args:
             features: Feature(s) to project onto the grid.
             bin_size: Width of each bin.  The expected type depends on the
-                temporal column type:
+                time column type:
 
                 - **Datetime sequences** (``pl.Datetime`` / ``pl.Date``):
                   a duration string parsed by :class:`pandas.Timedelta`;
@@ -1692,7 +1695,7 @@ class SequencePool(
                   ``"30min"``, ``"12h"``, ``"1d"``, ``"90s"``,
                   ``"2h30min"``, ``"1W"``.
                 - **Timestep sequences** (numeric column): an ``int`` or
-                  ``float`` in the same unit as the temporal column.
+                  ``float`` in the same unit as the time column.
                   E.g. if the column holds integer timesteps, ``bin_size=2``
                   produces bins of size 2 timesteps.
             max_bins: Maximum number of bins. Sequences longer than this are
@@ -1728,17 +1731,17 @@ class SequencePool(
         Returns:
             Grid-aligned data in the requested format.
         """
-        valid_features, temporal_cols, id_col = self._validate_discretize_inputs(
+        valid_features, time_cols, id_col = self._validate_discretize_inputs(
             features, overlap_rule
         )
 
         # Build frame once - reused by both _resolve_bin_params and _to_grid_with_axis.
         frame, feat_cols = self._build_entity_frame(
-            valid_features, temporal_cols, id_col, ohe
+            valid_features, time_cols, id_col, ohe
         )
 
         t_min, is_datetime, bin_size_native = self._resolve_bin_params(
-            frame, temporal_cols, bin_size, max_bins
+            frame, time_cols, bin_size, max_bins
         )
 
         lf_binned = self._assign_bins(
@@ -1865,7 +1868,7 @@ class SequencePool(
             context="Cannot extend pools with different ID dtypes.",
         )
         # 2. Temporal schema.
-        self.metadata.assert_temporal_compatible_with(
+        self.metadata.assert_time_index_compatible_with(
             other.metadata,
             alias="other",
             context="Cannot extend pools with different temporal schemas.",
@@ -2134,8 +2137,8 @@ class SequencePool(
         # The temporal schema is fully materialized on disk after a type conversion (e.g.
         # _t_event → _t_start/_t_end).  A temporal cast no longer meaningful.
         cast_for_new = (
-            self._casts.with_fields(temporal=None)
-            if self._casts.temporal is not None
+            self._casts.with_fields(time_index=None)
+            if self._casts.time_index is not None
             else self._casts
         )
         # object.__new__ bypasses target_pool_cls.__init__ (validation, resolution, ...)
@@ -2230,7 +2233,7 @@ class SequencePool(
                 f"anchor must be 'start', 'end', or 'middle', got {anchor!r}"
             )
         new_uuid = self._store._fork_period_to_event(
-            self._virtual_id, anchor, temporal_cast=self._casts.temporal
+            self._virtual_id, anchor, time_index_cast=self._casts.time_index
         )
         new_settings = {
             "id_column": self.settings.id_column,

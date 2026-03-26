@@ -13,7 +13,7 @@ import polars as pl
 from ...base.builder import BaseSequenceVizBuilder
 from ...base.utils import drop_null_labels, rename_id_column, resolve_label
 from ...base.exceptions import UnsupportedSequenceTypeError
-from .data import aggregate_distribution, assign_time_bins, rename_temporal_columns
+from .data import aggregate_distribution, assign_time_bins, rename_time_index_columns
 from .settings import DistributionSettings
 
 if TYPE_CHECKING:
@@ -150,7 +150,7 @@ class DistributionVizBuilder(BaseSequenceVizBuilder, register_name="distribution
         1. Guard: pool type must be ``"state"``.
         2. Guard: ``time_mode="relative"`` is not yet implemented.
         3. Guard: *bin_size* type must match the pool temporal type.
-        4. Rename ID and temporal columns, resolve label, optionally drop nulls.
+        4. Rename ID and time columns, resolve label, optionally drop nulls.
         5. Inject ``__FACET__`` when *facet_by* is set.
         6. Assign time bins (occupancy-based, one collect for global bounds).
         7. Aggregate by ``[__TIME_BIN__, __LABEL__]`` (plus ``__FACET__``)
@@ -183,8 +183,8 @@ class DistributionVizBuilder(BaseSequenceVizBuilder, register_name="distribution
                 "time_mode='relative' is not yet implemented. Use time_mode='absolute'."
             )
 
-        temporal = sequence_or_pool.metadata.temporal
-        is_datetime = temporal.is_datetime
+        ti = sequence_or_pool.metadata.time_index
+        is_datetime = ti.is_datetime
         bin_size = self.settings.aesthetics.bin_size
 
         # bin_size type guard (raises TypeError if incompatible)
@@ -200,7 +200,7 @@ class DistributionVizBuilder(BaseSequenceVizBuilder, register_name="distribution
             )
 
         id_col = sequence_or_pool.settings.id_column
-        temporal_cols = sequence_or_pool.settings.get_temporal_columns()
+        time_cols = sequence_or_pool.settings.get_time_columns()
 
         # Include facet_by in features for entity (non-static) facets
         is_static_facet = self.settings.facet.is_static
@@ -208,9 +208,9 @@ class DistributionVizBuilder(BaseSequenceVizBuilder, register_name="distribution
         if facet_by and not is_static_facet:
             features.append(facet_by)
 
-        lf = sequence_or_pool._sequence_data_lf(features=features)
+        lf = sequence_or_pool._temporal_data_lf(features=features)
         lf = rename_id_column(lf, id_col)
-        lf = rename_temporal_columns(lf, temporal_cols)
+        lf = rename_time_index_columns(lf, time_cols)
         lf = resolve_label(lf, entity_feature)
 
         if drop_na:

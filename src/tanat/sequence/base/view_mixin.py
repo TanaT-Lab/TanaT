@@ -127,20 +127,19 @@ class SequenceViewMixin:
                 static_features=self.settings.static_features,
             )
 
+        # TODO : review code for potential simplification with utilties ...
         # seq_id dtype: from cast recipe if set, else store schema
         seq_id_dtype = self._casts.id
         if seq_id_dtype is None:
             seq_id_dtype = self._store.seq_id_dtype
 
-        seq_lf = self._get_data_from_store(is_static=False)
-        seq_lf = self._apply_masks(seq_lf, is_static=False)
+        sequence_lf = self._get_data_from_store(is_static=False)
+        sequence_lf = self._apply_masks(sequence_lf, is_static=False)
 
-        # Temporal and entity slices from the single assembled LF.
-        temporal_col_names = (
-            self._store.temporal(self._virtual_id).collect_schema().names()
-        )
-        temporal_lf = seq_lf.select(temporal_col_names)
-        entity_lf = seq_lf.select(self.settings.entity_features)
+        # Time index and entity slices from the single assembled LF.
+        ti_colnames = self._store.time_index(self._virtual_id).collect_schema().names()
+        temporal_lf = sequence_lf.select(ti_colnames)
+        entity_lf = sequence_lf.select(self.settings.entity_features)
 
         # Static: casts + masks, then drop ID column directly (rename is useless here).
         static_infos = None
@@ -155,7 +154,7 @@ class SequenceViewMixin:
 
         return SequenceMetadata(
             seq_id=seq_id_dtype,
-            temporal=SequenceMetadata.infer_temporal(temporal_lf),
+            time_index=SequenceMetadata.infer_time_index(temporal_lf),
             entity_features=SequenceMetadata.infer_entity_features(entity_lf),
             static_features=static_infos,
         )
@@ -187,15 +186,15 @@ class SequenceViewMixin:
     # Lazy data access (no collect, for internal consumers)
     # ------------------------------------------------------------------
 
-    def _sequence_data_lf(
+    def _temporal_data_lf(
         self,
         features: list[str] | str | None = None,
     ) -> pl.LazyFrame:
-        """Return sequence data as a :class:`~polars.LazyFrame` without collecting.
+        """Return temporal data as a :class:`~polars.LazyFrame` without collecting.
 
-        Applies masks, column selection and renaming identically to
-        :meth:`sequence_data`, but skips the final ``.collect()`` call.
-        Intended for internal consumers that chain further lazy operations.
+        Applies masks, column selection, and renaming identically to
+        :meth:`temporal_data`, but skips the final ``.collect()`` call.
+        Use this when chaining further lazy operations.
         """
         valid_features = self._resolve_valid_features(features, is_static=False)
         lf = self._get_data_from_store(is_static=False)
@@ -203,16 +202,16 @@ class SequenceViewMixin:
         lf = self._select_columns(lf, valid_features, is_static=False)
         return self._rename_columns(lf, is_static=False)
 
-    def _temporal_data_lf(self) -> pl.LazyFrame:
-        """Return ``id + temporal`` columns as a :class:`~polars.LazyFrame`, masks applied.
+    def _time_index_lf(self) -> pl.LazyFrame:
+        """Return ``id + time index`` columns only as a :class:`~polars.LazyFrame`, masks applied.
 
-        Cheaper than :meth:`_sequence_data_lf` when entity features are not
-        needed.
+        Cheaper than :meth:`_temporal_data_lf` when entity features are not needed.
+        Works regardless of the temporal type (datetime, integer timestep, etc.).
         """
-        lf = self._store.get_temporal_data(
+        lf = self._store.get_id_time_index(
             virtual_id=self._virtual_id,
             id_cast=self._casts.id,
-            temporal_cast=self._casts.temporal,
+            time_index_cast=self._casts.time_index,
         )
         lf = self._apply_masks(lf, is_static=False)
         return self._rename_columns(lf, is_static=False)
@@ -240,17 +239,17 @@ class SequenceViewMixin:
     # ------------------------------------------------------------------
 
     @CachableSettings.cached_method()
-    def _sequence_data_df(
+    def _temporal_data_df(
         self,
         features: list[str] | str | None = None,
     ) -> pl.DataFrame:
-        """Collect and cache sequence data as a Polars DataFrame.
+        """Collect and cache temporal data as a Polars DataFrame.
 
-        Wraps :meth:`_sequence_data_lf` with a final ``.collect()`` and
-        caches the result.  Use :meth:`_sequence_data_lf` when further
+        Wraps :meth:`_temporal_data_lf` with a final ``.collect()`` and
+        caches the result.  Use :meth:`_temporal_data_lf` when further
         lazy operations are needed (e.g. in the visualization layer).
         """
-        return self._sequence_data_lf(features).collect()
+        return self._temporal_data_lf(features).collect()
 
     @CachableSettings.cached_method()
     def _static_data_df(
@@ -321,10 +320,10 @@ class SequenceViewMixin:
                 id_cast=self._casts.id,
                 feature_casts=self._casts.static or None,
             )
-        return self._store.get_sequence_data(
+        return self._store.get_temporal_data(
             virtual_id=self._virtual_id,
             id_cast=self._casts.id,
-            temporal_cast=self._casts.temporal,
+            time_index_cast=self._casts.time_index,
             feature_casts=self._casts.entity or None,
         )
 
@@ -338,7 +337,7 @@ class SequenceViewMixin:
     ) -> pl.DataFrame:
         """Floor lookup: last row where ``start[i] ≤ _T0`` per sequence.
 
-        The comparison **always** uses the first temporal column (``start``),
+        The comparison **always** uses the first time column (``start``),
         regardless of the anchor used to compute ``_T0``.
 
         Rationale: the anchor controls *which edge of a row* is used to
@@ -365,10 +364,11 @@ class SequenceViewMixin:
             Three-column DataFrame ``[id_col, _T0_, _T0_NEAREST_RANK_]``.
         """
         id_col = self.settings.id_column
-        t_col = self.settings.get_temporal_columns()[0]
+        t_col = self.settings.get_time_columns()[0]
 
+        # TODO : refactor to use cheaper methode
         temporal_lf = (
-            self._sequence_data_lf()
+            self._temporal_data_lf()
             .select([id_col, t_col])
             .with_columns(
                 pl.int_range(pl.len()).over(id_col).alias("__rn__"),

@@ -152,7 +152,7 @@ class TestTrajectoryPoolSave:
         reloaded = get_workspace()[store_name]
         cols = (
             reloaded.sequence_pools["intervals"]
-            .sequence_data(output_format="polars")
+            .temporal_data(output_format="polars")
             .columns
         )
         assert "flag_valid" not in cols
@@ -169,7 +169,7 @@ class TestTrajectoryPoolSave:
         reloaded = get_workspace()[store_name]
         schema = (
             reloaded.sequence_pools["intervals"]
-            .sequence_data(output_format="polars")
+            .temporal_data(output_format="polars")
             .schema
         )
         assert schema["status"] == pl.Categorical

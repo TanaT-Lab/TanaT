@@ -10,25 +10,25 @@ import polars as pl
 from ...base.literals import GroupBy
 
 
-def rename_temporal_columns(
+def rename_time_index_columns(
     lf: pl.LazyFrame,
-    temporal_cols: list[str],
+    time_cols: list[str],
 ) -> pl.LazyFrame:
-    """Rename pool temporal columns to internal standard names.
+    """Rename pool time index columns to internal standard names.
 
     - 1 column  -> renamed to ``__TIME__`` (event pool).
     - 2 columns -> first renamed to ``__TIME__``, second to ``__END__`` (interval/state).
 
     Args:
         lf: Input LazyFrame.
-        temporal_cols: List of temporal column names (1 or 2 elements).
+        time_cols: List of time index column names (1 or 2 elements).
 
     Returns:
-        LazyFrame with temporal columns renamed to ``__TIME__`` (and ``__END__``).
+        LazyFrame with time index columns renamed to ``__TIME__`` (and ``__END__``).
     """
-    rename_map: dict[str, str] = {temporal_cols[0]: "__TIME__"}
-    if len(temporal_cols) == 2:
-        rename_map[temporal_cols[1]] = "__END__"
+    rename_map: dict[str, str] = {time_cols[0]: "__TIME__"}
+    if len(time_cols) == 2:
+        rename_map[time_cols[1]] = "__END__"
     return lf.rename(rename_map)
 
 

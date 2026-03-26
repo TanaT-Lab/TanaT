@@ -31,7 +31,7 @@ class VirtualStore:
     The VirtualStore is used by stores (SequenceStore, TrajectoryStore)
     to handle ephemeral feature engineering contexts:
     - Creating / clearing virtual contexts
-    - Temporal overrides (sequence store only, e.g for temporal conversions)
+    - Time-index overrides (sequence store only, e.g. for time-index conversions)
     - Reading / writing virtual feature files
     - Listing virtual feature names
     """
@@ -126,36 +126,36 @@ class VirtualStore:
         """Scans the virtual feature file; returns ``None`` when absent."""
         return scan_if_exists(self._virtual_path(virtual_id, is_static))
 
-    def temporal(self, virtual_id: str) -> pl.LazyFrame | None:
-        """Scan the virtual temporal override for *virtual_id*.
+    def time_index(self, virtual_id: str) -> pl.LazyFrame | None:
+        """Scan the virtual time-index override for *virtual_id*.
 
-        Returns ``None`` when no ``temporal_index.arrow`` has been written
+        Returns ``None`` when no ``time_index.arrow`` has been written
         for this context.
 
         Args:
             virtual_id: Virtual context identifier.
 
         Returns:
-            A :class:`polars.LazyFrame` of the override temporal rows, or
+            A :class:`polars.LazyFrame` of the override time-index rows, or
             ``None`` if absent.
         """
-        path = self._tmp_root / virtual_id / SCH.Files.TEMPORAL_INDEX
+        path = self._tmp_root / virtual_id / SCH.Files.TIME_INDEX
         return scan_if_exists(path)
 
-    def write_temporal(self, virtual_id: str, temporal_lf: pl.LazyFrame) -> None:
-        """Write a temporal override into the virtual context.
+    def write_time_index(self, virtual_id: str, time_index_lf: pl.LazyFrame) -> None:
+        """Write a time-index override into the virtual context.
 
         Creates the context directory if it does not already exist, then
-        writes *temporal_lf* as ``temporal_index.arrow`` inside
+        writes *time_index_lf* as ``time_index.arrow`` inside
         ``tmp/<virtual_id>/``.
 
         Args:
             virtual_id: Virtual context identifier.
-            temporal_lf: LazyFrame containing the new temporal columns.
+            time_index_lf: LazyFrame containing the new time index columns.
         """
         self.create(virtual_id)
-        path = self._tmp_root / virtual_id / SCH.Files.TEMPORAL_INDEX
-        atomic_write(temporal_lf, path)
+        path = self._tmp_root / virtual_id / SCH.Files.TIME_INDEX
+        atomic_write(time_index_lf, path)
 
     # ------------------------------------------------------------------
     # Mutations (add/drop)
@@ -234,7 +234,7 @@ class VirtualStore:
             df: Feature-only DataFrame (no ID column), positionally aligned
                 with the entity rows in the store.
             expected_height: Expected row count (validated against the
-                temporal index length).
+                time index length).
 
         Returns:
             The list of column names written.
@@ -248,7 +248,7 @@ class VirtualStore:
         if input_height != expected_height:
             raise ValueError(
                 f"Dimension Mismatch: Input has {input_height} rows, "
-                f"but temporal index has {expected_height}."
+                f"but time index has {expected_height}."
             )
 
         return self._merge_and_write(virtual_id, lf, is_static=False)

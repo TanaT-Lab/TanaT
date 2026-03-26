@@ -296,7 +296,7 @@
 # name: TestSequencePoolFromFixtures.test_len[timestep-state]
   60
 # ---
-# name: TestSequencePoolFromFixtures.test_sequence_data_schema[datetime-event]
+# name: TestSequencePoolFromFixtures.test_temporal_data_schema[datetime-event]
   dict({
     'duration': Int64,
     'flag_valid': Boolean,
@@ -309,7 +309,7 @@
     'value': Float64,
   })
 # ---
-# name: TestSequencePoolFromFixtures.test_sequence_data_schema[datetime-interval]
+# name: TestSequencePoolFromFixtures.test_temporal_data_schema[datetime-interval]
   dict({
     'duration': Int64,
     'end': Datetime(time_unit='us', time_zone=None),
@@ -323,7 +323,7 @@
     'value': Float64,
   })
 # ---
-# name: TestSequencePoolFromFixtures.test_sequence_data_schema[datetime-state]
+# name: TestSequencePoolFromFixtures.test_temporal_data_schema[datetime-state]
   dict({
     'duration': Int64,
     'end': Datetime(time_unit='us', time_zone=None),
@@ -337,7 +337,7 @@
     'value': Float64,
   })
 # ---
-# name: TestSequencePoolFromFixtures.test_sequence_data_schema[timestep-event]
+# name: TestSequencePoolFromFixtures.test_temporal_data_schema[timestep-event]
   dict({
     'duration': Float64,
     'flag_valid': Boolean,
@@ -349,7 +349,7 @@
     'value': Float64,
   })
 # ---
-# name: TestSequencePoolFromFixtures.test_sequence_data_schema[timestep-interval]
+# name: TestSequencePoolFromFixtures.test_temporal_data_schema[timestep-interval]
   dict({
     'duration': Float64,
     'end': Float64,
@@ -362,7 +362,7 @@
     'value': Float64,
   })
 # ---
-# name: TestSequencePoolFromFixtures.test_sequence_data_schema[timestep-state]
+# name: TestSequencePoolFromFixtures.test_temporal_data_schema[timestep-state]
   dict({
     'duration': Float64,
     'end': Float64,

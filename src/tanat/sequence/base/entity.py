@@ -145,10 +145,10 @@ class Entity(Registrable, ABC):
             A ``list`` of two values ``[start, end]`` for interval-based
             sequences, or a single scalar for event sequences.
         """
-        return self._store.get_temporal_at(
+        return self._store.get_time_at(
             self._id_value,
             self._rank,
-            temporal_cast=self._casts.temporal,
+            time_index_cast=self._casts.time_index,
             id_cast=self._casts.id,
         )
 
@@ -160,7 +160,7 @@ class Entity(Registrable, ABC):
         Access the feature values for this entity as a dictionary.
 
         Only feature columns are returned; the sequence identifier and
-        temporal columns are excluded (use :pyattr:`sequence_id` and
+        time columns are excluded (use :pyattr:`id_value` and
         :pyattr:`temporal_extent` instead).
 
         Args:

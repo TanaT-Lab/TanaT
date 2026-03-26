@@ -32,7 +32,7 @@ def _sentinel_t0(pool_copy):
 def _anchor_for(pool_type: str, anchor: str = "start") -> str | None:
     """Return the anchor value to use, avoiding spurious warnings on event pools.
 
-    Event pools have a single temporal column, anchor is always ignored.
+    Event pools have a single time column, anchor is always ignored.
     To avoid polluting other tests with that warning, return None for event.
     """
     return None if pool_type == "event" else anchor
@@ -220,12 +220,12 @@ class TestFeatureStrategy:
     def test_feature_from_static_column(self, pool_copy, snapshot) -> None:
         """Cast-aligned static feature → set_t0(feature=...) snapshot."""
         id_col = pool_copy.settings.id_column
-        temporal_col = pool_copy.settings.get_temporal_columns()[0]
+        temporal_col = pool_copy.settings.get_time_columns()[0]
 
         # Build a static feature with the correct temporal dtype:
         # take the first temporal value per sequence from sequence_data.
-        # Use the actual Polars dtype from the schema (metadata.temporal.dtype is a str).
-        seq_df = pool_copy.sequence_data(output_format="polars")
+        # Use the actual Polars dtype from the schema (metadata.time_index.dtype is a str).
+        seq_df = pool_copy.temporal_data(output_format="polars")
         actual_temporal_dtype = seq_df.schema[temporal_col]
         t0_static = (
             seq_df.group_by(id_col)

@@ -308,7 +308,7 @@
 # name: TestSequence.test_len[timestep-state]
   8
 # ---
-# name: TestSequence.test_sequence_data[datetime-event]
+# name: TestSequence.test_temporal_data[datetime-event]
   shape: (8, 9)
   ┌─────────────┬────────────┬─────┬─────────────┬───┬─────────┬────────────┬────────────┬───────────┐
   │ duration    ┆ flag_valid ┆ id  ┆ observed_at ┆ … ┆ status  ┆ time       ┆ token_emb  ┆ value     │
@@ -342,7 +342,7 @@
   │             ┆            ┆     ┆             ┆   ┆         ┆            ┆ … 0.66307… ┆           │
   └─────────────┴────────────┴─────┴─────────────┴───┴─────────┴────────────┴────────────┴───────────┘
 # ---
-# name: TestSequence.test_sequence_data[datetime-interval]
+# name: TestSequence.test_temporal_data[datetime-interval]
   shape: (8, 10)
   ┌─────────────┬─────────────┬────────────┬─────┬───┬────────────┬─────────┬────────────┬───────────┐
   │ duration    ┆ end         ┆ flag_valid ┆ id  ┆ … ┆ start      ┆ status  ┆ token_emb  ┆ value     │
@@ -376,7 +376,7 @@
   │             ┆             ┆            ┆     ┆   ┆            ┆         ┆ … 0.66307… ┆           │
   └─────────────┴─────────────┴────────────┴─────┴───┴────────────┴─────────┴────────────┴───────────┘
 # ---
-# name: TestSequence.test_sequence_data[datetime-state]
+# name: TestSequence.test_temporal_data[datetime-state]
   shape: (8, 10)
   ┌─────────────┬─────────────┬────────────┬─────┬───┬────────────┬─────────┬────────────┬───────────┐
   │ duration    ┆ end         ┆ flag_valid ┆ id  ┆ … ┆ start      ┆ status  ┆ token_emb  ┆ value     │
@@ -410,7 +410,7 @@
   │             ┆             ┆            ┆     ┆   ┆            ┆         ┆ … 0.66307… ┆           │
   └─────────────┴─────────────┴────────────┴─────┴───┴────────────┴─────────┴────────────┴───────────┘
 # ---
-# name: TestSequence.test_sequence_data[timestep-event]
+# name: TestSequence.test_temporal_data[timestep-event]
   shape: (8, 8)
   ┌───────────┬────────────┬─────┬───────────────┬─────────┬───────┬─────────────────────┬───────────┐
   │ duration  ┆ flag_valid ┆ id  ┆ response_time ┆ status  ┆ time  ┆ token_emb           ┆ value     │
@@ -439,7 +439,7 @@
   │           ┆            ┆     ┆               ┆         ┆       ┆ 0.59380…            ┆           │
   └───────────┴────────────┴─────┴───────────────┴─────────┴───────┴─────────────────────┴───────────┘
 # ---
-# name: TestSequence.test_sequence_data[timestep-interval]
+# name: TestSequence.test_temporal_data[timestep-interval]
   shape: (8, 9)
   ┌───────────┬────────────┬────────────┬─────┬───┬───────┬─────────┬────────────────┬───────────┐
   │ duration  ┆ end        ┆ flag_valid ┆ id  ┆ … ┆ start ┆ status  ┆ token_emb      ┆ value     │
@@ -472,7 +472,7 @@
   │           ┆            ┆            ┆     ┆   ┆       ┆         ┆ 0.59380…       ┆           │
   └───────────┴────────────┴────────────┴─────┴───┴───────┴─────────┴────────────────┴───────────┘
 # ---
-# name: TestSequence.test_sequence_data[timestep-state]
+# name: TestSequence.test_temporal_data[timestep-state]
   shape: (8, 9)
   ┌───────────┬───────┬────────────┬─────┬───┬───────┬─────────┬─────────────────────────┬───────────┐
   │ duration  ┆ end   ┆ flag_valid ┆ id  ┆ … ┆ start ┆ status  ┆ token_emb               ┆ value     │
@@ -515,7 +515,7 @@
 # name: TestSequencePool.test_len[timestep-state]
   60
 # ---
-# name: TestSequencePool.test_sequence_data_schema[datetime-event]
+# name: TestSequencePool.test_temporal_data_schema[datetime-event]
   dict({
     'duration': Int64,
     'flag_valid': Boolean,
@@ -528,7 +528,7 @@
     'value': Float64,
   })
 # ---
-# name: TestSequencePool.test_sequence_data_schema[datetime-interval]
+# name: TestSequencePool.test_temporal_data_schema[datetime-interval]
   dict({
     'duration': Int64,
     'end': Datetime(time_unit='us', time_zone=None),
@@ -542,7 +542,7 @@
     'value': Float64,
   })
 # ---
-# name: TestSequencePool.test_sequence_data_schema[datetime-state]
+# name: TestSequencePool.test_temporal_data_schema[datetime-state]
   dict({
     'duration': Int64,
     'end': Datetime(time_unit='us', time_zone=None),
@@ -556,7 +556,7 @@
     'value': Float64,
   })
 # ---
-# name: TestSequencePool.test_sequence_data_schema[timestep-event]
+# name: TestSequencePool.test_temporal_data_schema[timestep-event]
   dict({
     'duration': Float64,
     'flag_valid': Boolean,
@@ -568,7 +568,7 @@
     'value': Float64,
   })
 # ---
-# name: TestSequencePool.test_sequence_data_schema[timestep-interval]
+# name: TestSequencePool.test_temporal_data_schema[timestep-interval]
   dict({
     'duration': Float64,
     'end': Float64,
@@ -581,7 +581,7 @@
     'value': Float64,
   })
 # ---
-# name: TestSequencePool.test_sequence_data_schema[timestep-state]
+# name: TestSequencePool.test_temporal_data_schema[timestep-state]
   dict({
     'duration': Float64,
     'end': Float64,
@@ -708,7 +708,7 @@
     5,
   ])
 # ---
-# name: TestTrajectory.test_sub_sequence_data[datetime]
+# name: TestTrajectory.test_sub_temporal_data[datetime]
   shape: (8, 10)
   ┌─────────────┬─────────────┬────────────┬─────┬───┬────────────┬─────────┬────────────┬───────────┐
   │ duration    ┆ end         ┆ flag_valid ┆ id  ┆ … ┆ start      ┆ status  ┆ token_emb  ┆ value     │
@@ -742,7 +742,7 @@
   │             ┆             ┆            ┆     ┆   ┆            ┆         ┆ … 0.66307… ┆           │
   └─────────────┴─────────────┴────────────┴─────┴───┴────────────┴─────────┴────────────┴───────────┘
 # ---
-# name: TestTrajectory.test_sub_sequence_data[timestep]
+# name: TestTrajectory.test_sub_temporal_data[timestep]
   shape: (8, 9)
   ┌───────────┬────────────┬────────────┬─────┬───┬───────┬─────────┬────────────────┬───────────┐
   │ duration  ┆ end        ┆ flag_valid ┆ id  ┆ … ┆ start ┆ status  ┆ token_emb      ┆ value     │

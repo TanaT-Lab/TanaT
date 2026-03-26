@@ -22,14 +22,14 @@ def check_no_reserved_names(
     """Raise ``ValueError`` if any column in *cols* collides with *reserved*.
 
     Used at both the store layer (internal schema names) and the pool layer
-    (user-facing structural names such as the ID or temporal columns).
+    (user-facing structural names such as the ID or time columns).
 
     Args:
         cols: Incoming column names to validate.
         reserved: Set of forbidden names.
         context: Human-readable description of the reserved set, shown in
             the error message (e.g. ``"internal store columns"`` or
-            ``"temporal columns"``).
+            ``"time columns"``).
 
     Raises:
         ValueError: If any name in *cols* is in *reserved*.
