@@ -9,8 +9,9 @@ Both SequenceStore and TrajectoryStore follow the same pattern:
 * Merge at read time via horizontal concatenation.
 * Split physical / virtual at write / drop time.
 
-This mixin extracts that shared logic so concrete stores inherit
-it directly via ``class MyStore(StaticStoreMixin): ...``.
+This mixin extracts that shared logic.  It is a **pure mixin** that
+relies on attributes provided by :class:`BaseStore` (``_root_path``,
+``_virtual``, ``main_index``, ``main_id_col``).
 """
 
 from __future__ import annotations
@@ -36,40 +37,18 @@ class StaticStoreMixin:
     """
     Mixin that manages **static features** (physical + virtual).
 
-    Requirements on the host class
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Expects the host class to provide:
+
     * ``self._root_path: Path``
     * ``self._virtual: VirtualStore``
+    * ``self.main_index: pl.LazyFrame``
+    * ``self.main_id_col: str``
     """
 
     FILE_STATIC_FEATURES: Final[str] = SCH.Files.STATIC_FEATURES
 
     # Physical cache slot
     _phys_static_names: list[str] | None = None
-
-    # ------------------------------------------------------------------
-    # Abstract interface (must be implemented by host class)
-    # ------------------------------------------------------------------
-
-    @property
-    def main_index(self) -> pl.LazyFrame:
-        """Primary ID index (e.g. ``sequence_index`` or ``trajectory_index``)."""
-        property_name = getattr(self, "_MAIN_INDEX_PROPERTY", None)
-        if property_name is None:
-            raise NotImplementedError(
-                f"{type(self).__name__} must define `_MAIN_INDEX_PROPERTY`"
-            )
-        return getattr(self, property_name)
-
-    @property
-    def main_id_col(self) -> str:
-        """Name of the ID column in the main index."""
-        property_name = getattr(self, "_MAIN_ID_PROPERTY", None)
-        if property_name is None:
-            raise NotImplementedError(
-                f"{type(self).__name__} must define `_MAIN_ID_PROPERTY`"
-            )
-        return getattr(self, property_name)
 
     # ------------------------------------------------------------------
     # Static features
