@@ -1628,11 +1628,12 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
                 binning.  All features must be ``Categorical`` or ``Enum``.
             output_format: Format of the returned object:
 
-                - ``"pandas"`` *(default)* / ``"polars"``: **wide** format
-                  with one row per trajectory.  Columns are
-                  ``[id_col, alias_feat_0, alias_feat_1, …]``,
-                  where each ``alias_feat_k`` corresponds to bin *k* of
-                  feature ``feat`` from store ``alias``.
+                - ``"pandas"`` *(default)* / ``"polars"``: **long** format
+                  with ``N × M`` rows.  Columns are
+                  ``[id_col, bin_col, alias1_feat1, alias1_feat2, …]``,
+                  where each ``alias_feat`` column holds the binned values
+                  of feature ``feat`` from store ``alias`` (prefixed by
+                  the alias name).
                 - ``"numpy"``: 3-D :class:`numpy.ndarray` of shape
                   ``(N, M, K)`` where *N* = trajectories (ordered by
                   :attr:`unique_ids`), *M* = bins, *K* = total feature
@@ -1652,7 +1653,6 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             ValueError: If *bin_size* would produce too many bins and
                 *max_bins* is not set.
         """
-        # TODO : fix output format !
         # ------------------------------------------------------------------ #
         # Step 1 - Validate aliases
         # ------------------------------------------------------------------ #
@@ -1721,45 +1721,22 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         # Step 10 - Dispatch output_format
         # ------------------------------------------------------------------ #
         traj_id_col = self.settings.id_column
+        if alias_id_col != traj_id_col:
+            result = result.rename({alias_id_col: traj_id_col})
+
         feat_cols_result = [
-            c for c in result.columns if c not in {alias_id_col, bin_col}
+            c for c in result.columns if c not in {traj_id_col, bin_col}
         ]
 
         if output_format == "numpy":
             arr = result.select(feat_cols_result).to_numpy()  # (N*M, K)
             return arr.reshape(len(traj_ids), max_bins, len(feat_cols_result))
 
-        # Wide pivot: one row per trajectory, columns {alias}_{feat}_{bin_index}.
-        ids_df = result.select(alias_id_col).unique(maintain_order=True)
-        wide = ids_df
-        for feat in feat_cols_result:
-            feat_pivot = result.select([alias_id_col, bin_col, feat]).pivot(
-                values=feat,
-                index=alias_id_col,
-                on=bin_col,
-                aggregate_function="first",
-            )
-            feat_pivot = feat_pivot.rename(
-                {
-                    str(i): f"{feat}_{i}"
-                    for i in range(max_bins)
-                    if str(i) in feat_pivot.columns
-                }
-            )
-            wide = wide.join(feat_pivot, on=alias_id_col, how="left")
-
-        ordered = [alias_id_col] + [
-            f"{feat}_{i}" for feat in feat_cols_result for i in range(max_bins)
-        ]
-        wide = wide.select([c for c in ordered if c in wide.columns])
-        if alias_id_col != traj_id_col:
-            wide = wide.rename({alias_id_col: traj_id_col})
-
         if output_format == "polars":
-            return wide
+            return result
 
         if output_format == "pandas":
-            return wide.to_pandas()
+            return result.to_pandas()
 
         raise ValueError(
             f"Invalid output_format {output_format!r}. "
