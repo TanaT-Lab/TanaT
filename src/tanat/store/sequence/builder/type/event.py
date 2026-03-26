@@ -33,6 +33,7 @@ class EventSequenceStoreBuilder(SequenceStoreBuilder, register_name="event"):
         features: str | list[str],
         time_column: str | None = None,
         is_static: bool = False,
+        **_kw,
     ) -> EventSequenceStoreBuilder:
         """Register an in-memory Polars / Pandas DataFrame."""
         features = [features] if isinstance(features, str) else list(features)
