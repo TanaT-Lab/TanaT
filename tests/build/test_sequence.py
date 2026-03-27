@@ -48,12 +48,12 @@ class TestSequencePoolFromFixtures:
 class TestBuildFromDataFrame:
     """Build each pool type from in-memory DataFrames (polars eager, lazy, pandas)."""
 
-    def test_interval_pool(self, sequence_df_fixture, tmp_path: Path, snapshot) -> None:
+    def test_interval_pool(self, temporal_df_fixture, tmp_path: Path, snapshot) -> None:
         """IntervalSequencePool built from a DataFrame has the expected length and schema."""
         store = (
             IntervalSequencePool.builder()
             .add_dataframe(
-                sequence_df_fixture,
+                temporal_df_fixture,
                 id_column="id",
                 start_column="start",
                 end_column="end",
@@ -65,12 +65,12 @@ class TestBuildFromDataFrame:
         assert len(pool) == snapshot
         assert dict(pool.temporal_data(output_format="polars").schema) == snapshot
 
-    def test_event_pool(self, sequence_df_fixture, tmp_path: Path, snapshot) -> None:
+    def test_event_pool(self, temporal_df_fixture, tmp_path: Path, snapshot) -> None:
         """EventSequencePool built from a DataFrame has the expected length and schema."""
         store = (
             EventSequencePool.builder()
             .add_dataframe(
-                sequence_df_fixture,
+                temporal_df_fixture,
                 id_column="id",
                 time_column="start",
                 features=["value", "status", "flag_valid", "duration"],
@@ -81,12 +81,12 @@ class TestBuildFromDataFrame:
         assert len(pool) == snapshot
         assert dict(pool.temporal_data(output_format="polars").schema) == snapshot
 
-    def test_state_pool(self, sequence_df_fixture, tmp_path: Path, snapshot) -> None:
+    def test_state_pool(self, temporal_df_fixture, tmp_path: Path, snapshot) -> None:
         """StateSequencePool built from a DataFrame has the expected length and schema."""
         store = (
             StateSequencePool.builder()
             .add_dataframe(
-                sequence_df_fixture,
+                temporal_df_fixture,
                 id_column="id",
                 start_column="start",
                 features=["value", "status", "flag_valid", "duration"],
@@ -98,13 +98,13 @@ class TestBuildFromDataFrame:
         assert dict(pool.temporal_data(output_format="polars").schema) == snapshot
 
     def test_with_static(
-        self, static_df_fixture, sequence_data_pl, tmp_path: Path, snapshot
+        self, static_df_fixture, temporal_data_pl, tmp_path: Path, snapshot
     ) -> None:
         """Static schema is exposed after registering static via add_dataframe()."""
         store = (
             IntervalSequencePool.builder()
             .add_dataframe(
-                sequence_data_pl,
+                temporal_data_pl,
                 id_column="id",
                 start_column="start",
                 end_column="end",
@@ -227,13 +227,13 @@ class TestBuilderOptions:
 
     @pytest.mark.parametrize("anchor", ["start", "end", "middle"])
     def test_interval_sort_anchor(
-        self, sequence_data_pl, tmp_path: Path, anchor: str, snapshot
+        self, temporal_data_pl, tmp_path: Path, anchor: str, snapshot
     ) -> None:
         """temporal_data() row order reflects the chosen sort_anchor, locked by snapshot."""
         store = (
             IntervalSequencePool.builder(sort_anchor=anchor)
             .add_dataframe(
-                sequence_data_pl,
+                temporal_data_pl,
                 id_column="id",
                 start_column="start",
                 end_column="end",

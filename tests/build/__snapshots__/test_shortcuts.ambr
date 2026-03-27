@@ -1,0 +1,313 @@
+# serializer version: 1
+# name: TestBuildEvents.test_build_events[pandas_df]
+  35
+# ---
+# name: TestBuildEvents.test_build_events[pandas_df].1
+  dict({
+    'duration': Float64,
+    'end': Float64,
+    'flag_valid': Boolean,
+    'id': Int64,
+    'start': Float64,
+    'status': String,
+    'value': Float64,
+  })
+# ---
+# name: TestBuildEvents.test_build_events[polars_df]
+  35
+# ---
+# name: TestBuildEvents.test_build_events[polars_df].1
+  dict({
+    'duration': Float64,
+    'end': Float64,
+    'flag_valid': Boolean,
+    'id': Int64,
+    'start': Float64,
+    'status': String,
+    'value': Float64,
+  })
+# ---
+# name: TestBuildEvents.test_build_events[polars_lf]
+  35
+# ---
+# name: TestBuildEvents.test_build_events[polars_lf].1
+  dict({
+    'duration': Float64,
+    'end': Float64,
+    'flag_valid': Boolean,
+    'id': Int64,
+    'start': Float64,
+    'status': String,
+    'value': Float64,
+  })
+# ---
+# name: TestBuildEvents.test_build_events_with_static[pandas_df-pandas_df]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+    'is_active': Boolean,
+    'membership_duration': Int64,
+  })
+# ---
+# name: TestBuildEvents.test_build_events_with_static[pandas_df-polars_df]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+    'is_active': Boolean,
+    'membership_duration': Int64,
+  })
+# ---
+# name: TestBuildEvents.test_build_events_with_static[pandas_df-polars_lf]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+    'is_active': Boolean,
+    'membership_duration': Int64,
+  })
+# ---
+# name: TestBuildEvents.test_build_events_with_static[polars_df-pandas_df]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+    'is_active': Boolean,
+    'membership_duration': Int64,
+  })
+# ---
+# name: TestBuildEvents.test_build_events_with_static[polars_df-polars_df]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+    'is_active': Boolean,
+    'membership_duration': Int64,
+  })
+# ---
+# name: TestBuildEvents.test_build_events_with_static[polars_df-polars_lf]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+    'is_active': Boolean,
+    'membership_duration': Int64,
+  })
+# ---
+# name: TestBuildEvents.test_build_events_with_static[polars_lf-pandas_df]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+    'is_active': Boolean,
+    'membership_duration': Int64,
+  })
+# ---
+# name: TestBuildEvents.test_build_events_with_static[polars_lf-polars_df]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+    'is_active': Boolean,
+    'membership_duration': Int64,
+  })
+# ---
+# name: TestBuildEvents.test_build_events_with_static[polars_lf-polars_lf]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+    'is_active': Boolean,
+    'membership_duration': Int64,
+  })
+# ---
+# name: TestBuildIntervals.test_build_intervals[pandas_df]
+  35
+# ---
+# name: TestBuildIntervals.test_build_intervals[pandas_df].1
+  dict({
+    'duration': Float64,
+    'end': Float64,
+    'flag_valid': Boolean,
+    'id': Int64,
+    'start': Float64,
+    'status': String,
+    'value': Float64,
+  })
+# ---
+# name: TestBuildIntervals.test_build_intervals[polars_df]
+  35
+# ---
+# name: TestBuildIntervals.test_build_intervals[polars_df].1
+  dict({
+    'duration': Float64,
+    'end': Float64,
+    'flag_valid': Boolean,
+    'id': Int64,
+    'start': Float64,
+    'status': String,
+    'value': Float64,
+  })
+# ---
+# name: TestBuildIntervals.test_build_intervals[polars_lf]
+  35
+# ---
+# name: TestBuildIntervals.test_build_intervals[polars_lf].1
+  dict({
+    'duration': Float64,
+    'end': Float64,
+    'flag_valid': Boolean,
+    'id': Int64,
+    'start': Float64,
+    'status': String,
+    'value': Float64,
+  })
+# ---
+# name: TestBuildIntervals.test_build_intervals_with_static[pandas_df-pandas_df]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+    'is_active': Boolean,
+    'membership_duration': Int64,
+  })
+# ---
+# name: TestBuildIntervals.test_build_intervals_with_static[pandas_df-polars_df]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+    'is_active': Boolean,
+    'membership_duration': Int64,
+  })
+# ---
+# name: TestBuildIntervals.test_build_intervals_with_static[pandas_df-polars_lf]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+    'is_active': Boolean,
+    'membership_duration': Int64,
+  })
+# ---
+# name: TestBuildIntervals.test_build_intervals_with_static[polars_df-pandas_df]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+    'is_active': Boolean,
+    'membership_duration': Int64,
+  })
+# ---
+# name: TestBuildIntervals.test_build_intervals_with_static[polars_df-polars_df]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+    'is_active': Boolean,
+    'membership_duration': Int64,
+  })
+# ---
+# name: TestBuildIntervals.test_build_intervals_with_static[polars_df-polars_lf]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+    'is_active': Boolean,
+    'membership_duration': Int64,
+  })
+# ---
+# name: TestBuildIntervals.test_build_intervals_with_static[polars_lf-pandas_df]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+    'is_active': Boolean,
+    'membership_duration': Int64,
+  })
+# ---
+# name: TestBuildIntervals.test_build_intervals_with_static[polars_lf-polars_df]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+    'is_active': Boolean,
+    'membership_duration': Int64,
+  })
+# ---
+# name: TestBuildIntervals.test_build_intervals_with_static[polars_lf-polars_lf]
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+    'is_active': Boolean,
+    'membership_duration': Int64,
+  })
+# ---
+# name: TestBuildStates.test_build_states_no_end[pandas_df]
+  35
+# ---
+# name: TestBuildStates.test_build_states_no_end[pandas_df].1
+  dict({
+    'duration': Float64,
+    'end': Float64,
+    'flag_valid': Boolean,
+    'id': Int64,
+    'start': Float64,
+    'status': String,
+    'value': Float64,
+  })
+# ---
+# name: TestBuildStates.test_build_states_no_end[polars_df]
+  35
+# ---
+# name: TestBuildStates.test_build_states_no_end[polars_df].1
+  dict({
+    'duration': Float64,
+    'end': Float64,
+    'flag_valid': Boolean,
+    'id': Int64,
+    'start': Float64,
+    'status': String,
+    'value': Float64,
+  })
+# ---
+# name: TestBuildStates.test_build_states_no_end[polars_lf]
+  35
+# ---
+# name: TestBuildStates.test_build_states_no_end[polars_lf].1
+  dict({
+    'duration': Float64,
+    'end': Float64,
+    'flag_valid': Boolean,
+    'id': Int64,
+    'start': Float64,
+    'status': String,
+    'value': Float64,
+  })
+# ---
+# name: TestBuildStates.test_build_states_with_end
+  2
+# ---
+# name: TestBuildStates.test_build_states_with_end.1
+  dict({
+    'end': Float64,
+    'id': Int64,
+    'start': Float64,
+    'status': String,
+    'value': Int64,
+  })
+# ---
+# name: TestBuildTrajectories.test_build_trajectories
+  35
+# ---
+# name: TestBuildTrajectories.test_build_trajectories_with_static
+  dict({
+    'age': Int64,
+    'group': String,
+    'id': Int64,
+    'is_active': Boolean,
+    'membership_duration': Int64,
+  })
+# ---
