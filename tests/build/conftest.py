@@ -4,9 +4,9 @@ Fixtures specific to the build/ test module.
 
 Provides:
   sqlite_db        : SQLite URI pointing to tables `sequence_data` and `static_data`
-  sequence_data_pl : entity data as a polars DataFrame
-  sequence_data_lf : entity data as a polars LazyFrame
-  sequence_data_pd : entity data as a pandas DataFrame
+  temporal_data_pl : temporal data as a polars DataFrame
+  temporal_data_lf : temporal data as a polars LazyFrame
+  temporal_data_pd : temporal data as a pandas DataFrame
   static_data_pl   : static data as a polars DataFrame
   static_data_lf   : static data as a polars LazyFrame
   static_data_pd   : static data as a pandas DataFrame
@@ -57,23 +57,23 @@ def sqlite_db(tmp_path_factory: pytest.TempPathFactory, data_dir: Path) -> str:
 
 
 @pytest.fixture(scope="session")
-def sequence_data_pl(data_dir: Path) -> pl.DataFrame:
-    """Entity data from timestep/sequence_main.parquet as a polars DataFrame."""
+def temporal_data_pl(data_dir: Path) -> pl.DataFrame:
+    """Temporal data from timestep/sequence_main.parquet as a polars DataFrame."""
     return pl.read_parquet(data_dir / "timestep" / "sequence_main.parquet").select(
         ["id", "start", "end", "value", "status", "flag_valid", "duration"]
     )
 
 
 @pytest.fixture(scope="session")
-def sequence_data_lf(sequence_data_pl: pl.DataFrame) -> pl.LazyFrame:
-    """Entity data as a polars LazyFrame (lazy view of sequence_data_pl)."""
-    return sequence_data_pl.lazy()
+def temporal_data_lf(temporal_data_pl: pl.DataFrame) -> pl.LazyFrame:
+    """Temporal data as a polars LazyFrame (lazy view of temporal_data_pl)."""
+    return temporal_data_pl.lazy()
 
 
 @pytest.fixture(scope="session")
-def sequence_data_pd(sequence_data_pl: pl.DataFrame) -> pd.DataFrame:
-    """Entity data as a pandas DataFrame."""
-    return sequence_data_pl.to_pandas()
+def temporal_data_pd(temporal_data_pl: pl.DataFrame) -> pd.DataFrame:
+    """Temporal data as a pandas DataFrame."""
+    return temporal_data_pl.to_pandas()
 
 
 # ---------------------------------------------------------------------------
@@ -105,14 +105,14 @@ def static_data_pd(static_data_pl: pl.DataFrame) -> pd.DataFrame:
 
 
 @pytest.fixture(params=["pl", "lf", "pd"], ids=["polars_df", "polars_lf", "pandas_df"])
-def sequence_df_fixture(
+def temporal_df_fixture(
     request: pytest.FixtureRequest,
-    sequence_data_pl: pl.DataFrame,
-    sequence_data_lf: pl.LazyFrame,
-    sequence_data_pd: pd.DataFrame,
+    temporal_data_pl: pl.DataFrame,
+    temporal_data_lf: pl.LazyFrame,
+    temporal_data_pd: pd.DataFrame,
 ) -> pl.DataFrame | pl.LazyFrame | pd.DataFrame:
-    """Entity data parametrized over polars DataFrame, polars LazyFrame and pandas DataFrame."""
-    return {"pl": sequence_data_pl, "lf": sequence_data_lf, "pd": sequence_data_pd}[
+    """Temporal data parametrized over polars DataFrame, polars LazyFrame and pandas DataFrame."""
+    return {"pl": temporal_data_pl, "lf": temporal_data_lf, "pd": temporal_data_pd}[
         request.param
     ]
 
