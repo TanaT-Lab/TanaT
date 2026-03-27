@@ -14,6 +14,8 @@ from .type.state.settings import StateSequenceSettings
 from .type.interval.pool import IntervalSequencePool
 from .type.interval.sequence import IntervalSequence
 
+from .shortcuts import build_events, build_intervals, build_states
+
 __all__ = [
     "SequencePool",
     "Sequence",
@@ -24,4 +26,7 @@ __all__ = [
     "StateSequenceSettings",
     "IntervalSequencePool",
     "IntervalSequence",
+    "build_events",
+    "build_intervals",
+    "build_states",
 ]
