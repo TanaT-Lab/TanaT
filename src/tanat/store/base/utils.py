@@ -13,6 +13,70 @@ import pandas as pd
 import polars as pl
 
 
+def get_column_names(
+    df: pl.DataFrame | pl.LazyFrame | pd.DataFrame,
+) -> list[str]:
+    """Return column names without triggering a PerformanceWarning on LazyFrames.
+
+    Args:
+        df: Any supported tabular format.
+
+    Returns:
+        Ordered list of column names.
+    """
+    if isinstance(df, pl.LazyFrame):
+        return df.collect_schema().names()
+    return list(df.columns)
+
+
+def validate_required_columns(
+    df: pl.DataFrame | pl.LazyFrame | pd.DataFrame,
+    required: set[str],
+) -> None:
+    """Raise ``ValueError`` if any column in *required* is missing from *df*.
+
+    Args:
+        df: Input DataFrame or LazyFrame.
+        required: Set of column names that must be present.
+
+    Raises:
+        ValueError: If any column in *required* is absent from *df*.
+    """
+    available = set(get_column_names(df))
+    missing = required - available
+    if missing:
+        raise ValueError(
+            f"The following required columns are missing: "
+            f"{sorted(missing)}. Available: {sorted(available)}."
+        )
+
+
+def infer_features(
+    df: pl.DataFrame | pl.LazyFrame | pd.DataFrame,
+    *,
+    exclude: set[str],
+) -> list[str]:
+    """Return all column names from *df* that are not in *exclude*.
+
+    Args:
+        df: Input DataFrame or LazyFrame.
+        exclude: Structural column names to exclude.
+
+    Returns:
+        Ordered list of feature column names.
+
+    Raises:
+        ValueError: If no feature columns remain after exclusion.
+    """
+    features = [c for c in get_column_names(df) if c not in exclude]
+    if not features:
+        raise ValueError(
+            f"No feature columns found after excluding {sorted(exclude)}. "
+            f"Available columns: {get_column_names(df)}."
+        )
+    return features
+
+
 def check_no_reserved_names(
     cols: list[str],
     reserved: frozenset[str],
