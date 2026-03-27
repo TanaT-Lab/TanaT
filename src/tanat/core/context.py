@@ -8,7 +8,7 @@ from pathlib import Path
 from .workspace import Workspace
 
 _active_ws = None  # pylint: disable=invalid-name
-DEFAULT_PATH = Path.home() / ".tanat_workspace"
+DEFAULT_PATH = Path.home() / ".tanat"
 
 
 def get_workspace():
