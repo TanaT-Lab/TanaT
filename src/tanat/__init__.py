@@ -13,6 +13,9 @@ from .core.workspace import Workspace
 from .sequence.base.pool import SequencePool
 from .trajectory.pool import TrajectoryPool
 
+from .sequence.shortcuts import build_events, build_intervals, build_states
+from .trajectory.shortcuts import build_trajectories
+
 logging.getLogger("tanat").addHandler(logging.NullHandler())
 LOGGER = logging.getLogger(__name__)
 
