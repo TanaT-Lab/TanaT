@@ -6,6 +6,7 @@ from .simulation import (
     simulate_events,
     simulate_intervals,
     simulate_states,
+    simulate_static,
     simulate_trajectories,
 )
 
@@ -14,5 +15,6 @@ __all__ = [
     "simulate_events",
     "simulate_intervals",
     "simulate_states",
+    "simulate_static",
     "simulate_trajectories",
 ]
