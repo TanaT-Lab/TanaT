@@ -236,26 +236,21 @@ class Sequence(
         """Iterate over entities in index order.
 
         Yields one :class:`~tanat.sequence.base.entity.Entity` per row,
-        from rank 0 to ``len(self) - 1``.
-
-        When a row mask is active, the physical indices are resolved in a
-        single :meth:`~polars.Series.arg_true` call (no repeated per-item
-        lookup), matching the O(n) cost of
-        :meth:`~tanat.sequence.base.pool.SequencePool.__iter__`.
+        from rank 0 to ``len(self) - 1``.  Each entity's
+        :pyattr:`~Entity.rank` matches its iteration index.
 
         Example::
 
             for entity in seq:
-                print(entity.temporal_extent, entity.data())
+                print(entity.rank, entity.temporal_extent, entity.data())
         """
-        # TODO : reflexion about physical vs logical rank ..
         if self._row_mask is not None:
-            for physical_rank in self._row_mask.arg_true():
-                yield self._build_entity(int(physical_rank))
+            for logical, physical in enumerate(self._row_mask.arg_true()):
+                yield self._build_entity(int(physical), logical_rank=logical)
         else:
             n = self._store.get_sequence_length(self._id_value, id_cast=self._casts.id)
-            for physical_rank in range(n):
-                yield self._build_entity(physical_rank)
+            for rank in range(n):
+                yield self._build_entity(rank)
 
     def __repr__(self) -> str:
         cls = type(self).__name__
@@ -318,8 +313,9 @@ class Sequence(
     # ------------------------------------------------------------------
 
     def __getitem__(self, rank: int) -> Entity:
-        """
-        Get the Entity at the specified rank within the sequence.
+        """Return the entity at the given position.
+
+        The returned entity satisfies ``entity.rank == rank``.
 
         Args:
             rank: 0-based index. Negative indexing supported.
@@ -336,20 +332,22 @@ class Sequence(
                 f"Entity rank {rank} out of range for sequence of length {len(self)}"
             )
 
-        # Map logical rank → physical row index when row mask is active
         if self._row_mask is not None:
             physical_rank = int(self._row_mask.arg_true()[rank])
-        else:
-            physical_rank = rank
+            return self._build_entity(physical_rank, logical_rank=rank)
 
-        return self._build_entity(physical_rank)
+        return self._build_entity(rank)
 
-    def _build_entity(self, physical_rank: int) -> Entity:
-        """
-        Build an Entity by physical store rank.
+    def _build_entity(
+        self, physical_rank: int, *, logical_rank: int | None = None
+    ) -> Entity:
+        """Build an Entity by physical store rank.
 
         Args:
             physical_rank: 0-based physical row index in the store.
+            logical_rank: 0-based position within the (possibly
+                filtered) sequence view.  ``None`` → same as
+                *physical_rank* (no mask active).
         """
         entity_cls = Entity.get_registered(self.get_registration_name())
         return entity_cls(
@@ -357,6 +355,7 @@ class Sequence(
             rank=physical_rank,
             store=self._store,
             features=self.settings.entity_features,
+            logical_rank=logical_rank,
             cast_recipe=self._casts,
             virtual_id=self._virtual_id,
             parent_metadata=self.metadata,
