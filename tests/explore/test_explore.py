@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from types import MappingProxyType
 
+import polars as pl
 import pytest
 
 from tanat.sequence.base.entity import Entity
@@ -114,6 +115,72 @@ class TestEntity:
         pool = pools_dict[pool_type]
         entity = pool[pool.unique_ids[0]][0]
         assert snapshot == entity.temporal_extent
+
+    def test_rank_matches_index(self, pools_dict: dict, pool_type: str) -> None:
+        """entity.rank equals the index used to retrieve it."""
+        pool = pools_dict[pool_type]
+        seq = pool[pool.unique_ids[0]]
+        for idx in (0, 1, len(seq) - 1):
+            assert seq[idx].rank == idx
+
+    def test_rank_negative_indexing(self, pools_dict: dict, pool_type: str) -> None:
+        """entity.rank is normalised after negative indexing."""
+        pool = pools_dict[pool_type]
+        seq = pool[pool.unique_ids[0]]
+        assert seq[-1].rank == len(seq) - 1
+
+    def test_iter_ranks_are_contiguous(self, pools_dict: dict, pool_type: str) -> None:
+        """Iterating a sequence yields entities with ranks 0..len-1."""
+        pool = pools_dict[pool_type]
+        seq = pool[pool.unique_ids[0]]
+        ranks = [e.rank for e in seq]
+        assert ranks == list(range(len(seq)))
+
+
+# ---------------------------------------------------------------------------
+# Entity rank under row mask
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(params=["interval", "event", "state"])
+def masked_pool(request: pytest.FixtureRequest, pools_dict: dict) -> SequencePool:
+    """A copy of each pool type with a row mask keeping every other row."""
+    pool = pools_dict[request.param].copy()
+    n_rows = pool.temporal_data(output_format="polars").height
+    pool._row_mask = pl.Series([i % 2 == 0 for i in range(n_rows)])
+    pool.clear_cache()
+    return pool
+
+
+class TestEntityRankWithMask:
+    """entity.rank reflects the logical position in a masked sequence."""
+
+    def test_iter_rank_equals_enumerate(self, masked_pool: SequencePool) -> None:
+        """entity.rank matches enumerate index when iterating a masked sequence."""
+        seq = masked_pool[masked_pool.unique_ids[0]]
+        for logical_idx, entity in enumerate(seq):
+            assert entity.rank == logical_idx
+
+    def test_iter_ranks_are_contiguous(self, masked_pool: SequencePool) -> None:
+        """Iterating a masked sequence yields contiguous ranks 0..len-1."""
+        seq = masked_pool[masked_pool.unique_ids[0]]
+        ranks = [e.rank for e in seq]
+        assert ranks == list(range(len(seq)))
+
+    def test_rank_negative_indexing(self, masked_pool: SequencePool) -> None:
+        """entity.rank is normalised after negative indexing."""
+        seq = masked_pool[masked_pool.unique_ids[0]]
+        assert seq[-1].rank == len(seq) - 1
+
+    def test_physical_rank_follows_mask(self, masked_pool: SequencePool) -> None:
+        """_physical_rank matches the even-only positions from the row mask."""
+        seq = masked_pool[masked_pool.unique_ids[0]]
+        physical_ranks = [e._physical_rank for e in seq]
+        # Mask keeps even rows: physical ranks must all be even
+        assert all(r % 2 == 0 for r in physical_ranks)
+        # Physical ranks must be strictly increasing
+        assert physical_ranks == sorted(physical_ranks)
+        assert len(physical_ranks) == len(set(physical_ranks))
 
 
 # ---------------------------------------------------------------------------
