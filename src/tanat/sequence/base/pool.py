@@ -441,10 +441,10 @@ class SequencePool(
 
         name = provided[0]
         strategies_kwargs = {
-            "position": dict(position=position, anchor=anchor),
-            "direct": dict(direct=direct, anchor=anchor),
-            "feature": dict(feature=feature),
-            "query": dict(query=query, anchor=anchor, use_first=use_first),
+            "position": {"position": position, "anchor": anchor},
+            "direct": {"direct": direct},
+            "feature": {"feature": feature},
+            "query": {"query": query, "anchor": anchor, "use_first": use_first},
         }
         setter = T0Setter.get_registered(name)(**strategies_kwargs[name])
         setter.compute(self)  # eager: sets setter._df; errors surface here

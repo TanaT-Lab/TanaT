@@ -24,9 +24,6 @@ class DirectT0Settings:
     """Settings for the direct T0 strategy."""
 
     direct: Any  # T0Value | dict[Any, T0Value]
-    anchor: Literal["start", "end", "middle"] | None = (
-        None  # None = auto-resolve from pool type
-    )
 
 
 class DirectT0Setter(T0Setter, register_name="direct"):
@@ -46,19 +43,18 @@ class DirectT0Setter(T0Setter, register_name="direct"):
         self,
         *,
         direct: T0Value | dict[Any, T0Value],
-        anchor: Literal["start", "end", "middle"] | None = None,
     ):
         if not isinstance(direct, (dict, *_VALID_SCALAR_TYPES)):
             raise TypeError(
                 f"'direct' must be a scalar T0Value (datetime, date, int, float, None) "
                 f"or a per-sequence dict, got {type(direct).__name__}."
             )
-        super().__init__(DirectT0Settings(direct=direct, anchor=anchor))
+        super().__init__(DirectT0Settings(direct=direct))
 
     @property
     def strategy_summary(self) -> str:
-        """e.g. ``'direct, anchor=start'``."""
-        return f"direct, anchor={self.settings.anchor}"
+        """e.g. ``'direct'``."""
+        return "direct (user-provided)"
 
     def _compute_t0(self, target: SequencePool | Sequence, id_col: str) -> pl.LazyFrame:
         direct = self.settings.direct
