@@ -1,0 +1,6 @@
+myst-parser
+sphinx
+pydata-sphinx-theme
+sphinxcontrib-mermaid
+sphinx-gallery
+matplotlib
