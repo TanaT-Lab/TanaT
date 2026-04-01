@@ -1312,14 +1312,14 @@ class SequencePool(
         Cast time columns to Datetime.
 
         Args:
-            unit: The datetime resolution ("s", "ms", "us", "ns").
+            unit: The datetime resolution ("ms", "us", "ns").
                 Default is "us" (microsecond), the Python standard.
             time_zone: Optional timezone string (e.g. "UTC", "Europe/Paris").
         """
         self._check_not_locked("cast_to_datetime")
-        if unit not in ("s", "ms", "us", "ns"):
+        if unit not in ("ms", "us", "ns"):
             raise ValueError(
-                f"Invalid time unit: {unit}. Must be one of 's', 'ms', 'us', 'ns'."
+                f"Invalid time unit: {unit}. Must be one of 'ms', 'us', 'ns'."
             )
         target_dtype = pl.Datetime(unit, time_zone)
         self._store.probe_time_cast(target_dtype)
@@ -1331,16 +1331,17 @@ class SequencePool(
         Cast time columns to numeric-based timesteps.
 
         Args:
-            dtype: The target numeric type (e.g., pl.UInt32, pl.Int64).
-                Default is pl.Int64 for safety.
+            dtype: The target numeric type (e.g., pl.UInt32, pl.Int64,
+                pl.Float64).  Default is pl.Int64 for safety.
 
         Raises:
+            TypeError: If *dtype* is not a numeric type.
             TypeError: If the underlying data is already in Datetime format.
                     (Conversion from Datetime to Timestep is not allowed).
         """
         self._check_not_locked("cast_to_timestep")
-        if not dtype.is_integer():
-            raise TypeError(f"Target dtype must be an integer type, got {dtype}")
+        if not dtype.is_numeric():
+            raise TypeError(f"Target dtype must be a numeric type, got {dtype}")
         if self.metadata.time_index.is_datetime:
             raise TypeError("Conversion from Datetime to Timestep is not supported.")
         self._store.probe_time_cast(dtype)

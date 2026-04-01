@@ -1052,7 +1052,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         re-propagated to every pool on next :attr:`sequence_pools` access.
 
         Args:
-            unit: Datetime resolution (``"s"``, ``"ms"``, ``"us"``, ``"ns"``).
+            unit: Datetime resolution (``"ms"``, ``"us"``, ``"ns"``).
                 Default is ``"us"`` (microsecond).
             time_zone: Optional timezone string (e.g. ``"UTC"``, ``"Europe/Paris"``).
 
@@ -1060,9 +1060,9 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             ValueError: If *unit* is not one of the accepted values.
             TypeError: If the cast is incompatible with the temporal data.
         """
-        if unit not in ("s", "ms", "us", "ns"):
+        if unit not in ("ms", "us", "ns"):
             raise ValueError(
-                f"Invalid time unit: {unit!r}. Must be one of 's', 'ms', 'us', 'ns'."
+                f"Invalid time unit: {unit!r}. Must be one of 'ms', 'us', 'ns'."
             )
         target_dtype = pl.Datetime(unit, time_zone)
         self._store.probe_time_cast(target_dtype)  # one probe - all stores homogeneous
@@ -1082,23 +1082,20 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         re-propagated to every pool on next :attr:`sequence_pools` access.
 
         Args:
-            dtype: Target integer type (e.g. ``pl.UInt32``, ``pl.Int64``).
-                Default is ``pl.Int64``.
+            dtype: Target numeric type (e.g. ``pl.UInt32``, ``pl.Int64``,
+                ``pl.Float64``).  Default is ``pl.Int64``.
 
         Raises:
-            TypeError: If *dtype* is not an integer type, or if the
+            TypeError: If *dtype* is not a numeric type, or if the
                 temporal data is already in Datetime format.
         """
-        if not dtype.is_integer():
-            raise TypeError(f"Target dtype must be an integer type, got {dtype}")
+        if not dtype.is_numeric():
+            raise TypeError(f"Target dtype must be a numeric type, got {dtype}")
         if (
             self.metadata.time_index is not None
             and self.metadata.time_index.is_datetime
         ):
-            raise TypeError(
-                "Temporal data is in Datetime format - "
-                "conversion to timestep is not supported."
-            )
+            raise TypeError("Conversion from Datetime to Timestep is not supported..")
         self._store.probe_time_cast(dtype)  # one probe - all stores homogeneous
         self._casts = self._casts.with_fields(time_index=dtype)
         self._sync_pool_casts()
