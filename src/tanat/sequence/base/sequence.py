@@ -232,6 +232,30 @@ class Sequence(
             return int(self._row_mask.sum())
         return self._store.get_sequence_length(self._id_value, id_cast=self._casts.id)
 
+    def __iter__(self):
+        """Iterate over entities in index order.
+
+        Yields one :class:`~tanat.sequence.base.entity.Entity` per row,
+        from rank 0 to ``len(self) - 1``.
+
+        When a row mask is active, the physical indices are resolved in a
+        single :meth:`~polars.Series.arg_true` call (no repeated per-item
+        lookup), matching the O(n) cost of
+        :meth:`~tanat.sequence.base.pool.SequencePool.__iter__`.
+
+        Example::
+
+            for entity in seq:
+                print(entity.temporal_extent, entity.data())
+        """
+        if self._row_mask is not None:
+            for physical_rank in self._row_mask.arg_true():
+                yield self._build_entity(int(physical_rank))
+        else:
+            n = self._store.get_sequence_length(self._id_value, id_cast=self._casts.id)
+            for physical_rank in range(n):
+                yield self._build_entity(physical_rank)
+
     def __repr__(self) -> str:
         cls = type(self).__name__
         n_entity = len(self.settings.entity_features)
@@ -317,6 +341,15 @@ class Sequence(
         else:
             physical_rank = rank
 
+        return self._build_entity(physical_rank)
+
+    def _build_entity(self, physical_rank: int) -> Entity:
+        """
+        Build an Entity by physical store rank.
+
+        Args:
+            physical_rank: 0-based physical row index in the store.
+        """
         entity_cls = Entity.get_registered(self.get_registration_name())
         return entity_cls(
             id_value=self._id_value,
