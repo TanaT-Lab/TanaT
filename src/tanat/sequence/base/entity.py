@@ -36,18 +36,22 @@ class Entity(Registrable, ABC):
         store: str | Path | SequenceStore,
         features: list[str] | None = None,
         *,
+        logical_rank: int | None = None,
         cast_recipe: SequenceCastRecipe | dict | None = None,
         virtual_id: str | None = None,
         parent_metadata: SequenceMetadata | None = None,
     ) -> None:
-        """Create an entity proxy for row *rank* of sequence *id_value*.
+        """Create an entity proxy for a single row in a sequence.
 
         Args:
             id_value: Sequence identifier this entity belongs to.
-            rank: 0-based row index within the sequence.
+            rank: 0-based row index used for store I/O.
             store: Store path, name, or :class:`SequenceStore` instance.
             features: Visible feature names propagated from the parent
                 :class:`Sequence`.  ``None`` → all store features.
+            logical_rank: 0-based position within the sequence as
+                seen by the user (accounts for filtering/masking).
+                ``None`` → defaults to *rank*.
             cast_recipe: Cast recipe propagated from the parent
                 :class:`Sequence`.  Normalised via
                 :meth:`SequenceCastRecipe.coerce`.
@@ -58,9 +62,9 @@ class Entity(Registrable, ABC):
                 parent pool.  When provided, ``metadata`` returns this
                 directly (no extra I/O).
         """
-        # TODO: reflexion about physical rank vs logical rank (after filtering, masking, ..).
         self._id_value = id_value
-        self._rank = rank
+        self._physical_rank = rank
+        self._logical_rank = logical_rank if logical_rank is not None else rank
         self._store = resolve_store(store)
         # Resolve features if None. Assume provided features are valid for performances
         self._features: list[str] = (
@@ -72,14 +76,14 @@ class Entity(Registrable, ABC):
 
     def __repr__(self) -> str:
         cls = type(self).__name__
-        return f"{cls}(id={self._id_value}, rank={self._rank})"
+        return f"{cls}(id={self._id_value}, rank={self._logical_rank})"
 
     def __str__(self) -> str:
         cls = type(self).__name__
         feature_values = self.data()
         overview = [
             format_kv("Sequence ID", str(self._id_value)),
-            format_kv("Rank", str(self._rank)),
+            format_kv("Rank", str(self._logical_rank)),
         ]
         feature_lines = [
             format_kv(name, str(value)) for name, value in feature_values.items()
@@ -105,8 +109,14 @@ class Entity(Registrable, ABC):
 
     @property
     def rank(self) -> int:
-        """The 0-based position of this entity in its sequence."""
-        return self._rank
+        """0-based position of this entity within its sequence.
+
+        Always matches the index used to retrieve it::
+
+            entity = seq[3]
+            entity.rank  # 3
+        """
+        return self._logical_rank
 
     @property
     def feature_names(self) -> list[str]:
@@ -148,7 +158,7 @@ class Entity(Registrable, ABC):
         """
         return self._store.get_time_at(
             self._id_value,
-            self._rank,
+            self._physical_rank,
             time_index_cast=self._casts.time_index,
             id_cast=self._casts.id,
         )
@@ -173,7 +183,7 @@ class Entity(Registrable, ABC):
         """
         row = self._store.get_entity_row(
             self._id_value,
-            self._rank,
+            self._physical_rank,
             self._virtual_id,
             feature_casts=self._casts.entity or None,
             id_cast=self._casts.id,
