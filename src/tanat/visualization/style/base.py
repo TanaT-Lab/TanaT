@@ -13,13 +13,14 @@ from .axis import XAxisSettings, YAxisSettings
 from .facet import FacetSettings
 from .grid import GridSettings
 from .legend import LegendSettings
+from .title import TitleSettings
 
 
 @dataclass
 class BaseVizSettings:
     """Base settings shared by all visualization builders."""
 
-    title: str | None = None
+    title: TitleSettings = field(default_factory=TitleSettings)
     colors: str | dict | list | None = None  # None -> matplotlib default color cycle
     figsize: tuple[float, float] = (10.0, 5.0)
     # pylint: disable=invalid-field-call
