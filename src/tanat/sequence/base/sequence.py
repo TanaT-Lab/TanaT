@@ -248,6 +248,7 @@ class Sequence(
             for entity in seq:
                 print(entity.temporal_extent, entity.data())
         """
+        # TODO : reflexion about physical vs logical rank ..
         if self._row_mask is not None:
             for physical_rank in self._row_mask.arg_true():
                 yield self._build_entity(int(physical_rank))

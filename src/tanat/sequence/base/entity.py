@@ -58,6 +58,7 @@ class Entity(Registrable, ABC):
                 parent pool.  When provided, ``metadata`` returns this
                 directly (no extra I/O).
         """
+        # TODO: reflexion about physical rank vs logical rank (after filtering, masking, ..).
         self._id_value = id_value
         self._rank = rank
         self._store = resolve_store(store)
