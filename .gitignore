@@ -12,7 +12,9 @@ doc/source/tanat.*.rst
 doc/source/tanat.rst
 doc/source/modules.rst
 doc/source/user-guide/auto_examples/*
+doc/source/user-guide/auto_tutorials/*
 
 # Ignore all auto-generated API documentation except index
 doc/source/reference/api/*
 !doc/source/reference/api/index.rst
+doc/source/sg_execution_times.rst
