@@ -24,7 +24,7 @@ def simulate_trajectories(
     *,
     shared_ids: bool = True,
     seed: int | None = None,
-) -> dict[str, pd.DataFrame | tuple[pd.DataFrame, pd.DataFrame]]:
+) -> dict[str, pd.DataFrame]:
     """Generate synthetic data for multiple sequence types at once.
 
     Convenience wrapper that calls ``simulate_events``,
@@ -36,7 +36,8 @@ def simulate_trajectories(
             config_dict must contain a ``"type"`` key (``"event"``,
             ``"interval"``, or ``"state"``) and may contain any
             keyword accepted by the corresponding ``simulate_*``
-            function.
+            function, including ``features`` to name the entity-level
+            columns.
         shared_ids: When True all generated sequences use the same
             ID space (1..n_ids). When False each sequence gets its
             own independent ID range.
@@ -44,9 +45,12 @@ def simulate_trajectories(
             deterministically when individual configs omit ``seed``.
 
     Returns:
-        Dict of ``{alias: DataFrame_or_tuple}`` matching the input
-        keys, ready to be piped into ``build_*`` and then
+        Dict of ``{alias: DataFrame}`` matching the input keys,
+        ready to be piped into ``build_*`` and then
         ``build_trajectories``.
+
+        Use :func:`~tanat.dataset.simulate_static` separately to
+        generate per-trajectory static data.
 
     Raises:
         ValueError: When ``shared_ids=True`` and ``n_ids`` values
@@ -74,7 +78,7 @@ def simulate_trajectories(
     ss = np.random.SeedSequence(seed)
     child_seeds = ss.spawn(len(sequences))
 
-    result: dict[str, pd.DataFrame | tuple[pd.DataFrame, pd.DataFrame]] = {}
+    result: dict[str, pd.DataFrame] = {}
     for (alias, config), child_seed in zip(sequences.items(), child_seeds):
         config = dict(config)
         seq_type = config.pop("type")
