@@ -41,15 +41,15 @@ def aggregate_rate(
     ``[facet_col, label_col, __VALUE__]``.
     """
     group_cols = [label_col] if facet_col is None else [facet_col, label_col]
-    over_cols = [label_col] if facet_col is None else [facet_col]
+    count_sum = (
+        pl.col("__COUNT__").sum()
+        if facet_col is None
+        else pl.col("__COUNT__").sum().over(facet_col)
+    )
     return (
         lf.group_by(group_cols)
         .agg(pl.len().alias("__COUNT__"))
-        .with_columns(
-            (pl.col("__COUNT__") / pl.col("__COUNT__").sum().over(over_cols)).alias(
-                "__VALUE__"
-            )
-        )
+        .with_columns((pl.col("__COUNT__") / count_sum).alias("__VALUE__"))
         .drop("__COUNT__")
     )
 
