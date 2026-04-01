@@ -53,13 +53,30 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
     # Chainable configuration: figure layout
     # ------------------------------------------------------------------
 
-    def title(self, text: str) -> BaseSequenceVizBuilder:
+    def title(
+        self,
+        text: str,
+        *,
+        fontsize: int | None = None,
+        fontweight: str | None = None,
+        pad: float | None = None,
+    ) -> BaseSequenceVizBuilder:
         """Set the figure title. Chainable.
 
         Args:
             text: Title string displayed above the chart.
+            fontsize: Font size in points. ``None`` uses the matplotlib default.
+            fontweight: Font weight, e.g. ``"bold"`` or ``"normal"``.
+            pad: Spacing between the title and the chart in points.
         """
-        self.update_settings(title=text)
+        patch: dict = {"text": text}
+        if fontsize is not None:
+            patch["fontsize"] = fontsize
+        if fontweight is not None:
+            patch["fontweight"] = fontweight
+        if pad is not None:
+            patch["pad"] = pad
+        self.update_settings(title=patch)
         return self
 
     def figsize(self, width: float, height: float) -> BaseSequenceVizBuilder:
@@ -402,6 +419,7 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
             sharex=f.share_x,
             sharey=f.share_y,
             squeeze=False,
+            layout="constrained",
         )
         axes_flat = axes.flatten().tolist()
 
@@ -447,8 +465,12 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
             axes_flat[i].axis("off")
 
         # 7 ─ Figure-level decorations
-        if self.settings.title:
-            fig.suptitle(self.settings.title, y=1.01)
+        if self.settings.title.text:
+            fig.suptitle(
+                self.settings.title.text,
+                fontsize=self.settings.title.fontsize,
+                fontweight=self.settings.title.fontweight,
+            )
 
         if self.settings.legend.show and legend_handles:
             fig.legend(
@@ -459,9 +481,10 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
                 title=self.settings.legend.title,
                 frameon=True,
             )
-            fig.subplots_adjust(right=0.85)
+            # constrained_layout handles the right margin automatically
 
-        plt.tight_layout()
+        # constrained_layout (set at figure creation) handles all spacing,
+        # including suptitle — no tight_layout() call needed.
         return VisualizationResult(fig)
 
     # ------------------------------------------------------------------
@@ -530,8 +553,13 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
         """Apply common axis styling from settings."""
         s = self.settings
 
-        if s.title:
-            ax.set_title(s.title)
+        if s.title.text:
+            ax.set_title(
+                s.title.text,
+                fontsize=s.title.fontsize,
+                fontweight=s.title.fontweight,
+                pad=s.title.pad,
+            )
 
         if s.grid.show:
             ax.set_axisbelow(True)
