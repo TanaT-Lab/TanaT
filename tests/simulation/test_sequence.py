@@ -13,7 +13,12 @@ import pandas as pd
 import pytest
 
 from tanat import build_events, build_intervals, build_states
-from tanat.dataset import simulate_events, simulate_intervals, simulate_states
+from tanat.dataset import (
+    simulate_events,
+    simulate_intervals,
+    simulate_states,
+    simulate_static,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -45,23 +50,15 @@ class TestSimulateEvents:
         df = simulate_events(n_ids=50, seed=42)
         assert df["id"].nunique() == 50
 
-    def test_with_static_returns_tuple(self) -> None:
-        """Returns a (temporal, static) tuple when static_features is set."""
-        result = simulate_events(n_ids=50, static_features=2, seed=42)
-        assert isinstance(result, tuple)
-        assert len(result) == 2
-        temporal, static = result
-        assert isinstance(temporal, pd.DataFrame)
+    def test_with_static_via_simulate_static(self) -> None:
+        """simulate_static generates a separate static DataFrame."""
+        static = simulate_static(n_ids=50, features=2, seed=42)
         assert isinstance(static, pd.DataFrame)
-
-    def test_with_static_columns(self) -> None:
-        """Static DataFrame has id + auto-named static feature columns."""
-        _, static = simulate_events(n_ids=50, static_features=2, seed=42)
         assert set(static.columns) == {"id", "s_0", "s_1"}
 
-    def test_with_static_id_count(self) -> None:
+    def test_static_id_count(self) -> None:
         """Static DataFrame has exactly n_ids rows (one per ID)."""
-        _, static = simulate_events(n_ids=50, static_features=2, seed=42)
+        static = simulate_static(n_ids=50, features=2, seed=42)
         assert len(static) == 50
         assert static["id"].nunique() == 50
 
@@ -146,7 +143,7 @@ class TestFeatureGeneration:
         """Explicit feature names produce correctly named columns."""
         df = simulate_events(
             n_ids=10,
-            entity_features=["score", "status", "flag"],
+            features=["score", "status", "flag"],
             seed=0,
         )
         assert "score" in df.columns
@@ -157,7 +154,7 @@ class TestFeatureGeneration:
         """Type cycling: position 0 -> float64, 1 -> string, 2 -> bool."""
         df = simulate_events(
             n_ids=10,
-            entity_features=["score", "status", "flag"],
+            features=["score", "status", "flag"],
             seed=0,
         )
         assert df["score"].dtype == np.float64
@@ -166,10 +163,9 @@ class TestFeatureGeneration:
 
     def test_named_static_features(self) -> None:
         """Explicit static feature names appear in the static DataFrame."""
-        _, static = simulate_states(
+        static = simulate_static(
             n_ids=10,
-            entity_features=2,
-            static_features=["age", "group"],
+            features=["age", "group"],
             seed=0,
         )
         assert set(static.columns) == {"id", "age", "group"}
