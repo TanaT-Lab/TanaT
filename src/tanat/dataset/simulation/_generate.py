@@ -6,7 +6,6 @@ from __future__ import annotations
 from datetime import datetime
 
 import numpy as np
-import pandas as pd
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -79,28 +78,6 @@ def _generate_features(
         else:  # boolean
             result[name] = rng.random(n) > 0.5
     return result
-
-
-def _build_static(
-    ids: np.ndarray,
-    static_features: int | list[str],
-    rng: np.random.Generator,
-) -> pd.DataFrame:
-    """Build the static features DataFrame.
-
-    Args:
-        ids: Array of unique IDs (length = n_ids).
-        static_features: Feature count or name list.
-        rng: NumPy random generator.
-
-    Returns:
-        DataFrame with ``id`` plus one column per static feature.
-    """
-    names = _resolve_feature_names(static_features, prefix="s")
-    typed = _assign_feature_types(names)
-    data: dict[str, np.ndarray] = {"id": ids}
-    data.update(_generate_features(len(ids), typed, rng))
-    return pd.DataFrame(data)
 
 
 # ---------------------------------------------------------------------------
@@ -251,7 +228,6 @@ def _sample_state_times(
     """
     lo = _to_us(time_range[0])
     hi = _to_us(time_range[1])
-    hi_end = _to_us(time_range[1])
     d_lo = duration_range[0] * _DAY_US
     d_hi = duration_range[1] * _DAY_US
     total = int(lengths.sum())
@@ -269,7 +245,7 @@ def _sample_state_times(
             current = current + dur
             e_arr[k] = current
         s_arr[length - 1] = current
-        e_arr[length - 1] = hi_end
+        e_arr[length - 1] = hi
         starts_raw[offset : offset + length] = s_arr
         ends_raw[offset : offset + length] = e_arr
         offset += length
@@ -280,24 +256,40 @@ def _sample_state_times(
 
 
 # ---------------------------------------------------------------------------
-# Return-type helper
+# Sequence preparation helper
 # ---------------------------------------------------------------------------
 
 
-def _maybe_with_static(
-    temporal: pd.DataFrame,
-    static: pd.DataFrame | None,
-) -> pd.DataFrame | tuple[pd.DataFrame, pd.DataFrame]:
-    """Return temporal alone or a ``(temporal, static)`` tuple.
+def _prepare_sequence(
+    n_ids: int,
+    seq_length_range: tuple[int, int],
+    features: int | list[str],
+    time_range: tuple[datetime, datetime] | None,
+    seed: int | None,
+) -> tuple[
+    np.random.Generator,
+    tuple[datetime, datetime],
+    np.ndarray,
+    np.ndarray,
+    dict[str, np.ndarray],
+]:
+    """Common setup shared by all ``simulate_*`` functions.
 
     Args:
-        temporal: Temporal DataFrame.
-        static: Static DataFrame, or None.
+        n_ids: Number of distinct sequence IDs.
+        seq_length_range: (min, max) rows per ID.
+        features: Feature count or name list.
+        time_range: Optional (start, end) datetime bounds.
+        seed: Random seed.
 
     Returns:
-        The temporal DataFrame when ``static`` is ``None``, otherwise a
-        ``(temporal, static)`` tuple.
+        Tuple of ``(rng, time_range, id_col, lengths, feat_data)``.
     """
-    if static is None:
-        return temporal
-    return temporal, static
+    rng = np.random.default_rng(seed)
+    tr = time_range if time_range is not None else _DEFAULT_TIME_RANGE
+    ids = np.arange(1, n_ids + 1, dtype=np.int64)
+    lengths = _sample_lengths(n_ids, seq_length_range, rng)
+    id_col = np.repeat(ids, lengths)
+    typed = _assign_feature_types(_resolve_feature_names(features, prefix="f"))
+    feat_data = _generate_features(int(lengths.sum()), typed, rng)
+    return rng, tr, id_col, lengths, feat_data
