@@ -319,6 +319,36 @@ class SequenceViewMixin:
     # T0 / Zeroing
     # ------------------------------------------------------------------
 
+    def _nearest_rank_lf(self, t0_lf: pl.LazyFrame) -> pl.LazyFrame:
+        """Lazy floor lookup: ``[id_col, _T0_NEAREST_RANK_]`` from ``[id_col, _T0_]``.
+
+        Returns a LazyFrame; the caller decides when to collect.
+
+        The comparison always uses the first time column (``start``) — see
+        :meth:`_resolve_nearest_rank` for the rationale.
+
+        Args:
+            t0_lf: Two-column LazyFrame ``[id_col, _T0_]``.
+
+        Returns:
+            Two-column LazyFrame ``[id_col, _T0_NEAREST_RANK_]`` (raw max agg,
+            no null-handling applied).  Call :meth:`_resolve_nearest_rank` for
+            the full three-case null-handling logic.
+        """
+        id_col = self.settings.id_column
+        t_col = self.settings.get_time_columns()[0]
+        temporal_lf = (
+            self._id_time_index_lf()
+            .select([id_col, t_col])
+            .with_columns(pl.int_range(pl.len()).over(id_col).alias("__rn__"))
+        )
+        return (
+            temporal_lf.join(t0_lf.select([id_col, _T0]), on=id_col)
+            .filter(pl.col(t_col) <= pl.col(_T0))
+            .group_by(id_col)
+            .agg(pl.col("__rn__").max().alias(_T0_NEAREST_RANK))
+        )
+
     def _resolve_nearest_rank(
         self,
         t0_df: pl.DataFrame,
@@ -352,21 +382,7 @@ class SequenceViewMixin:
             Three-column DataFrame ``[id_col, _T0_, _T0_NEAREST_RANK_]``.
         """
         id_col = self.settings.id_column
-        t_col = self.settings.get_time_columns()[0]
-
-        temporal_lf = (
-            self._id_time_index_lf()
-            .select([id_col, t_col])
-            .with_columns(
-                pl.int_range(pl.len()).over(id_col).alias("__rn__"),
-            )
-        )
-        rank_lf = (
-            temporal_lf.join(t0_df.lazy().select([id_col, _T0]), on=id_col)
-            .filter(pl.col(t_col) <= pl.col(_T0))
-            .group_by(id_col)
-            .agg(pl.col("__rn__").max().alias(_T0_NEAREST_RANK))
-        )
+        rank_lf = self._nearest_rank_lf(t0_df.lazy())
         return (
             t0_df.lazy()
             .join(rank_lf, on=id_col, how="left")
