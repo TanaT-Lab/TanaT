@@ -370,6 +370,19 @@ class SequenceViewMixin:
         return (
             t0_df.lazy()
             .join(rank_lf, on=id_col, how="left")
-            .with_columns(pl.col(_T0_NEAREST_RANK).cast(pl.Int32))
+            .with_columns(
+                # Three cases:
+                #   _T0_ null                        → null  (T0 unknown)
+                #   _T0_ set, floor found            → floor rank (last row ≤ T0)
+                #   _T0_ set, all data after T0      → 0     (first row is nearest)
+                pl.when(pl.col(_T0).is_null())
+                .then(pl.lit(None, dtype=pl.UInt32))
+                .otherwise(
+                    pl.col(_T0_NEAREST_RANK)
+                    .fill_null(pl.lit(0, dtype=pl.UInt32))
+                    .cast(pl.UInt32)
+                )
+                .alias(_T0_NEAREST_RANK)
+            )
             .collect()
         )
