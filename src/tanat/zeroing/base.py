@@ -170,8 +170,8 @@ class T0Setter(ABC, Registrable):
             cols:   Time column names from
                     ``target.settings.get_time_columns()``.
                     Single-element list (event) → anchor is ignored.
-            is_datetime: Flag from ``target.metadata.is_datetime``. Controls
-                    the midpoint formula when ``anchor == "middle"``:
+            is_datetime: Flag from ``target.metadata.time_index.is_datetime``.
+                    Controls the midpoint formula when ``anchor == "middle"``:
 
                     * ``True`` (default): ``start + (end - start) / 2``.
                       Required because Polars forbids adding two absolute

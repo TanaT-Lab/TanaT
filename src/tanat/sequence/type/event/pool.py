@@ -159,7 +159,7 @@ class EventSequencePool(SequencePool, register_name="event"):
         if isinstance(duration, str):
             self.settings.validate_features([duration], is_static=False)
             # Type check: the feature column must be compatible with the time index
-            if self.metadata.is_datetime:
+            if self.metadata.time_index.is_datetime:
                 if not self.metadata.is_duration_feature(duration):
                     got = self.metadata.feature_info(duration).dtype
                     raise TypeError(
@@ -176,13 +176,13 @@ class EventSequencePool(SequencePool, register_name="event"):
                         f"Got: {got}."
                     )
         elif isinstance(duration, (int, float)):
-            if self.metadata.is_datetime:
+            if self.metadata.time_index.is_datetime:
                 raise ValueError(
                     "Numeric duration is not valid for datetime time index. "
                     "Use a timedelta or an entity feature column instead."
                 )
         elif isinstance(duration, timedelta):
-            if not self.metadata.is_datetime:
+            if not self.metadata.time_index.is_datetime:
                 raise ValueError(
                     "Timedelta duration is not valid for numeric time index. "
                     "Use a numeric scalar or an entity feature column instead."
@@ -226,7 +226,7 @@ class EventSequencePool(SequencePool, register_name="event"):
         """
         if isinstance(end_value, str):
             self.settings.validate_features([end_value], is_static=True)
-            if self.metadata.is_datetime:
+            if self.metadata.time_index.is_datetime:
                 if not self.metadata.is_datetime_feature(end_value, is_static=True):
                     got = self.metadata.feature_info(end_value, is_static=True).dtype
                     raise TypeError(

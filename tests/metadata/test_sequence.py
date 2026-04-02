@@ -102,7 +102,7 @@ class TestSequenceMetadataHelpers:
         'observed_at' is a native Datetime[us] column from sequence_main.parquet;
         it is absent from timestep pools where no datetime columns are ingested.
         """
-        if not pools_dict[pool_type].metadata.is_datetime:
+        if not pools_dict[pool_type].metadata.time_index.is_datetime:
             pytest.skip("observed_at only present in datetime pools")
         fi = pools_dict[pool_type].metadata.feature_info("observed_at")
         assert isinstance(fi, TemporalInfo)
@@ -149,7 +149,7 @@ class TestSequencePoolCast:
     ) -> None:
         """cast_to_timestep raises TypeError on a datetime pool."""
         pool = pools_dict[pool_type]
-        if not pool.metadata.is_datetime:
+        if not pool.metadata.time_index.is_datetime:
             pytest.skip("only applies to datetime pools")
         with pytest.raises(TypeError):
             pool.copy().cast_to_timestep(pl.Int64)
@@ -228,24 +228,24 @@ class TestSequencePoolCastPropagation:
         self, pools_dict: dict, pool_type: str
     ) -> None:
         """cast_to_datetime('ms') → Sequence metadata reflects the new unit."""
-        if not pools_dict[pool_type].metadata.is_datetime:
+        if not pools_dict[pool_type].metadata.time_index.is_datetime:
             pytest.skip("only applies to datetime pools")
         pool = pools_dict[pool_type].copy()
         pool.cast_to_datetime("ms")
         seq = pool[pool.unique_ids[0]]
-        assert seq.metadata.is_datetime
+        assert seq.metadata.time_index.is_datetime
         assert seq.metadata.time_index.unit == "ms"
 
     def test_cast_to_timestep_propagates(
         self, pools_dict: dict, pool_type: str
     ) -> None:
         """cast_to_timestep → Sequence metadata reflects non-datetime temporal type."""
-        if pools_dict[pool_type].metadata.is_datetime:
+        if pools_dict[pool_type].metadata.time_index.is_datetime:
             pytest.skip("only applies to timestep pools")
         pool = pools_dict[pool_type].copy()
         pool.cast_to_timestep(pl.Int64)
         seq = pool[pool.unique_ids[0]]
-        assert not seq.metadata.is_datetime
+        assert not seq.metadata.time_index.is_datetime
 
     def test_chained_features_propagates(
         self, pools_dict: dict, pool_type: str

@@ -51,7 +51,7 @@ class PositionT0Setter(T0Setter, register_name="position"):
         pos = self.settings.position
         cols = target.settings.get_time_columns()
         t_expr = self._t0_temporal_expr(
-            self.settings.anchor, cols, target.metadata.is_datetime
+            self.settings.anchor, cols, target.metadata.time_index.is_datetime
         )
         # pylint: disable=protected-access
         lf = target._id_time_index_lf().select(id_col, t_expr.alias(_T0))

@@ -349,11 +349,6 @@ class SequenceMetadata:
 
         return [name for name in other_feats if name not in self_feats]
 
-    @property
-    def is_datetime(self) -> bool:
-        """Returns ``True`` if the time index is a Datetime type."""
-        return self.time_index.is_datetime
-
     def feature_info(self, name: str, is_static: bool = False) -> FeatureInfo | None:
         """Return the :class:`~tanat.metadata.feature.FeatureInfo` for *name*, or ``None``.
 

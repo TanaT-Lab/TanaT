@@ -98,7 +98,7 @@ class TestTrajectoryPoolCastPropagation:
         pool = traj_pool.copy()
         pool.cast_to_datetime("ms")
         for seq_pool in pool.sequence_pools.values():
-            assert seq_pool.metadata.is_datetime
+            assert seq_pool.metadata.time_index.is_datetime
             assert seq_pool.metadata.time_index.unit == "ms"
 
     def test_cast_to_timestep_propagates(self, traj_pool: TrajectoryPool) -> None:
@@ -108,7 +108,7 @@ class TestTrajectoryPoolCastPropagation:
         pool = traj_pool.copy()
         pool.cast_to_timestep(pl.Int64)
         for seq_pool in pool.sequence_pools.values():
-            assert not seq_pool.metadata.is_datetime
+            assert not seq_pool.metadata.time_index.is_datetime
 
 
 # ---------------------------------------------------------------------------

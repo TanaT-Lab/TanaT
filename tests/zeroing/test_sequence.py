@@ -24,7 +24,7 @@ def _sentinel_t0(pool_copy):
     - datetime pools → datetime(2000, 6, 1)
     - timestep pools → 42.0
     """
-    if pool_copy.metadata.is_datetime:
+    if pool_copy.metadata.time_index.is_datetime:
         return datetime(2000, 6, 1)
     return 42.0
 

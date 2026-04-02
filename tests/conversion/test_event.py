@@ -28,12 +28,12 @@ from tanat.zeroing import _T0
 
 def _duration(pool: EventSequencePool):
     """Return the right duration type for a given pool's temporal variant."""
-    return timedelta(days=7) if pool.metadata.is_datetime else 7.0
+    return timedelta(days=7) if pool.metadata.time_index.is_datetime else 7.0
 
 
 def _sentinel(pool: EventSequencePool):
     """Return a closed-end sentinel compatible with the pool's temporal variant."""
-    return datetime(2200, 12, 31) if pool.metadata.is_datetime else 99999.0
+    return datetime(2200, 12, 31) if pool.metadata.time_index.is_datetime else 99999.0
 
 
 # ---------------------------------------------------------------------------
@@ -104,7 +104,7 @@ class TestEventPoolAsInterval:
         On timestep pools the column is already numeric.
         """
         pool = pools_dict["event"].copy()
-        if pool.metadata.is_datetime:
+        if pool.metadata.time_index.is_datetime:
             pool.cast_features({"duration": pl.Duration("ms")})
         converted = pool.as_interval(duration="duration")
         assert isinstance(converted, IntervalSequencePool)
@@ -121,7 +121,7 @@ class TestEventPoolAsInterval:
         because a plain integer column is neither a timedelta nor a Duration column.
         """
         pool = pools_dict["event"]
-        if not pool.metadata.is_datetime:
+        if not pool.metadata.time_index.is_datetime:
             pytest.skip("Int64 guard-rail only applies to datetime pools")
         with pytest.raises(TypeError):
             pool.as_interval(duration="duration")

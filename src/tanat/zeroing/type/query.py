@@ -65,7 +65,7 @@ class QueryT0Setter(T0Setter, register_name="query"):
         id_col = target.settings.id_column
         cols = target.settings.get_time_columns()
         t_expr = self._t0_temporal_expr(
-            self.settings.anchor, cols, target.metadata.is_datetime
+            self.settings.anchor, cols, target.metadata.time_index.is_datetime
         )
         # Full temporal data (time cols + entity features), masks applied.
         # Row numbers are stable within each sequence (physical order preserved).
