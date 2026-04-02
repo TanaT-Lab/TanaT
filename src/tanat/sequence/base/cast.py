@@ -56,6 +56,43 @@ class SequenceCastRecipe:
         """
         return replace(self, **kwargs)
 
+    def append(
+        self,
+        *,
+        # pylint: disable=redefined-builtin
+        id: pl.DataType | None = None,
+        time_index: pl.DataType | None = None,
+        entity: dict[str, pl.DataType] | None = None,
+        static: dict[str, pl.DataType] | None = None,
+    ) -> SequenceCastRecipe:
+        """Return a new recipe with new dtype steps appended to existing pipelines.
+
+        Example::
+
+            recipe = recipe.append(id=pl.Utf8)
+            recipe = recipe.append(entity={"value": pl.Float32, "score": pl.Int64})
+        """
+        new_id = [*self.id, id] if id is not None else self.id
+        new_ti = (
+            [*self.time_index, time_index]
+            if time_index is not None
+            else self.time_index
+        )
+
+        new_entity = dict(self.entity)
+        if entity:
+            for col, dt in entity.items():
+                new_entity[col] = [*new_entity.get(col, []), dt]
+
+        new_static = dict(self.static)
+        if static:
+            for col, dt in static.items():
+                new_static[col] = [*new_static.get(col, []), dt]
+
+        return replace(
+            self, id=new_id, time_index=new_ti, entity=new_entity, static=new_static
+        )
+
     def copy(self) -> SequenceCastRecipe:
         """Returns a deep copy (all nested containers are new objects)."""
         return self.replace(
