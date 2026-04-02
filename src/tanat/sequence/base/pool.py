@@ -344,8 +344,8 @@ class SequencePool(
         df = self._t0_setter.df
         if df is None:
             # No explicit set_t0() yet: trigger default (position=0) lazily.
-            # compute(self) uses _temporal_data_lf() → already respects _id_mask.
-            self._t0_setter.compute(self)
+            # compute_from_sequence(self) uses _temporal_data_lf() → already respects _id_mask.
+            self._t0_setter.compute_from_sequence(self)
             df = self._t0_setter.df
         elif self._id_mask is not None:
             # Pre-computed df may contain IDs no longer in view: filter now.
@@ -447,7 +447,9 @@ class SequencePool(
             "query": {"query": query, "anchor": anchor, "use_first": use_first},
         }
         setter = T0Setter.get_registered(name)(**strategies_kwargs[name])
-        setter.compute(self)  # eager: sets setter._df; errors surface here
+        setter.compute_from_sequence(
+            self
+        )  # eager: sets setter._df; errors surface here
         self._t0_setter = setter
 
         self.clear_cache()

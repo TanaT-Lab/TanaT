@@ -87,7 +87,7 @@ class T0Setter(ABC, Registrable):
         anchor = None if is_event else "start"
         return cls.get_registered("position")(anchor=anchor)
 
-    def compute(self, target: SequencePool | Sequence) -> pl.DataFrame:
+    def compute_from_sequence(self, target: SequencePool | Sequence) -> pl.DataFrame:
         """Compute T0 and store the result in :attr:`df`.
 
         Template method. Handles the shared steps for every strategy:

@@ -178,7 +178,7 @@ class Sequence(
         if self._parent_pool is not None:
             return self._parent_pool._t0_setter
         setter = T0Setter.default(is_event=self.get_registration_name() == "event")
-        setter.compute(self)
+        setter.compute_from_sequence(self)
         return setter
 
     @CachableSettings.cached_property
