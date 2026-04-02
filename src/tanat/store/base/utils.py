@@ -301,26 +301,3 @@ def probe_cast(
         raise TypeError(
             f"Cast validation failed on {n_rows}-row sample " f"({cols_desc}): {exc}"
         ) from exc
-
-
-def cast_columns_in_file(path: Path, schema: dict[str, pl.DataType | type]) -> bool:
-    """
-    Casts columns in an IPC file on disk.
-
-    Columns not present in the file are silently ignored.
-
-    Returns:
-        ``True`` if the file was modified, ``False`` otherwise.
-    """
-    if not path.exists() or not schema:
-        return False
-
-    lf = pl.scan_ipc(path)
-    existing = set(lf.collect_schema().names())
-    params = [pl.col(c).cast(dt) for c, dt in schema.items() if c in existing]
-
-    if not params:
-        return False
-
-    atomic_write(lf.with_columns(params), path)
-    return True
