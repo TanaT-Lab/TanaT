@@ -150,10 +150,9 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
             all_aliases = [a for a in all_aliases if a in self._alias_mask]
         # Keep only aliases where this trajectory is actually present
         traj_idx = self._store.trajectory_index
-        if self._casts.id is not None:
-            traj_idx = traj_idx.with_columns(
-                pl.col(self._store.traj_id_col).cast(self._casts.id)
-            )
+        id_caster = self._casts.id_caster()
+        if id_caster is not None:
+            traj_idx = traj_idx.with_columns(id_caster(pl.col(self._store.traj_id_col)))
         row = traj_idx.filter(
             pl.col(self._store.traj_id_col) == self._id_value
         ).collect()
