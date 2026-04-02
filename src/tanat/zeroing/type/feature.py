@@ -13,6 +13,7 @@ from ..base import T0Setter, _T0
 if TYPE_CHECKING:
     from ...sequence.base.pool import SequencePool
     from ...sequence.base.sequence import Sequence
+    from ...trajectory.pool import TrajectoryPool
 
 
 @dataclass
@@ -37,7 +38,8 @@ class FeatureT0Setter(T0Setter, register_name="feature"):
         """e.g. ``"feature='admission_date'"``."""
         return f"feature='{self.settings.feature}'"
 
-    def _compute_t0(self, target: SequencePool | Sequence, id_col: str) -> pl.LazyFrame:
+    def _compute_t0(self, target: SequencePool | Sequence) -> pl.LazyFrame:
+        id_col = target.settings.id_column
         feature = self.settings.feature
 
         # Validate the feature exists in static features.
@@ -58,3 +60,51 @@ class FeatureT0Setter(T0Setter, register_name="feature"):
         return target._static_data_lf(feature).select(
             id_col, pl.col(feature).alias(_T0)
         )
+
+    def compute_from_trajectory(
+        self,
+        target: TrajectoryPool,
+        on: str | None = None,
+    ) -> pl.DataFrame:
+        """Read T0 from a trajectory-level static feature column.
+
+        Uses ``target.static_data`` (public API) so no coupling to
+        trajectory store internals is needed.
+
+        Args:
+            target: The trajectory pool.
+            on:     Ignored for the feature strategy (T0 comes from the
+                    trajectory-level static feature, not a sub-pool).
+
+        Returns:
+            Complete ``[id_col, _T0_]`` DataFrame stored in ``self._df``.
+
+        Raises:
+            KeyError:  If the feature does not exist in trajectory static features.
+            TypeError: If the feature dtype does not match the trajectory's
+                       time index dtype.
+        """
+        feature = self.settings.feature
+        id_col = target.settings.id_column
+
+        # Validate feature exists and dtype matches temporal dtype.
+        meta = target.metadata
+        temporal_dtype = meta.time_index.dtype
+        feat_map = {f.name: f for f in (meta.static_features or [])}
+        if feature not in feat_map:
+            raise KeyError(
+                f"Static feature '{feature}' not found in trajectory "
+                f"static features. Available: {sorted(feat_map)}"
+            )
+        if feat_map[feature].dtype != temporal_dtype:
+            raise TypeError(
+                f"Static feature '{feature}' has dtype "
+                f"{feat_map[feature].dtype!r} but the trajectory's time "
+                f"index has dtype {temporal_dtype!r}. Use "
+                f"cast_static_features({{'{feature}': <target_dtype>}}) "
+                "to align the feature dtype before calling set_t0()."
+            )
+
+        static_df = target.static_data(features=[feature], output_format="polars")
+        partial_lf = static_df.lazy().select(id_col, pl.col(feature).alias(_T0))
+        return self._finalize(partial_lf, target._id_lf, id_col)

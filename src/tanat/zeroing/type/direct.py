@@ -56,18 +56,17 @@ class DirectT0Setter(T0Setter, register_name="direct"):
         """e.g. ``'direct'``."""
         return "direct (user-provided)"
 
-    def _compute_t0(self, target: SequencePool | Sequence, id_col: str) -> pl.LazyFrame:
+    def _compute_t0(self, target: SequencePool | Sequence) -> pl.LazyFrame:
+        id_col = target.settings.id_column
         direct = self.settings.direct
         # pylint: disable=protected-access
         id_lf = target._id_lf
         if isinstance(direct, dict):
             return self._compute_dict(id_lf, direct, id_col)
-        return self._compute_scalar(id_lf, direct, id_col)
+        return self._compute_scalar(id_lf, direct)
 
     @staticmethod
-    def _compute_scalar(
-        id_lf: pl.LazyFrame, value: T0Value, id_col: str
-    ) -> pl.LazyFrame:
+    def _compute_scalar(id_lf: pl.LazyFrame, value: T0Value) -> pl.LazyFrame:
         """Add a constant ``_T0_`` column to the typed ID frame."""
         return id_lf.with_columns(pl.lit(value).alias(_T0))
 

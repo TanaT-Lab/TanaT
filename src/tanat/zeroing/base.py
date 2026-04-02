@@ -107,9 +107,7 @@ class T0Setter(ABC, Registrable):
         if hasattr(self.settings, "anchor"):
             self._guard_anchor(target)
         id_col = target.settings.id_column
-        id_lf = target._id_lf
-
-        partial_lf = self._compute_t0(target, id_col)
+        partial_lf = self._compute_t0(target)
 
         t0_df = id_lf.join(partial_lf, on=id_col, how="left").collect()
         self._warn_nulls(t0_df.filter(pl.col(_T0).is_null())[id_col].to_list())
@@ -117,17 +115,18 @@ class T0Setter(ABC, Registrable):
         return self._df
 
     @abstractmethod
-    def _compute_t0(self, target: SequencePool | Sequence, id_col: str) -> pl.LazyFrame:
+    def _compute_t0(self, target: SequencePool | Sequence) -> pl.LazyFrame:
         """Return a partial ``[id_col, _T0_]`` LazyFrame for this strategy.
 
-        Called by :meth:`compute` after anchor normalisation. The returned
-        frame may omit IDs for which no valid row was found; those IDs
-        receive ``_T0_ = null`` in the outer left-join performed by
-        :meth:`compute`.
+        Called by :meth:`compute_from_sequence` / :meth:`compute_from_trajectory`
+        after anchor normalisation.  The returned frame may omit IDs for which
+        no valid row was found; those IDs receive ``_T0_ = null`` in the outer
+        left-join performed by :meth:`_finalize`.
+
+        The ID column name is available via ``target.settings.id_column``.
 
         Args:
             target: Pool or standalone Sequence being targeted.
-            id_col: Name of the ID column in *target*.
 
         Returns:
             Two-column LazyFrame ``[id_col, _T0_]``. Partial results are

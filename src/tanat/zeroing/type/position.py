@@ -46,7 +46,8 @@ class PositionT0Setter(T0Setter, register_name="position"):
         """e.g. ``'position=0, anchor=start'``."""
         return f"position={self.settings.position}, anchor={self.settings.anchor}"
 
-    def _compute_t0(self, target: SequencePool | Sequence, id_col: str) -> pl.LazyFrame:
+    def _compute_t0(self, target: SequencePool | Sequence) -> pl.LazyFrame:
+        id_col = target.settings.id_column
         pos = self.settings.position
         cols = target.settings.get_time_columns()
         t_expr = self._t0_temporal_expr(
