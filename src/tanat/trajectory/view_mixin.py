@@ -83,7 +83,7 @@ class TrajectoryViewMixin:
 
         Cached via ``CachableSettings``; invalidated by ``clear_cache()``.
         """
-        lf = self._store.get_id_lf(id_cast=self._casts.id).rename(
+        lf = self._store.get_id_lf(id_caster=self._casts.id_caster()).rename(
             {self._store.traj_id_col: self.settings.id_column}
         )
         if hasattr(self, "_id_value"):
@@ -121,10 +121,8 @@ class TrajectoryViewMixin:
                 static_features=self.settings.static_features,
             )
 
-        # traj_id dtype: from cast recipe if set, else store schema - no plan traversal.
-        traj_id_dtype = self._casts.id
-        if traj_id_dtype is None:
-            traj_id_dtype = self._store.traj_id_dtype
+        # traj_id dtype: from cast recipe if set, else store schema.
+        traj_id_dtype = self._casts.id_dtype or self._store.traj_id_dtype
 
         # Time index: aggregate across visible sequence stores.
         time_index = TrajectoryMetadata.infer_time_index(
@@ -202,8 +200,8 @@ class TrajectoryViewMixin:
         """
         return self._store.get_static_data(
             virtual_id=self._virtual_id,
-            id_cast=self._casts.id or None,
-            feature_casts=self._casts.static or None,
+            id_caster=self._casts.id_caster(),
+            feature_exprs=self._casts.feature_exprs(),
         )
 
     # ------------------------------------------------------------------

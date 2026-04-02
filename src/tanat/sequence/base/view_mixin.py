@@ -86,7 +86,7 @@ class SequenceViewMixin:
         Unlike :attr:`unique_ids`, preserves rich dtypes (e.g. ``Categorical``).
         Cached via ``CachableSettings``; invalidated by ``clear_cache()``.
         """
-        lf = self._store.get_id_lf(id_cast=self._casts.id).rename(
+        lf = self._store.get_id_lf(id_caster=self._casts.id_caster()).rename(
             {self._store.seq_id_col: self.settings.id_column}
         )
         if hasattr(self, "_id_value"):
@@ -127,7 +127,7 @@ class SequenceViewMixin:
                 static_features=self.settings.static_features,
             )
 
-        seq_id_dtype = self._casts.id or self._store.seq_id_dtype
+        seq_id_dtype = self._casts.id_dtype or self._store.seq_id_dtype
         id_col = self.settings.id_column
 
         time_index = self._id_time_index_lf().select(self.settings.get_time_columns())
@@ -198,8 +198,8 @@ class SequenceViewMixin:
         """
         lf = self._store.get_id_time_index(
             virtual_id=self._virtual_id,
-            id_cast=self._casts.id,
-            time_index_cast=self._casts.time_index,
+            id_caster=self._casts.id_caster(),
+            time_index_caster=self._casts.time_index_caster(),
         )
         lf = self._apply_masks(lf, is_static=False)
         return self._rename_columns(lf, is_static=False)
@@ -305,14 +305,14 @@ class SequenceViewMixin:
         if is_static:
             return self._store.get_static_data(
                 virtual_id=self._virtual_id,
-                id_cast=self._casts.id,
-                feature_casts=self._casts.static or None,
+                id_caster=self._casts.id_caster(),
+                feature_exprs=self._casts.feature_exprs(is_static=True),
             )
         return self._store.get_temporal_data(
             virtual_id=self._virtual_id,
-            id_cast=self._casts.id,
-            time_index_cast=self._casts.time_index,
-            feature_casts=self._casts.entity or None,
+            id_caster=self._casts.id_caster(),
+            time_index_caster=self._casts.time_index_caster(),
+            feature_exprs=self._casts.feature_exprs(is_static=False),
         )
 
     # ------------------------------------------------------------------
