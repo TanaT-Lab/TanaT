@@ -167,6 +167,35 @@ class TestSequencePoolCast:
         assert fi.is_duration
         assert "ms" in fi.dtype
 
+    def test_cast_chained_recipe_accumulates(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """Two successive cast_features() build a recipe instead of overwriting.
+
+        Float64 → [Float32] → [Float32, Float64]: the second call appends to the
+        existing recipe rather than replacing it.
+        """
+        pool = pools_dict[pool_type].copy()
+        pool.cast_features({"value": pl.Float32})
+        pool.cast_features({"value": pl.Float64})
+        recipe = pool._casts.entity["value"]  # pylint: disable=protected-access
+        assert recipe == [pl.Float32, pl.Float64]
+
+    def test_cast_chained_metadata_reflects_final_step(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """After Float32 → Float64 chain, metadata exposes the final dtype (Float64).
+
+        The intermediate Float32 step is part of the recipe but the observable
+        dtype in metadata must reflect the last cast in the chain.
+        """
+        pool = pools_dict[pool_type].copy()
+        pool.cast_features({"value": pl.Float32})
+        pool.cast_features({"value": pl.Float64})
+        fi = pool.metadata.feature_info("value")
+        assert isinstance(fi, NumericalInfo)
+        assert fi.dtype == str(pl.Float64)
+
 
 # ---------------------------------------------------------------------------
 # Sequence pool: cast propagation to child Sequence objects
@@ -217,6 +246,22 @@ class TestSequencePoolCastPropagation:
         pool.cast_to_timestep(pl.Int64)
         seq = pool[pool.unique_ids[0]]
         assert not seq.metadata.is_datetime
+
+    def test_chained_features_propagates(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """Chained recipe propagates to child Sequence: seq.metadata shows the final dtype.
+
+        After Float64 → Float32 → Float64, the Sequence built from the pool must
+        expose Float64 as the effective dtype for 'value' in its own metadata.
+        """
+        pool = pools_dict[pool_type].copy()
+        pool.cast_features({"value": pl.Float32})
+        pool.cast_features({"value": pl.Float64})
+        seq = pool[pool.unique_ids[0]]
+        fi = seq.metadata.feature_info("value")
+        assert isinstance(fi, NumericalInfo)
+        assert fi.dtype == str(pl.Float64)
 
 
 # ---------------------------------------------------------------------------
