@@ -216,88 +216,50 @@ def drop_columns_from_file(path: Path, columns: list[str]) -> bool:
     return True
 
 
-def apply_casts(
+def apply_cast_exprs(
     lf: pl.LazyFrame,
-    schema: dict[str, pl.DataType],
+    exprs: list[pl.Expr],
 ) -> pl.LazyFrame:
-    """
-    Applies a cast schema to *lf*, silently skipping absent columns.
+    """Apply pre-built cast expressions to *lf*.
 
-    Args:
-        lf: The LazyFrame to apply casts to.
-        schema: Mapping of column name → target dtype.
-
-    Returns:
-        A new LazyFrame with the cast expressions applied (or *lf* unchanged
-        when *schema* is empty or no matching column is found).
+    Returns *lf* unchanged when *exprs* is empty.
     """
-    if not schema:
-        return lf
-    existing = set(lf.collect_schema().names())
-    exprs = [pl.col(c).cast(schema[c]) for c in schema if c in existing]
     return lf.with_columns(exprs) if exprs else lf
 
 
-def filter_and_cast(
+def probe_cast_recipe(
     lf: pl.LazyFrame,
-    row_filter: pl.Series | None,
-    cast_schema: dict[str, pl.DataType] | None,
-) -> pl.LazyFrame:
-    """
-    Applies an optional row filter and an optional cast schema to *lf*.
-
-    Both arguments are safe to pass as ``None`` - the LazyFrame is returned
-    unchanged when neither operation is needed.
-
-    Args:
-        lf: The LazyFrame to transform.
-        row_filter: Boolean ``pl.Series`` aligned with *lf* rows, or ``None``.
-        cast_schema: Column-name → dtype mapping, or ``None`` / empty dict.
-
-    Returns:
-        The transformed LazyFrame.
-    """
-    if row_filter is not None:
-        lf = lf.filter(row_filter)
-    if cast_schema:
-        lf = apply_casts(lf, cast_schema)
-    return lf
-
-
-def probe_cast(
-    lf: pl.LazyFrame,
-    schema: dict[str, pl.DataType],
+    recipes: dict[str, list[pl.DataType]],
     n_rows: int = 10,
 ) -> None:
-    """
-    Validates cast *schema* against at most *n_rows* rows sampled from *lf*.
+    """Validate multi-step cast recipes on a small sample of *lf*.
 
-    Columns absent from *lf* are silently skipped (same contract as
-    :func:`apply_casts`).  Only the minimal IPC footer is read to resolve
-    the column list; actual data is fetched for at most *n_rows* rows.
-
-    Args:
-        lf: LazyFrame to probe (physical store data, no full scan needed).
-        schema: Mapping of column name → target dtype to validate.
-        n_rows: Number of rows to sample (default: 10).
+    Each column is cast through its recipe in order (``T0 → T1 → … → Tn``).
+    Absent columns are silently skipped.
 
     Raises:
-        TypeError: Wrapping the Polars error when a cast fails, with a
-            description of which columns / target dtypes were involved.
+        TypeError: If any step fails, with column name and full chain in the message.
     """
     existing = set(lf.collect_schema().names())
-    to_check = {c: dt for c, dt in schema.items() if c in existing}
+    to_check = {c: dtypes for c, dtypes in recipes.items() if c in existing and dtypes}
     if not to_check:
         return
-    # Build a sample that excludes rows where ALL probed columns are null,
-    # so we always test on real values (a fully-null slice would trivially succeed).
     non_null_filter = pl.any_horizontal(pl.col(c).is_not_null() for c in to_check)
     sample = lf.filter(non_null_filter).limit(n_rows)
-    exprs = [pl.col(c).cast(dt) for c, dt in to_check.items()]
-    cols_desc = ", ".join(f"'{c}' → {dt}" for c, dt in to_check.items())
+    exprs = []
+    for col, dtypes in to_check.items():
+        expr = pl.col(col)
+        for dtype in dtypes:
+            expr = expr.cast(dtype)
+        exprs.append(expr)
+    cols_desc = ", ".join(
+        f"'{c}' → {' → '.join(str(d) for d in dtypes)}"
+        for c, dtypes in to_check.items()
+    )
     try:
         sample.with_columns(exprs).collect()
     except Exception as exc:
         raise TypeError(
-            f"Cast validation failed on {n_rows}-row sample " f"({cols_desc}): {exc}"
+            f"Cast recipe validation failed on {n_rows}-row sample "
+            f"({cols_desc}): {exc}"
         ) from exc
