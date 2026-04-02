@@ -259,14 +259,15 @@ class EventSequencePool(SequencePool, register_name="event"):
         overwrite: bool = False,
     ) -> IntervalSequencePool:
         """Fork the virtual context with ``(_t_start, _t_end)`` computed from *duration*, then branch on *destination*."""
-        feature_cast = (
-            self._casts.entity.get(duration) if isinstance(duration, str) else None
-        )
         new_uuid = self._store._fork_event_to_interval(
             self._virtual_id,
             duration,
-            feature_cast=feature_cast,
-            time_index_cast=self._casts.time_index,
+            feature_caster=(
+                self._casts.entity_caster(duration)
+                if isinstance(duration, str)
+                else None
+            ),
+            time_index_caster=self._casts.time_index_caster(),
         )
         new_settings = {
             "id_column": self.settings.id_column,
@@ -291,14 +292,15 @@ class EventSequencePool(SequencePool, register_name="event"):
         overwrite: bool = False,
     ) -> StateSequencePool:
         """Fork the virtual context with shift-based ``(_t_start, _t_end)``, then branch on *destination*."""
-        static_cast = (
-            self._casts.static.get(end_value) if isinstance(end_value, str) else None
-        )
         new_uuid = self._store._fork_event_to_state(
             self._virtual_id,
             end_value,
-            time_index_cast=self._casts.time_index,
-            static_cast=static_cast,
+            time_index_caster=self._casts.time_index_caster(),
+            static_caster=(
+                self._casts.static_caster(end_value)
+                if isinstance(end_value, str)
+                else None
+            ),
         )
         new_settings = {
             "id_column": self.settings.id_column,
