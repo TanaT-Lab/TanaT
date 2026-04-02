@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 import polars as pl
 
@@ -14,61 +14,112 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class SequenceCastRecipe:
-    """Holds all type-cast overrides for a view (Pool, Sequence, or Entity).
+    """Type-cast overrides for a sequence view (Pool / Sequence / Entity).
 
-    Applied at read time only.
+    Each field is an **ordered recipe** of target types, applied
+    left-to-right at read time.  Empty lists mean "no cast".
 
     Attributes:
-        id: Target type for the sequence ID column.
-        time_index: Target type for time index columns.
-        entity: Per-column casts for entity features.
-        static: Per-column casts for static features (unused at Entity level).
+        id: Cast recipe for the sequence ID column.
+        time_index: Cast recipe for time-index columns.
+        entity: Per-column cast recipes for entity features.
+        static: Per-column cast recipes for static features.
     """
 
-    id: pl.DataType | None = None
-    time_index: pl.DataType | None = None
-    entity: dict[str, pl.DataType] = field(default_factory=dict)
-    static: dict[str, pl.DataType] = field(default_factory=dict)
+    id: list[pl.DataType] = field(default_factory=list)
+    time_index: list[pl.DataType] = field(default_factory=list)
+    entity: dict[str, list[pl.DataType]] = field(default_factory=dict)
+    static: dict[str, list[pl.DataType]] = field(default_factory=dict)
 
     def is_empty(self) -> bool:
         """Returns ``True`` if no cast is defined."""
         return (
-            self.id is None
-            and self.time_index is None
-            and not self.entity
-            and not self.static
+            not self.id and not self.time_index and not self.entity and not self.static
         )
 
-    def with_fields(self, **kwargs) -> SequenceCastRecipe:
-        """Return a new recipe with the given fields replaced.
+    @property
+    def id_dtype(self) -> pl.DataType | None:
+        """Final dtype of the ID recipe, or ``None`` if empty."""
+        return self.id[-1] if self.id else None
 
-        Thin wrapper around :func:`dataclasses.replace`.
+    @property
+    def time_index_dtype(self) -> pl.DataType | None:
+        """Final dtype of the time-index recipe, or ``None`` if empty."""
+        return self.time_index[-1] if self.time_index else None
+
+    def with_fields(self, **kwargs) -> SequenceCastRecipe:
+        """Return a copy with the specified fields replaced.
+
         Example::
 
-            new = recipe.with_fields(id=pl.Utf8)
-            merged = recipe.with_fields(entity={**recipe.entity, "age": pl.Float32})
+            new = recipe.with_fields(id=[pl.Utf8])
         """
         return replace(self, **kwargs)
 
     def copy(self) -> SequenceCastRecipe:
-        """Returns a copy (dict fields are new dicts)."""
-        return self.with_fields(entity=dict(self.entity), static=dict(self.static))
+        """Returns a deep copy (all nested containers are new objects)."""
+        return self.with_fields(
+            id=list(self.id),
+            time_index=list(self.time_index),
+            entity={k: list(v) for k, v in self.entity.items()},
+            static={k: list(v) for k, v in self.static.items()},
+        )
+
+    @staticmethod
+    def _build_caster(
+        recipe: list[pl.DataType],
+    ) -> Callable[[pl.Expr], pl.Expr]:
+        """Return a column-agnostic transformer that applies *recipe* in order."""
+
+        def caster(expr: pl.Expr) -> pl.Expr:
+            for dtype in recipe:
+                expr = expr.cast(dtype)
+            return expr
+
+        return caster
+
+    def id_caster(self) -> Callable[[pl.Expr], pl.Expr] | None:
+        """Return a transformer for the ID column, or ``None`` if no casts are set."""
+        if not self.id:
+            return None
+        return self._build_caster(self.id)
+
+    def time_index_caster(self) -> Callable[[pl.Expr], pl.Expr] | None:
+        """Return a transformer for time-index columns, or ``None`` if no casts are set."""
+        if not self.time_index:
+            return None
+        return self._build_caster(self.time_index)
+
+    def entity_caster(self, col: str) -> Callable[[pl.Expr], pl.Expr] | None:
+        """Return a transformer for a single entity feature column, or ``None``."""
+        recipe = self.entity.get(col)
+        if not recipe:
+            return None
+        return self._build_caster(recipe)
+
+    def static_caster(self, col: str) -> Callable[[pl.Expr], pl.Expr] | None:
+        """Return a transformer for a single static feature column, or ``None``."""
+        recipe = self.static.get(col)
+        if not recipe:
+            return None
+        return self._build_caster(recipe)
+
+    def feature_exprs(self, is_static: bool = False) -> list[pl.Expr]:
+        """Cast expressions for entity (or static) features.
+
+        Returns expressions ready for ``lf.with_columns(exprs)``.
+        Empty list when no casts are defined.
+        """
+        source = self.static if is_static else self.entity
+        return [
+            self._build_caster(recipe)(pl.col(col)) for col, recipe in source.items()
+        ]
 
     @classmethod
     def coerce(cls, value: SequenceCastRecipe | dict | None) -> SequenceCastRecipe:
-        """Normalise *value* to a :class:`SequenceCastRecipe`.
+        """Normalise *value* to a ``SequenceCastRecipe``.
 
-        Accepted inputs:
-
-        - ``None``                    → empty recipe
-        - ``dict``                    → ``SequenceCastRecipe(**value)``
-        - :class:`SequenceCastRecipe` → returned as-is (frozen: safe to share)
-
-        Args:
-            value: Raw cast recipe input from a constructor or public API.
-
-        Raises:
-            TypeError: If *value* is not one of the accepted types.
+        Accepts ``None`` (→ empty), a ``dict``, or an existing instance.
         """
         if value is None:
             return cls()
@@ -82,21 +133,16 @@ class SequenceCastRecipe:
         )
 
     def probe(self, store: SequenceStore) -> None:
-        """Validate all non-empty fields against a small sample of *store* data.
-
-        Delegates to the store's individual probe helpers.
-
-        Args:
-            store: The sequence store to validate against.
+        """Validate every recipe on a small sample from *store*.
 
         Raises:
-            TypeError: If any cast is incompatible with the underlying data.
+            TypeError: If any step is incompatible with the data.
         """
-        if self.id is not None:
-            store.probe_id_cast(self.id)
-        if self.time_index is not None:
-            store.probe_time_cast(self.time_index)
+        if self.id:
+            store.probe_id_cast_recipe(self.id)
+        if self.time_index:
+            store.probe_time_cast_recipe(self.time_index)
         if self.entity:
-            store.probe_entity_cast(self.entity)
+            store.probe_entity_cast_recipe(self.entity)
         if self.static:
-            store.probe_static_cast(self.static)
+            store.probe_static_cast_recipe(self.static)
