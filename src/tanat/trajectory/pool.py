@@ -1014,12 +1014,16 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         valid_names = self.settings.validate_features(list(schema.keys()))
         valid_schema = {col: schema[col] for col in valid_names}
 
-        # Fast probe: try the cast on 10 store rows before accepting the recipe.
-        self._store.probe_static_cast(valid_schema)
-
-        self._casts = self._casts.with_fields(
-            static={**self._casts.static, **valid_schema}
-        )
+        # Build new recipes and probe the full chain.
+        new_recipes = {
+            col: [*self._casts.static.get(col, []), dt]
+            for col, dt in valid_schema.items()
+        }
+        self._store.probe_static_cast_recipe(new_recipes)
+        new_static = dict(self._casts.static)
+        for col, dt in valid_schema.items():
+            new_static[col] = [*new_static.get(col, []), dt]
+        self._casts = self._casts.with_fields(static=new_static)
         self.clear_cache()
 
     def cast_id(self, dtype: pl.DataType) -> None:
@@ -1036,8 +1040,9 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         Raises:
             TypeError: If the cast is incompatible with the stored ID values.
         """
-        self._store.probe_id_cast(dtype)
-        self._casts = self._casts.with_fields(id=dtype)
+        new_recipe = [*self._casts.id, dtype]
+        self._store.probe_id_cast_recipe(new_recipe)
+        self._casts = self._casts.with_fields(id=new_recipe)
         self._sync_pool_casts()
         self.clear_cache()
 
@@ -1065,8 +1070,11 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
                 f"Invalid time unit: {unit!r}. Must be one of 'ms', 'us', 'ns'."
             )
         target_dtype = pl.Datetime(unit, time_zone)
-        self._store.probe_time_cast(target_dtype)  # one probe - all stores homogeneous
-        self._casts = self._casts.with_fields(time_index=target_dtype)
+        new_recipe = [*self._casts.time_index, target_dtype]
+        self._store.probe_time_cast_recipe(
+            new_recipe
+        )  # one probe - all stores homogeneous
+        self._casts = self._casts.with_fields(time_index=new_recipe)
         self._sync_pool_casts()
         self.clear_cache()
 
@@ -1096,8 +1104,11 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             and self.metadata.time_index.is_datetime
         ):
             raise TypeError("Conversion from Datetime to Timestep is not supported..")
-        self._store.probe_time_cast(dtype)  # one probe - all stores homogeneous
-        self._casts = self._casts.with_fields(time_index=dtype)
+        new_recipe = [*self._casts.time_index, dtype]
+        self._store.probe_time_cast_recipe(
+            new_recipe
+        )  # one probe - all stores homogeneous
+        self._casts = self._casts.with_fields(time_index=new_recipe)
         self._sync_pool_casts()
         self.clear_cache()
 
