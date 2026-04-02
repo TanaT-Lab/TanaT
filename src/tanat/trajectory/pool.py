@@ -254,7 +254,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             # Align id_column with the trajectory-level user-facing name.
             pool.update_settings(id_column=self.settings.id_column)
             # Propagate id/time index casts - already validated at trajectory level.
-            pool._casts = pool._casts.with_fields(
+            pool._casts = pool._casts.replace(
                 id=self._casts.id, time_index=self._casts.time_index
             )
             # Propagate trajectory-level ID mask as a silent intersection.
@@ -285,7 +285,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         for pool in self._pools.values():
             # pylint: disable=protected-access
             # Propagate id/time index casts - already validated at trajectory level.
-            pool._casts = pool._casts.with_fields(
+            pool._casts = pool._casts.replace(
                 id=self._casts.id, time_index=self._casts.time_index
             )
             pool.clear_cache()
@@ -1015,15 +1015,9 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         valid_schema = {col: schema[col] for col in valid_names}
 
         # Build new recipes and probe the full chain.
-        new_recipes = {
-            col: [*self._casts.static.get(col, []), dt]
-            for col, dt in valid_schema.items()
-        }
-        self._store.probe_static_cast_recipe(new_recipes)
-        new_static = dict(self._casts.static)
-        for col, dt in valid_schema.items():
-            new_static[col] = [*new_static.get(col, []), dt]
-        self._casts = self._casts.with_fields(static=new_static)
+        new_recipe = self._casts.append(static=valid_schema)
+        new_recipe.probe(self._store)
+        self._casts = new_recipe
         self.clear_cache()
 
     def cast_id(self, dtype: pl.DataType) -> None:
@@ -1040,9 +1034,9 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         Raises:
             TypeError: If the cast is incompatible with the stored ID values.
         """
-        new_recipe = [*self._casts.id, dtype]
-        self._store.probe_id_cast_recipe(new_recipe)
-        self._casts = self._casts.with_fields(id=new_recipe)
+        new_recipe = self._casts.append(id=dtype)
+        new_recipe.probe(self._store)
+        self._casts = new_recipe
         self._sync_pool_casts()
         self.clear_cache()
 
@@ -1070,11 +1064,9 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
                 f"Invalid time unit: {unit!r}. Must be one of 'ms', 'us', 'ns'."
             )
         target_dtype = pl.Datetime(unit, time_zone)
-        new_recipe = [*self._casts.time_index, target_dtype]
-        self._store.probe_time_cast_recipe(
-            new_recipe
-        )  # one probe - all stores homogeneous
-        self._casts = self._casts.with_fields(time_index=new_recipe)
+        new_recipe = self._casts.append(time_index=target_dtype)
+        new_recipe.probe(self._store)  # one probe - all stores homogeneous
+        self._casts = new_recipe
         self._sync_pool_casts()
         self.clear_cache()
 
@@ -1104,11 +1096,9 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             and self.metadata.time_index.is_datetime
         ):
             raise TypeError("Conversion from Datetime to Timestep is not supported..")
-        new_recipe = [*self._casts.time_index, dtype]
-        self._store.probe_time_cast_recipe(
-            new_recipe
-        )  # one probe - all stores homogeneous
-        self._casts = self._casts.with_fields(time_index=new_recipe)
+        new_recipe = self._casts.append(time_index=dtype)
+        new_recipe.probe(self._store)  # one probe - all stores homogeneous
+        self._casts = new_recipe
         self._sync_pool_casts()
         self.clear_cache()
 
