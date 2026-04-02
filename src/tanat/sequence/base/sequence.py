@@ -146,7 +146,8 @@ class Sequence(
         pool_slice: pl.Series | None = None
         if self._parent_pool is not None and self._parent_pool._row_mask is not None:
             offset, length = self._parent_pool._store.get_slice(
-                self._id_value, id_cast=self._parent_pool._casts.id
+                self._id_value,
+                id_caster=self._parent_pool._casts.id_caster(),
             )
             pool_slice = self._parent_pool._row_mask.slice(offset, length)
 
@@ -230,7 +231,9 @@ class Sequence(
         """Number of events/states in this sequence (respects row mask)."""
         if self._row_mask is not None:
             return int(self._row_mask.sum())
-        return self._store.get_sequence_length(self._id_value, id_cast=self._casts.id)
+        return self._store.get_sequence_length(
+            self._id_value, id_caster=self._casts.id_caster()
+        )
 
     def __iter__(self):
         """Iterate over entities in index order.
@@ -248,7 +251,9 @@ class Sequence(
             for logical, physical in enumerate(self._row_mask.arg_true()):
                 yield self._build_entity(int(physical), logical_rank=logical)
         else:
-            n = self._store.get_sequence_length(self._id_value, id_cast=self._casts.id)
+            n = self._store.get_sequence_length(
+                self._id_value, id_caster=self._casts.id_caster()
+            )
             for rank in range(n):
                 yield self._build_entity(rank)
 
