@@ -108,7 +108,28 @@ class T0Setter(ABC, Registrable):
             self._guard_anchor(target)
         id_col = target.settings.id_column
         partial_lf = self._compute_t0(target)
+        return self._finalize(partial_lf, target._id_lf, id_col)
 
+    def _finalize(
+        self,
+        partial_lf: pl.LazyFrame,
+        id_lf: pl.LazyFrame,
+        id_col: str,
+    ) -> pl.DataFrame:
+        """Left-join partial ``[id, _T0_]`` with the full ID set, warn nulls, store ``_df``.
+
+        Shared between :meth:`compute_from_sequence` and
+        :meth:`compute_from_trajectory` so the null-fill + warning logic
+        is never duplicated.
+
+        Args:
+            partial_lf: Strategy-specific result (may omit IDs with no match).
+            id_lf:      Full ID universe (sequence-level or trajectory-level).
+            id_col:     Name of the ID column.
+
+        Returns:
+            Complete ``[id_col, _T0_]`` DataFrame stored in ``self._df``.
+        """
         t0_df = id_lf.join(partial_lf, on=id_col, how="left").collect()
         self._warn_nulls(t0_df.filter(pl.col(_T0).is_null())[id_col].to_list())
         self._df = t0_df
