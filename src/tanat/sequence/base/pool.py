@@ -1278,20 +1278,27 @@ class SequencePool(
         )
         valid_schema = {col: schema[col] for col in valid_names}
 
-        # Fast probe: try the cast on 10 store rows before accepting the recipe.
+        # Build new recipes (existing + new step) and probe the full chain.
         if is_static:
-            self._store.probe_static_cast(valid_schema)
+            new_recipes = {
+                col: [*self._casts.static.get(col, []), dt]
+                for col, dt in valid_schema.items()
+            }
+            self._store.probe_static_cast_recipe(new_recipes)
+            new_static = dict(self._casts.static)
+            for col, dt in valid_schema.items():
+                new_static[col] = [*new_static.get(col, []), dt]
+            self._casts = self._casts.with_fields(static=new_static)
         else:
-            self._store.probe_entity_cast(valid_schema)
-
-        if is_static:
-            self._casts = self._casts.with_fields(
-                static={**self._casts.static, **valid_schema}
-            )
-        else:
-            self._casts = self._casts.with_fields(
-                entity={**self._casts.entity, **valid_schema}
-            )
+            new_recipes = {
+                col: [*self._casts.entity.get(col, []), dt]
+                for col, dt in valid_schema.items()
+            }
+            self._store.probe_entity_cast_recipe(new_recipes)
+            new_entity = dict(self._casts.entity)
+            for col, dt in valid_schema.items():
+                new_entity[col] = [*new_entity.get(col, []), dt]
+            self._casts = self._casts.with_fields(entity=new_entity)
         self.clear_cache()
 
     def cast_id(self, dtype: pl.DataType) -> None:
@@ -1302,9 +1309,9 @@ class SequencePool(
             dtype: The target Polars DataType.
         """
         self._check_not_locked("cast_id")
-        # Fast probe: try the cast on 10 IDs before accepting the recipe.
-        self._store.probe_id_cast(dtype)
-        self._casts = self._casts.with_fields(id=dtype)
+        new_recipe = [*self._casts.id, dtype]
+        self._store.probe_id_cast_recipe(new_recipe)
+        self._casts = self._casts.with_fields(id=new_recipe)
         self.clear_cache()
 
     def cast_to_datetime(self, unit: str = "us", time_zone: str | None = None):
@@ -1322,8 +1329,9 @@ class SequencePool(
                 f"Invalid time unit: {unit}. Must be one of 'ms', 'us', 'ns'."
             )
         target_dtype = pl.Datetime(unit, time_zone)
-        self._store.probe_time_cast(target_dtype)
-        self._casts = self._casts.with_fields(time_index=target_dtype)
+        new_recipe = [*self._casts.time_index, target_dtype]
+        self._store.probe_time_cast_recipe(new_recipe)
+        self._casts = self._casts.with_fields(time_index=new_recipe)
         self.clear_cache()
 
     def cast_to_timestep(self, dtype: pl.DataType = pl.Int64):
@@ -1344,8 +1352,9 @@ class SequencePool(
             raise TypeError(f"Target dtype must be a numeric type, got {dtype}")
         if self.metadata.time_index.is_datetime:
             raise TypeError("Conversion from Datetime to Timestep is not supported.")
-        self._store.probe_time_cast(dtype)
-        self._casts = self._casts.with_fields(time_index=dtype)
+        new_recipe = [*self._casts.time_index, dtype]
+        self._store.probe_time_cast_recipe(new_recipe)
+        self._casts = self._casts.with_fields(time_index=new_recipe)
         self.clear_cache()
 
     def drop_features(
@@ -2150,8 +2159,8 @@ class SequencePool(
         # The temporal schema is fully materialized on disk after a type conversion (e.g.
         # _t_event → _t_start/_t_end).  A temporal cast no longer meaningful.
         cast_for_new = (
-            self._casts.with_fields(time_index=None)
-            if self._casts.time_index is not None
+            self._casts.with_fields(time_index=[])
+            if self._casts.time_index
             else self._casts
         )
         # pylint: disable=protected-access
@@ -2245,7 +2254,10 @@ class SequencePool(
                 f"anchor must be 'start', 'end', or 'middle', got {anchor!r}"
             )
         new_uuid = self._store._fork_period_to_event(
-            self._virtual_id, anchor, time_index_cast=self._casts.time_index
+            self._virtual_id,
+            anchor,
+            time_index_caster=self._casts.time_index_caster(),
+            time_index_dtype=self._casts.time_index_dtype,
         )
         new_settings = {
             "id_column": self.settings.id_column,
