@@ -13,7 +13,7 @@ from tanat_utils import Registrable
 from tanat_utils.pretty_format import format_header, format_section, format_kv
 
 from ...metadata.feature import FeatureInfo, build_feature_metadata
-from ...store.base.utils import apply_casts
+from ...store.base.utils import apply_cast_exprs
 from ...store.sequence.store import SequenceStore
 from .cast import SequenceCastRecipe
 from ._utils import resolve_store
@@ -140,8 +140,9 @@ class Entity(Registrable, ABC):
 
         # Fallback for standalone Entity: infer directly from store
         entity_lf = self._store.entity(virtual_id=self._virtual_id)
-        if self._casts.entity:
-            entity_lf = apply_casts(entity_lf, self._casts.entity)
+        feat_exprs = self._casts.feature_exprs(is_static=False)
+        if feat_exprs:
+            entity_lf = apply_cast_exprs(entity_lf, feat_exprs)
         if self._features is not None:
             entity_lf = entity_lf.select(self._features)
         infos = build_feature_metadata(entity_lf)
@@ -159,8 +160,8 @@ class Entity(Registrable, ABC):
         return self._store.get_time_at(
             self._id_value,
             self._physical_rank,
-            time_index_cast=self._casts.time_index,
-            id_cast=self._casts.id,
+            time_index_caster=self._casts.time_index_caster(),
+            id_caster=self._casts.id_caster(),
         )
 
     def data(
@@ -185,8 +186,8 @@ class Entity(Registrable, ABC):
             self._id_value,
             self._physical_rank,
             self._virtual_id,
-            feature_casts=self._casts.entity or None,
-            id_cast=self._casts.id,
+            feature_exprs=self._casts.feature_exprs(is_static=False),
+            id_caster=self._casts.id_caster(),
         )
         # Resolve + validate feature scope
         effective = self._resolve_features(features, available=list(row.keys()))
