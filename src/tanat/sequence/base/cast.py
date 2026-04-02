@@ -47,18 +47,18 @@ class SequenceCastRecipe:
         """Final dtype of the time-index recipe, or ``None`` if empty."""
         return self.time_index[-1] if self.time_index else None
 
-    def with_fields(self, **kwargs) -> SequenceCastRecipe:
+    def replace(self, **kwargs) -> SequenceCastRecipe:
         """Return a copy with the specified fields replaced.
 
         Example::
 
-            new = recipe.with_fields(id=[pl.Utf8])
+            new = recipe.replace(id=[pl.Utf8])
         """
         return replace(self, **kwargs)
 
     def copy(self) -> SequenceCastRecipe:
         """Returns a deep copy (all nested containers are new objects)."""
-        return self.with_fields(
+        return self.replace(
             id=list(self.id),
             time_index=list(self.time_index),
             entity={k: list(v) for k, v in self.entity.items()},
