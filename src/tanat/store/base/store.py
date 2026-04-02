@@ -9,11 +9,12 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Callable
 
 import polars as pl
 
 from .virtual import VirtualStore
-from .utils import probe_cast
+from .utils import probe_cast_recipe
 from .static import StaticStoreMixin
 
 LOGGER = logging.getLogger(__name__)
@@ -109,26 +110,25 @@ class BaseStore(ABC, StaticStoreMixin):
     @abstractmethod
     def get_id_lf(
         self,
-        id_cast: pl.DataType | None = None,
+        id_caster: Callable[[pl.Expr], pl.Expr] | None = None,
         **kwargs,
     ) -> pl.LazyFrame:
-        """ID column as a single-column lazy frame, optionally cast."""
+        """ID column as a single-column lazy frame, with optional cast recipe applied."""
 
     # ------------------------------------------------------------------
     # Cast probes
     # ------------------------------------------------------------------
 
-    def probe_id_cast(self, dtype: pl.DataType, n_rows: int = 10) -> None:
-        """Validates casting the ID column to *dtype*.
+    def probe_id_cast_recipe(self, recipe: list[pl.DataType], n_rows: int = 10) -> None:
+        """Validate the ID cast recipe on a small sample.
 
-        Args:
-            dtype: Target Polars DataType.
-            n_rows: Sample size (default: 10).
+        Raises:
+            TypeError: If any step is incompatible with the data.
         """
         id_col = self.main_id_col
-        probe_cast(
+        probe_cast_recipe(
             self.main_index.select(id_col),
-            {id_col: dtype},
+            {id_col: recipe},
             n_rows,
         )
 

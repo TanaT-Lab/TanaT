@@ -10,18 +10,19 @@ from datetime import datetime, timedelta, timezone
 import logging
 import shutil
 from pathlib import Path
+from typing import Callable
 import pandas as pd
 import polars as pl
 
 from ...metadata.sequence import SequenceMetadata
 from ..base.store import BaseStore
 from ..base.utils import (
-    apply_casts,
+    apply_cast_exprs,
     check_no_reserved_names,
     drop_columns_from_file,
     hconcat_physical_virtual,
     normalise_to_lazyframe,
-    probe_cast,
+    probe_cast_recipe,
 )
 from .schema import StoreSchema as SCH
 
@@ -156,14 +157,17 @@ class SequenceStore(BaseStore):
 
     def get_id_lf(
         self,
-        id_cast: pl.DataType | None = None,
+        id_caster: Callable[[pl.Expr], pl.Expr] | None = None,
         *,
         explode: bool = False,
+        **_kw,
     ) -> pl.LazyFrame:
-        """Sequence IDs as a single-column lazy frame, optionally cast.
+        """Sequence IDs as a single-column lazy frame, with optional cast recipe applied.
 
         Args:
-            id_cast: If set, the ID column is cast to this dtype.
+            id_caster: If set, applied to the ID column as a column-agnostic
+                ``Callable[[pl.Expr], pl.Expr]`` (e.g. from
+                :meth:`SequenceCastRecipe.id_caster`).
             explode: When ``False`` (default), returns one row per sequence
                 (unique IDs).  When ``True``, expands each ID by its entity
                 count so the result is row-aligned with :meth:`entity` and
@@ -180,21 +184,23 @@ class SequenceStore(BaseStore):
             )
         else:
             lf = self.sequence_index.select(SCH.SEQ_ID)
-        if id_cast is not None:
-            lf = apply_casts(lf, {SCH.SEQ_ID: id_cast})
+        if id_caster is not None:
+            lf = lf.with_columns(id_caster(pl.col(SCH.SEQ_ID)))
         return lf
 
     def get_slice(
-        self, id_value, id_cast: pl.DataType | None = None
+        self,
+        id_value,
+        id_caster: Callable[[pl.Expr], pl.Expr] | None = None,
     ) -> tuple[int, int]:
         """Returns ``(offset, length)`` for slicing a pool-level row mask.
 
-        *id_cast* is the user-facing cast type of *id_value* - when set, the
-        store casts its own column before filtering (no reverse cast needed).
+        *id_caster* is the user-facing cast recipe for *id_value* - when set,
+        the store applies it to its own column before filtering.
         """
         idx = self.sequence_index
-        if id_cast is not None:
-            idx = idx.with_columns(pl.col(SCH.SEQ_ID).cast(id_cast))
+        if id_caster is not None:
+            idx = idx.with_columns(id_caster(pl.col(SCH.SEQ_ID)))
         row = (
             idx.filter(pl.col(SCH.SEQ_ID) == id_value)
             .select(SCH.OFFSET, SCH.LENGTH)
@@ -202,15 +208,19 @@ class SequenceStore(BaseStore):
         )
         return int(row[SCH.OFFSET][0]), int(row[SCH.LENGTH][0])
 
-    def get_sequence_length(self, id_value, id_cast: pl.DataType | None = None) -> int:
+    def get_sequence_length(
+        self,
+        id_value,
+        id_caster: Callable[[pl.Expr], pl.Expr] | None = None,
+    ) -> int:
         """Returns the number of entity rows for a given sequence ID.
 
-        *id_cast* is the user-facing cast type of *id_value* - when set, the
-        store casts its own column before filtering.
+        *id_caster* is the user-facing cast recipe for *id_value*; the store
+        applies it to its own column before filtering.
         """
         idx = self.sequence_index
-        if id_cast is not None:
-            idx = idx.with_columns(pl.col(SCH.SEQ_ID).cast(id_cast))
+        if id_caster is not None:
+            idx = idx.with_columns(id_caster(pl.col(SCH.SEQ_ID)))
         return int(
             idx.filter(pl.col(SCH.SEQ_ID) == id_value)
             .select(SCH.LENGTH)
@@ -232,38 +242,21 @@ class SequenceStore(BaseStore):
     # Cast probes (fast validation on a small sample before accepting a cast)
     # ------------------------------------------------------------------
 
-    def probe_entity_cast(
-        self, schema: dict[str, pl.DataType], n_rows: int = 10
+    def probe_time_cast_recipe(
+        self, recipe: list[pl.DataType], n_rows: int = 10
     ) -> None:
-        """
-        Validates *schema* against a sample of entity-feature rows.
-
-        Reads at most *n_rows* rows from ``entity_features.arrow``
-        (IPC footer + a tiny slice - no full scan) and attempts every
-        cast.  Raises :exc:`TypeError` if any cast is incompatible.
-
-        Args:
-            schema: Mapping of feature name → target dtype.
-            n_rows: Sample size (default: 10).
-        """
-        probe_cast(self.entity(), schema, n_rows)
-
-    def probe_time_cast(self, dtype: pl.DataType, n_rows: int = 10) -> None:
-        """
-        Validates casting all time columns to *dtype*.
-
-        Only columns actually present in ``time_index.arrow`` are
-        checked (the schema is read from the IPC footer - no full scan).
-
-        Args:
-            dtype: Target Polars DataType.
-            n_rows: Sample size (default: 10).
-        """
+        """Validate the time-index cast recipe on a small sample."""
         t_lf = self.time_index()
         t_names = SCH.time_index_columns()
         present = [c for c in t_lf.collect_schema().names() if c in t_names]
         if present:
-            probe_cast(t_lf, {c: dtype for c in present}, n_rows)
+            probe_cast_recipe(t_lf, {c: recipe for c in present}, n_rows)
+
+    def probe_entity_cast_recipe(
+        self, entity: dict[str, list[pl.DataType]], n_rows: int = 10
+    ) -> None:
+        """Validate entity-feature cast recipes on a small sample."""
+        probe_cast_recipe(self.entity(), entity, n_rows)
 
     def structural_columns(
         self, is_static: bool = False, virtual_id: str | None = None
@@ -354,66 +347,67 @@ class SequenceStore(BaseStore):
         self,
         virtual_id: str | None = None,
         *,
-        id_cast: pl.DataType | None = None,
-        time_index_cast: pl.DataType | None = None,
-        feature_casts: dict[str, pl.DataType] | None = None,
+        id_caster: Callable[[pl.Expr], pl.Expr] | None = None,
+        time_index_caster: Callable[[pl.Expr], pl.Expr] | None = None,
+        feature_exprs: list[pl.Expr] | None = None,
     ) -> pl.LazyFrame:
         """Returns the full temporal data: seq_id + time index + entity features.
 
-        Cast overlays are applied after assembly - physical store is never touched.
+        Cast recipes are applied after assembly - physical store is never touched.
         """
         lf = pl.concat(
             [
-                self.get_id_lf(id_cast=id_cast, explode=True),
-                self.get_time_index(virtual_id, time_index_cast=time_index_cast),
+                self.get_id_lf(id_caster=id_caster, explode=True),
+                self.get_time_index(virtual_id, time_index_caster=time_index_caster),
                 self.entity(virtual_id),
             ],
             how="horizontal",
         )
-        if feature_casts:
-            lf = apply_casts(lf, feature_casts)
+        if feature_exprs:
+            lf = apply_cast_exprs(lf, feature_exprs)
         return lf
 
     def get_time_index(
         self,
         virtual_id: str | None = None,
         *,
-        time_index_cast: pl.DataType | None = None,
+        time_index_caster: Callable[[pl.Expr], pl.Expr] | None = None,
     ) -> pl.LazyFrame:
-        """Returns time-index columns only, with optional cast overlay.
+        """Returns time-index columns only, with optional cast recipe applied.
 
         Cheaper than :meth:`get_id_time_index` when the sequence ID
         column is not needed.
 
         Args:
             virtual_id: Optional virtual context identifier.
-            time_index_cast: If set, all time columns are cast to this dtype.
+            time_index_caster: If set, applied to each time column as a
+                column-agnostic ``Callable[[pl.Expr], pl.Expr]``.
 
         Returns:
             A :class:`polars.LazyFrame` of the time-index columns.
         """
         lf = self.time_index(virtual_id)
-        if time_index_cast is not None:
-            cast_schema = {col: time_index_cast for col in lf.collect_schema().names()}
-            lf = apply_casts(lf, cast_schema)
+        if time_index_caster is not None:
+            cols = lf.collect_schema().names()
+            lf = lf.with_columns([time_index_caster(pl.col(c)) for c in cols])
         return lf
 
     def get_id_time_index(
         self,
         virtual_id: str | None = None,
         *,
-        id_cast: pl.DataType | None = None,
-        time_index_cast: pl.DataType | None = None,
+        id_caster: Callable[[pl.Expr], pl.Expr] | None = None,
+        time_index_caster: Callable[[pl.Expr], pl.Expr] | None = None,
     ) -> pl.LazyFrame:
         """Returns seq_id + time-index columns only (no entity features).
 
         Cheaper than :meth:`get_temporal_data` when entity features are not needed.
-        Cast overlays are applied after assembly.
+        Cast recipes are applied after assembly.
         """
         return pl.concat(
             [
-                self.get_id_lf(id_cast=id_cast, explode=True),
-                self.get_time_index(virtual_id, time_index_cast=time_index_cast),
+                self.get_id_lf(id_caster=id_caster, explode=True),
+                self.get_time_index(virtual_id, time_index_caster=time_index_caster),
             ],
             how="horizontal",
         )
@@ -424,8 +418,8 @@ class SequenceStore(BaseStore):
         rank: int,
         virtual_id: str | None = None,
         *,
-        feature_casts: dict[str, pl.DataType] | None = None,
-        id_cast: pl.DataType | None = None,
+        feature_exprs: list[pl.Expr] | None = None,
+        id_caster: Callable[[pl.Expr], pl.Expr] | None = None,
     ) -> dict:
         """
         Returns the feature values for the entity at *rank* within *id_value*.
@@ -438,32 +432,32 @@ class SequenceStore(BaseStore):
             id_value: The sequence identifier (user-facing type).
             rank: 0-based row index within that sequence.
             virtual_id: Optional virtual feature context.
-            feature_casts: Optional cast schema applied before collecting.
-            id_cast: User-facing cast type of *id_value*; the store casts
-                its own column before the slice lookup.
+            feature_exprs: Pre-built cast expressions applied before collecting.
+            id_caster: User-facing cast recipe for *id_value*; the store
+                applies it to its own column before the slice lookup.
 
         Returns:
             ``dict`` mapping feature name → scalar value.
         """
         lf = self.entity(virtual_id)
-        offset, _ = self.get_slice(id_value, id_cast=id_cast)
+        offset, _ = self.get_slice(id_value, id_caster=id_caster)
         physical_rank = offset + rank
         row = (
             lf.with_row_index(SCH.ROW_IDX)
             .filter(pl.col(SCH.ROW_IDX) == physical_rank)
             .drop(SCH.ROW_IDX)
         )
-        if feature_casts is None:
+        if not feature_exprs:
             return row.collect().row(0, named=True)
-        return apply_casts(row, feature_casts).collect().row(0, named=True)
+        return apply_cast_exprs(row, feature_exprs).collect().row(0, named=True)
 
     def get_time_at(
         self,
         id_value,
         rank: int,
         *,
-        time_index_cast: pl.DataType | None = None,
-        id_cast: pl.DataType | None = None,
+        time_index_caster: Callable[[pl.Expr], pl.Expr] | None = None,
+        id_caster: Callable[[pl.Expr], pl.Expr] | None = None,
     ):
         """
         Returns the time-index value(s) for the entity at *rank* within *id_value*.
@@ -471,9 +465,9 @@ class SequenceStore(BaseStore):
         Returns a single scalar for event sequences, or a two-element
         list ``[start, end]`` for interval sequences.
 
-        *id_cast* is the user-facing cast type of *id_value*.
+        *id_caster* is the user-facing cast recipe for *id_value*.
         """
-        offset, _ = self.get_slice(id_value, id_cast=id_cast)
+        offset, _ = self.get_slice(id_value, id_caster=id_caster)
         physical_rank = offset + rank
         lf = (
             self.time_index()
@@ -481,9 +475,9 @@ class SequenceStore(BaseStore):
             .filter(pl.col(SCH.ROW_IDX) == physical_rank)
             .drop(SCH.ROW_IDX)
         )
-        if time_index_cast is not None:
+        if time_index_caster is not None:
             cols = lf.collect_schema().names()
-            lf = apply_casts(lf, dict.fromkeys(cols, time_index_cast))
+            lf = lf.with_columns([time_index_caster(pl.col(c)) for c in cols])
         row = lf.collect().row(0, named=True)
         values = list(row.values())
         return values[0] if len(values) == 1 else values
@@ -557,8 +551,8 @@ class SequenceStore(BaseStore):
         self,
         virtual_id: str | None,
         duration: timedelta | int | float | str,
-        feature_cast: pl.DataType | None = None,
-        time_index_cast: pl.DataType | None = None,
+        feature_caster: Callable[[pl.Expr], pl.Expr] | None = None,
+        time_index_caster: Callable[[pl.Expr], pl.Expr] | None = None,
     ) -> str:
         """Fork a virtual context with ``(_t_start, _t_end)`` computed from an event index.
 
@@ -570,12 +564,10 @@ class SequenceStore(BaseStore):
         Args:
             virtual_id: Active virtual context to inherit from (``None`` → physical only).
             duration: Scalar offset or entity feature column name.
-            feature_cast: Resolved dtype for the duration column (``str`` case only).
-                Applied to that column before the arithmetic so that, e.g., an
-                ``Int64`` column can be promoted to ``Duration`` on the fly.
-            time_index_cast: Resolved dtype for the time column.  Applied to
-                ``_t_event`` before the arithmetic so the forked virtual time index
-                is written in the user-declared dtype.
+            feature_caster: Callable applying the full cast recipe to the duration
+                column (``str`` case only), or ``None``.
+            time_index_caster: Callable applying the full cast recipe to the time
+                column, or ``None``.
 
         Returns:
             UUID of the new forked context.
@@ -584,12 +576,16 @@ class SequenceStore(BaseStore):
             "Fork event -> interval (virtual_id=%r, duration=%r)", virtual_id, duration
         )
         active_ti = self.time_index(virtual_id)
-        if time_index_cast is not None:
-            active_ti = apply_casts(active_ti, {SCH.T_EVENT: time_index_cast})
+        if time_index_caster is not None:
+            active_ti = apply_cast_exprs(
+                active_ti, [time_index_caster(pl.col(SCH.T_EVENT))]
+            )
         if isinstance(duration, str):
             entity_col = self.entity(virtual_id).select(pl.col(duration))
-            if feature_cast is not None:
-                entity_col = apply_casts(entity_col, {duration: feature_cast})
+            if feature_caster is not None:
+                entity_col = apply_cast_exprs(
+                    entity_col, [feature_caster(pl.col(duration))]
+                )
             combined = pl.concat(
                 [
                     self.get_id_lf(explode=True),
@@ -615,8 +611,8 @@ class SequenceStore(BaseStore):
         self,
         virtual_id: str | None,
         end_value: datetime | int | float | str | None,
-        time_index_cast: pl.DataType | None = None,
-        static_cast: pl.DataType | None = None,
+        time_index_caster: Callable[[pl.Expr], pl.Expr] | None = None,
+        static_caster: Callable[[pl.Expr], pl.Expr] | None = None,
     ) -> str:
         """Fork a virtual context with ``(_t_start, _t_end)`` where ``_t_end`` is the next event start.
 
@@ -628,10 +624,10 @@ class SequenceStore(BaseStore):
             virtual_id: Active virtual context to inherit from (``None`` → physical only).
             end_value: Fill value for the last row's ``_t_end``, or ``None``.
                 A ``str`` names a static feature column whose per-sequence value is used.
-            time_index_cast: Resolved dtype for the time column.  Applied to
-                ``_t_event`` before the shift so the forked virtual time index is
-                written in the user-declared dtype.
-            static_cast: Resolved dtype for the static end_value column (``str`` case only).
+            time_index_caster: Callable applying the full cast recipe to the time
+                column, or ``None``.
+            static_caster: Callable applying the full cast recipe to the static
+                end_value column (``str`` case only), or ``None``.
 
         Returns:
             UUID of the new forked context.
@@ -640,8 +636,10 @@ class SequenceStore(BaseStore):
             "Fork event -> state (virtual_id=%r, end_value=%r)", virtual_id, end_value
         )
         active_ti = self.time_index(virtual_id)
-        if time_index_cast is not None:
-            active_ti = apply_casts(active_ti, {SCH.T_EVENT: time_index_cast})
+        if time_index_caster is not None:
+            active_ti = apply_cast_exprs(
+                active_ti, [time_index_caster(pl.col(SCH.T_EVENT))]
+            )
         combined = pl.concat(
             [self.get_id_lf(explode=True), active_ti], how="horizontal"
         )
@@ -652,8 +650,10 @@ class SequenceStore(BaseStore):
             static_col = self.get_static_data(virtual_id).select(
                 [SCH.SEQ_ID, end_value]
             )
-            if static_cast is not None:
-                static_col = apply_casts(static_col, {end_value: static_cast})
+            if static_caster is not None:
+                static_col = apply_cast_exprs(
+                    static_col, [static_caster(pl.col(end_value))]
+                )
             new_ti = (
                 combined.join(static_col, on=SCH.SEQ_ID, how="left")
                 .select(
@@ -692,7 +692,8 @@ class SequenceStore(BaseStore):
         self,
         virtual_id: str | None,
         anchor: str,
-        time_index_cast: pl.DataType | None = None,
+        time_index_caster: Callable[[pl.Expr], pl.Expr] | None = None,
+        time_index_dtype: pl.DataType | None = None,
     ) -> str:
         """Fork a virtual context with ``_t_event`` projected from a period time index.
 
@@ -704,9 +705,10 @@ class SequenceStore(BaseStore):
         Args:
             virtual_id: Active virtual context to inherit from (``None`` → physical only).
             anchor: One of ``'start'``, ``'end'``, ``'middle'``.
-            time_index_cast: Resolved dtype for the time columns.  Applied to
-                ``_t_start`` and ``_t_end`` before projection so the forked
-                virtual time index is written in the user-declared dtype.
+            time_index_caster: Callable applying the full cast recipe to the time
+                columns, or ``None``.
+            time_index_dtype: Final dtype after the cast recipe.  When provided,
+                avoids a ``collect_schema`` call on the middle-anchor path.
 
         Returns:
             UUID of the new forked context.
@@ -715,21 +717,22 @@ class SequenceStore(BaseStore):
             "Fork period -> event (virtual_id=%r, anchor=%r)", virtual_id, anchor
         )
         active_ti = self.time_index(virtual_id)
-        if time_index_cast is not None:
-            active_ti = apply_casts(
+        if time_index_caster is not None:
+            active_ti = apply_cast_exprs(
                 active_ti,
-                {SCH.T_START: time_index_cast, SCH.T_END: time_index_cast},
+                [
+                    time_index_caster(pl.col(SCH.T_START)),
+                    time_index_caster(pl.col(SCH.T_END)),
+                ],
             )
         if anchor == "start":
             new_ti = active_ti.select(pl.col(SCH.T_START).alias(SCH.T_EVENT))
         elif anchor == "end":
             new_ti = active_ti.select(pl.col(SCH.T_END).alias(SCH.T_EVENT))
         else:  # middle
-            # Use time_index_cast when provided (avoids a schema collect on the lazy frame).
+            # Resolve the effective dtype without a lazy-plan collect when possible.
             col_type = (
-                time_index_cast
-                if time_index_cast is not None
-                else active_ti.collect_schema()[SCH.T_START]
+                time_index_dtype or self.time_index().collect_schema()[SCH.T_START]
             )
             if isinstance(col_type, (pl.Datetime, pl.Date)):
                 # Polars forbids adding two absolute timestamps (`start + end`),

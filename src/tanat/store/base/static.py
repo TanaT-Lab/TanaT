@@ -17,19 +17,19 @@ relies on attributes provided by :class:`BaseStore` (``_root_path``,
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Final
+from typing import Callable, Final
 
 import pandas as pd
 import polars as pl
 
 from ..sequence.schema import StoreSchema as SCH
 from .utils import (
+    apply_cast_exprs,
     check_no_reserved_names,
     drop_columns_from_file,
     hconcat_physical_virtual,
-    apply_casts,
     normalise_to_lazyframe,
-    probe_cast,
+    probe_cast_recipe,
 )
 
 
@@ -84,18 +84,18 @@ class StaticStoreMixin:
         self,
         virtual_id: str | None = None,
         *,
-        id_cast: pl.DataType | None = None,
-        feature_casts: dict[str, pl.DataType] | None = None,
+        id_caster: Callable[[pl.Expr], pl.Expr] | None = None,
+        feature_exprs: list[pl.Expr] | None = None,
     ) -> pl.LazyFrame | None:
         """Static features with id column prepended, and optional cast overlays."""
         features_lf = self.static(virtual_id)
         if features_lf is None:
             return None
         id_lf = self.main_index.select(self.main_id_col)
-        if id_cast is not None:
-            id_lf = id_lf.with_columns(pl.col(self.main_id_col).cast(id_cast))
+        if id_caster is not None:
+            id_lf = id_lf.with_columns(id_caster(pl.col(self.main_id_col)))
         lf = pl.concat([id_lf, features_lf], how="horizontal")
-        return apply_casts(lf, feature_casts) if feature_casts else lf
+        return apply_cast_exprs(lf, feature_exprs) if feature_exprs else lf
 
     # ------------------------------------------------------------------
     # Mutations
@@ -160,21 +160,19 @@ class StaticStoreMixin:
         if virtual_id:
             self._virtual.drop_features(virtual_id, features, is_static=True)
 
-    def probe_static_cast(
-        self, schema: dict[str, pl.DataType], n_rows: int = 10
+    def probe_static_cast_recipe(
+        self, schema: dict[str, list[pl.DataType]], n_rows: int = 10
     ) -> None:
-        """
-        Validates *schema* against a sample of static-feature rows.
+        """Validate static-feature cast recipes on a small sample.
 
         No-op when the store has no static features.
 
-        Args:
-            schema: Mapping of feature name → target dtype.
-            n_rows: Sample size (default: 10).
+        Raises:
+            TypeError: If any step is incompatible with the data.
         """
         static = self.static()
         if static is not None:
-            probe_cast(static, schema, n_rows)
+            probe_cast_recipe(static, schema, n_rows)
 
     # ------------------------------------------------------------------
     # Cache

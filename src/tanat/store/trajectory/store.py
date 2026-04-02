@@ -22,13 +22,11 @@ import logging
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 import polars as pl
 
 from ..base.store import BaseStore
-from ..base.utils import (
-    apply_casts,
-)
+from ..base.utils import apply_cast_exprs
 from ..sequence.store import SequenceStore
 from .schema import TrajectorySchema as TSCH
 
@@ -107,14 +105,18 @@ class TrajectoryStore(BaseStore):
             return pl.scan_ipc(path)
         return pl.DataFrame({TSCH.TRAJ_ID: []}).lazy()
 
-    def get_id_lf(self, id_cast: pl.DataType | None = None, **_kw) -> pl.LazyFrame:
-        """All trajectory IDs as a single-column lazy frame, optionally cast.
+    def get_id_lf(
+        self,
+        id_caster: Callable[[pl.Expr], pl.Expr] | None = None,
+        **_kw,
+    ) -> pl.LazyFrame:
+        """All trajectory IDs as a single-column lazy frame, with optional cast recipe applied.
 
         Preserves the physical dtype — stays lazy until collected.
         """
         lf = self.trajectory_index.select(TSCH.TRAJ_ID)
-        if id_cast is not None:
-            lf = lf.with_columns(pl.col(TSCH.TRAJ_ID).cast(id_cast))
+        if id_caster is not None:
+            lf = lf.with_columns(id_caster(pl.col(TSCH.TRAJ_ID)))
         return lf
 
     @property
@@ -131,31 +133,22 @@ class TrajectoryStore(BaseStore):
     # Cast probes (fast validation on a small sample before accepting a cast)
     # ------------------------------------------------------------------
 
-    def probe_time_cast(self, dtype: pl.DataType, n_rows: int = 10) -> None:
-        """
-        Validates casting time index columns to *dtype* against the first
-        linked sequence store.
-
-        All sequence stores are guaranteed to share the same time index
-        schema by the build-time compatibility check
-        (:meth:`SequenceMetadata.assert_id_compatible_with` and :meth:`~SequenceMetadata.assert_time_index_compatible_with`), so probing
-        one is sufficient.
-
-        Args:
-            dtype: Target Polars DataType.
-            n_rows: Sample size (default: 10).
+    def probe_time_cast_recipe(
+        self, recipe: list[pl.DataType], n_rows: int = 10
+    ) -> None:
+        """Validate the time-index cast recipe against the first linked store.
 
         Raises:
             RuntimeError: If no sequence stores are linked.
-            TypeError: If the cast is incompatible with the time index data.
+            TypeError: If any step is incompatible with the data.
         """
         stores = self.sequence_stores
         if not stores:
             raise RuntimeError(
-                "No sequence stores linked - cannot probe time index cast."
+                "No sequence stores linked - cannot probe time index cast recipe."
             )
         first_store = next(iter(stores.values()))
-        first_store.probe_time_cast(dtype, n_rows)
+        first_store.probe_time_cast_recipe(recipe, n_rows)
 
     def _filter_by_id(self, lf: pl.LazyFrame, id_value) -> pl.LazyFrame:
         """Filters a LazyFrame to rows belonging to *id_value* (physical type)."""
@@ -206,18 +199,23 @@ class TrajectoryStore(BaseStore):
         traj_idx = self.trajectory_index
         if id_mask is not None:
             traj_idx = self._filter_by_ids(traj_idx, id_mask)
-        if has_casts and cast_recipe.id is not None:
-            traj_idx = apply_casts(traj_idx, {TSCH.TRAJ_ID: cast_recipe.id})
+        if has_casts:
+            id_caster = cast_recipe.id_caster()
+            if id_caster is not None:
+                traj_idx = traj_idx.with_columns(id_caster(pl.col(TSCH.TRAJ_ID)))
 
         # --- static features (physical + virtual, with TRAJ_ID) ---
         static_lf = self.get_static_data(virtual_id=virtual_id)
         if static_lf is not None:
             if id_mask is not None:
                 static_lf = self._filter_by_ids(static_lf, id_mask)
-            if has_casts and cast_recipe.id is not None:
-                static_lf = apply_casts(static_lf, {TSCH.TRAJ_ID: cast_recipe.id})
-            if has_casts and cast_recipe.static:
-                static_lf = apply_casts(static_lf, cast_recipe.static)
+            if has_casts:
+                id_caster = cast_recipe.id_caster()
+                if id_caster is not None:
+                    static_lf = static_lf.with_columns(id_caster(pl.col(TSCH.TRAJ_ID)))
+                feat_exprs = cast_recipe.feature_exprs()
+                if feat_exprs:
+                    static_lf = apply_cast_exprs(static_lf, feat_exprs)
             # Materialise soft drops: keep only requested feature columns.
             if features is not None:
                 keep = [TSCH.TRAJ_ID] + [f for f in features if f != TSCH.TRAJ_ID]
