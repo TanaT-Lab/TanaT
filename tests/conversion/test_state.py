@@ -200,7 +200,7 @@ class TestStatePoolTemporalCast:
         pool = state_pool_ts.copy()
         pool.cast_to_timestep(pl.Int64)
         # pylint: disable=protected-access
-        assert pool.as_event(anchor)._casts.time_index is None
+        assert pool.as_event(anchor)._casts.time_index == []
 
     def test_row_count_preserved(
         self, state_pool_ts: StateSequencePool, anchor: str
