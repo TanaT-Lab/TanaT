@@ -42,7 +42,7 @@ class PositionT0Setter(T0Setter, register_name="position"):
         super().__init__(PositionT0Settings(position=position, anchor=anchor))
 
     @property
-    def strategy_summary(self) -> str:
+    def _strategy_label(self) -> str:
         """e.g. ``'position=0, anchor=start'``."""
         return f"position={self.settings.position}, anchor={self.settings.anchor}"
 

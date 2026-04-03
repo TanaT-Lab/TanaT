@@ -56,11 +56,22 @@ class T0Setter(ABC, Registrable):
     def __init__(self, settings: Any) -> None:
         self._df: pl.DataFrame | None = None
         self.settings: Any = settings
+        # Reference alias to compute on (set by compute_from_trajectory)
+        self._on: str | None = None
 
     @property
     @abstractmethod
+    def _strategy_label(self) -> str:
+        """One-line description of the active strategy and its parameters (no alias)."""
+
+    @property
     def strategy_summary(self) -> str:
-        """One-line description of the active strategy and its parameters."""
+        """Full strategy description, appending ``, on='<alias>'`` when the
+        reference alias has been resolved (i.e. ``_on is not None``).
+        """
+        if self._on is not None:
+            return f"{self._strategy_label}, on='{self._on}'"
+        return self._strategy_label
 
     @property
     def df(self) -> pl.DataFrame | None:

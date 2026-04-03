@@ -34,7 +34,7 @@ class FeatureT0Setter(T0Setter, register_name="feature"):
         super().__init__(FeatureT0Settings(feature=feature))
 
     @property
-    def strategy_summary(self) -> str:
+    def _strategy_label(self) -> str:
         """e.g. ``"feature='admission_date'"``."""
         return f"feature='{self.settings.feature}'"
 

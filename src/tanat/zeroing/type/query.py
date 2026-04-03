@@ -57,7 +57,7 @@ class QueryT0Setter(T0Setter, register_name="query"):
         )
 
     @property
-    def strategy_summary(self) -> str:
+    def _strategy_label(self) -> str:
         """e.g. ``'query, anchor=start'``."""
         return f"query, anchor={self.settings.anchor}"
 

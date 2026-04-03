@@ -52,7 +52,7 @@ class DirectT0Setter(T0Setter, register_name="direct"):
         super().__init__(DirectT0Settings(direct=direct))
 
     @property
-    def strategy_summary(self) -> str:
+    def _strategy_label(self) -> str:
         """e.g. ``'direct'``."""
         return "direct (user-provided)"
 
