@@ -23,8 +23,8 @@ from .data import (
 from .settings import BarplotSettings
 
 if TYPE_CHECKING:
-    from tanat.sequence.base.pool import SequencePool
-    from tanat.sequence.base.sequence import Sequence
+    from ....sequence.base.pool import SequencePool
+    from ....sequence.base.sequence import Sequence
 
 
 class BarplotVizBuilder(BaseSequenceVizBuilder, register_name="barplot"):

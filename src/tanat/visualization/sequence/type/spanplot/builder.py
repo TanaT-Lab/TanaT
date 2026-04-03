@@ -25,8 +25,8 @@ from .data import (
 from .settings import SpanplotSettings
 
 if TYPE_CHECKING:
-    from tanat.sequence.base.pool import SequencePool
-    from tanat.sequence.base.sequence import Sequence
+    from ....sequence.base.pool import SequencePool
+    from ....sequence.base.sequence import Sequence
 
 
 class SpanplotVizBuilder(BaseSequenceVizBuilder, register_name="spanplot"):

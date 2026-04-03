@@ -19,8 +19,8 @@ from .data import (
 from .settings import TimelineSettings
 
 if TYPE_CHECKING:
-    from tanat.sequence.base.pool import SequencePool
-    from tanat.sequence.base.sequence import Sequence
+    from ....sequence.base.pool import SequencePool
+    from ....sequence.base.sequence import Sequence
 
 
 class TimelineVizBuilder(BaseSequenceVizBuilder, register_name="timeline"):

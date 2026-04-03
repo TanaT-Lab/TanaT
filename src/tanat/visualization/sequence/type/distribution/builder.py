@@ -17,8 +17,8 @@ from .data import aggregate_distribution, assign_time_bins, rename_time_index_co
 from .settings import DistributionSettings
 
 if TYPE_CHECKING:
-    from tanat.sequence.base.pool import SequencePool
-    from tanat.sequence.base.sequence import Sequence
+    from ....sequence.base.pool import SequencePool
+    from ....sequence.base.sequence import Sequence
 
 
 class DistributionVizBuilder(BaseSequenceVizBuilder, register_name="distribution"):
