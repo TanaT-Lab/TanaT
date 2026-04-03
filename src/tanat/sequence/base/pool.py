@@ -422,6 +422,8 @@ class SequencePool(
         Returns:
             ``self`` for chaining.
         """
+        self._check_not_locked("set_t0")
+
         strategies = {
             "position": position,
             "direct": direct,
