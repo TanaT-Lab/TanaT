@@ -86,6 +86,6 @@ distances or visualising cross-individual comparisons.
 
         <a href="zeroing/trajectory_t0.html" class="tanat-gallery-card">
             <p><strong>Trajectory Zeroing</strong><br>
-            Define a reference point (T0) for trajectories (not yet implemented &mdash; placeholder).</p>
+            Define a reference point (T0) for trajectories across multiple sub-pools.</p>
         </a>
     </div>
