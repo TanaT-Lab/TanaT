@@ -21,6 +21,7 @@ from tanat_utils.pretty_format import (
 from ..sequence.base.sequence import Sequence
 from ..store.trajectory.store import TrajectoryStore
 from ..zeroing import T0Setter, T0Value, _T0, _T0_NEAREST_RANK
+from ..zeroing.base import _InheritedT0Setter
 from .cast import TrajectoryCastRecipe
 from .settings import TrajectorySettings
 from .view_mixin import TrajectoryViewMixin
@@ -229,6 +230,8 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
             store=seq_store,
             id_column=self.settings.id_column,
         )
+        seq._inherited_setter = _InheritedT0Setter(parent=self)
+        return seq
 
     def __getitem__(self, store_alias: str):
         if store_alias not in self._store_aliases:
