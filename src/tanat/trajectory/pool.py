@@ -34,6 +34,7 @@ from ..sequence.base._utils import merge_optional_frames, resolve_ids_to_add
 from ..core import registry as _registry
 from ..store.base.utils import normalise_to_lazyframe
 from ..zeroing import T0Setter, T0Value, _T0, _T0_NEAREST_RANK
+from ..zeroing.base import _InheritedT0Setter
 from .cast import TrajectoryCastRecipe
 from .settings import TrajectorySettings
 from .trajectory import Trajectory
@@ -274,6 +275,8 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
                 pool.clear_cache()
             # Lock to prevent accidental casts or in-place mutations at pool level.
             pool._locked = True
+            # Sub-pools always inherit the trajectory T0.  _InheritedT0Setter
+            pool._t0_setter = _InheritedT0Setter(parent=self)
             result[alias] = pool
         return result
 
@@ -886,8 +889,20 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         setter.compute_from_trajectory(self, on=on)
 
         self._t0_setter = setter
+        self._propagate_t0()
         self.clear_cache()
         return self
+
+    def _propagate_t0(self) -> None:
+        """Install a fresh :class:`_InheritedT0Setter` on every sub-pool.
+
+        Called by :meth:`set_t0` after the trajectory-level setter has been
+        computed, so that every sub-pool delegates its T0 to this pool.
+        Each sub-pool's cache is cleared to pick up the new T0 on next access.
+        """
+        for pool in self.sequence_pools.values():
+            pool._t0_setter = _InheritedT0Setter(parent=self)
+            pool.clear_cache()
 
     @CachableSettings.cached_method()
     def _get_traj_t0_df(self) -> pl.DataFrame:
