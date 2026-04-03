@@ -20,6 +20,7 @@ from tanat_utils.pretty_format import (
 
 from ..sequence.base.sequence import Sequence
 from ..store.trajectory.store import TrajectoryStore
+from ..zeroing import T0Setter, T0Value, _T0, _T0_NEAREST_RANK
 from .cast import TrajectoryCastRecipe
 from .settings import TrajectorySettings
 from .view_mixin import TrajectoryViewMixin
@@ -222,10 +223,11 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
         seq_store = self._store.sequence_stores[store_alias]
         seq_type = seq_store.get_sequence_type()
         seq_cls = Sequence.get_registered(seq_type)
+        # TODO use from parent !
         return seq_cls(
             id_value=self._id_value,
             store=seq_store,
-            **self.settings,
+            id_column=self.settings.id_column,
         )
 
     def __getitem__(self, store_alias: str):
@@ -276,6 +278,89 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
     def _apply_masks(self, lf: pl.LazyFrame, **_) -> pl.LazyFrame:
         """Scopes a LazyFrame to this trajectory's ID."""
         return lf.filter(pl.col(self._store.traj_id_col) == self._id_value)
+
+    # ------------------------------------------------------------------
+    # T0 / Zeroing
+    # ------------------------------------------------------------------
+
+    @CachableSettings.cached_property
+    def _t0_setter(self):
+        """Active T0 setter for this trajectory.
+
+        * **Pool path:** returns the parent pool's setter directly.
+          Already computed and validated.
+        * **Standalone path:** instantiates the default ``position=0`` setter
+          and runs :meth:`~tanat.zeroing.base.T0Setter.compute_from_trajectory`
+          on this trajectory.  Cached after the first access.
+        """
+
+        if self._parent_pool is not None:
+            # pylint: disable=protected-access
+            return self._parent_pool._t0_setter
+        setter = T0Setter.default()
+        setter.compute_from_trajectory(self)
+        return setter
+
+    @CachableSettings.cached_property
+    def _t0_result(self) -> tuple:
+        """T0 ``(value, {alias: nearest_rank})`` pair for this trajectory.
+
+        * **Pool path:** filters the parent pool's cached
+          :meth:`~TrajectoryPool._get_traj_t0_df` result (zero extra I/O).
+        * **Standalone path:** uses :attr:`_t0_setter` (which triggers lazy
+          computation on first access) and resolves per-alias nearest ranks
+          via :meth:`~tanat.sequence.base.view_mixin.SequenceViewMixin._resolve_nearest_rank`.
+
+        Cached by :class:`~tanat_utils.CachableSettings`.
+        """
+        if self._parent_pool is None:
+            # Standalone path: trigger lazy T0 computation via _t0_setter.
+            setter = self._t0_setter
+            df = setter.df
+            if df is None or df.height == 0:
+                return (None, {})
+            id_col = self.settings.id_column
+            row = df.filter(pl.col(id_col) == self._id_value)
+            if row.height == 0:
+                return (None, {})
+            t0_value = row[_T0][0]
+            # Resolve per-alias nearest ranks using each visible sequence.
+            nearest_ranks: dict[str, int | None] = {}
+            for alias in self._store_aliases:
+                seq = self._build_sequence(alias)
+                # pylint: disable=protected-access
+                rank_df = seq._resolve_nearest_rank(row)
+                nearest_ranks[alias] = rank_df[_T0_NEAREST_RANK][0]
+            return (t0_value, nearest_ranks)
+
+        # Pool path: O(1) dict lookup. The pool builds the full
+        # {id: (t0, {alias: rank})} mapping once (cached) from the
+        # trajectory index + T0 DataFrame, avoiding both a per-trajectory
+        # DataFrame filter and a per-trajectory trajectory-index disk scan.
+        # pylint: disable=protected-access
+        lookup = self._parent_pool._get_traj_t0_lookup()
+        if self._id_value not in lookup:
+            return (None, {})
+        return lookup[self._id_value]
+
+    @property
+    def t0(self) -> T0Value | None:
+        """T0 value for this trajectory.
+
+        ``None`` when T0 could not be determined (e.g. no matching row).
+        """
+        return self._t0_result[0]
+
+    @property
+    def t0_nearest_rank(self) -> dict[str, int | None]:
+        """Per-alias nearest rank at or before T0.
+
+        Returns a dict keyed by visible alias name, e.g.
+        ``{"medical": 2, "lab": 5}``.  Value is ``None`` when T0 is
+        ``None`` or when no row satisfies ``start <= T0`` in that alias.
+        An empty dict is returned for standalone (non-pool) trajectories.
+        """
+        return self._t0_result[1]
 
     # ------------------------------------------------------------------
     # Data access
