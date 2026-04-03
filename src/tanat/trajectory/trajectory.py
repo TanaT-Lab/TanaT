@@ -177,6 +177,19 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
             format_kv("Trajectory ID", str(self._id_value)),
             format_kv("Sequences", ", ".join(aliases)),
         ]
+
+        t0_val = self.t0
+        t0_ranks = self.t0_nearest_rank
+        t0_desc = (
+            f"{t0_val} ({', '.join(f'{a}: rank {r}' for a, r in t0_ranks.items())})"
+            if t0_val is not None
+            else "None"
+        )
+        ti_section = [
+            format_kv("Type", str(meta.time_index)),
+            format_kv("t0", t0_desc),
+        ]
+
         seq_bullets = [
             format_bullet(alias, repr(seq)) for alias, seq in self.sequences.items()
         ]
@@ -185,6 +198,8 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
             format_header("Trajectory Summary"),
             "",
             format_section("Overview", overview),
+            "",
+            format_section("Time Index", ti_section),
             "",
             format_section("Sequences", seq_bullets),
         ]
@@ -224,8 +239,7 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
         seq_store = self._store.sequence_stores[store_alias]
         seq_type = seq_store.get_sequence_type()
         seq_cls = Sequence.get_registered(seq_type)
-        # TODO use from parent !
-        return seq_cls(
+        seq = seq_cls(
             id_value=self._id_value,
             store=seq_store,
             id_column=self.settings.id_column,
