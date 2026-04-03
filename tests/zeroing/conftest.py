@@ -45,3 +45,9 @@ def standalone_seq(stores_dict: dict, pool_type: str):
     """Standalone Sequence for ID=1; guaranteed to have temporal rows."""
     cls = _SEQ_CLS[pool_type]
     return cls(id_value=_ID_WITH_DATA, store=stores_dict[pool_type])
+
+
+@pytest.fixture
+def traj_pool_copy(traj_pool):
+    """Fresh copy of the session TrajectoryPool; safe to call set_t0()."""
+    return traj_pool.copy()
