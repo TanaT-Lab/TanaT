@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import warnings
 from datetime import date, datetime
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 from tanat_utils import settings_dataclass as dataclass
