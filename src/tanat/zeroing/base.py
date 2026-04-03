@@ -17,6 +17,8 @@ from tanat_utils import Registrable
 if TYPE_CHECKING:
     from ..sequence.base.pool import SequencePool
     from ..sequence.base.sequence import Sequence
+    from ..trajectory.pool import TrajectoryPool
+    from ..trajectory.trajectory import Trajectory
 
 # ---------------------------------------------------------------------------
 # Column name constants (used throughout the zeroing layer)
@@ -119,6 +121,43 @@ class T0Setter(ABC, Registrable):
             self._guard_anchor(target)
         id_col = target.settings.id_column
         partial_lf = self._compute_t0(target)
+        return self._finalize(partial_lf, target._id_lf, id_col)
+
+    def compute_from_trajectory(
+        self,
+        target: TrajectoryPool | Trajectory,
+        on: str | None = None,
+    ) -> pl.DataFrame:
+        """Compute T0 from a trajectory pool or a standalone trajectory.
+
+        Args:
+            target: The trajectory pool or standalone trajectory.
+            on:     Alias of the reference sub-pool / sequence.
+                    ``None`` selects the first visible alias.
+
+        Returns:
+            Complete ``[id_col, _T0_]`` DataFrame stored in ``self._df``.
+        """
+        # -- Resolve reference sub-obj (SequencePool or Sequence) ----------
+        aliases = target._store_aliases  # pylint: disable=protected-access
+        resolved_on = on if on is not None else (aliases[0] if aliases else None)
+        # TrajectoryPool.sequence_pools[alias] → SequencePool
+        # Trajectory[alias]                    → Sequence
+        seq_map = getattr(target, "sequence_pools", target)
+        ref = seq_map[resolved_on] if resolved_on is not None else None
+
+        if ref is None:
+            # No sequences available: return all-null T0.
+            id_col = target.settings.id_column
+            self._df = target._id_lf.collect().with_columns(pl.lit(None).alias(_T0))
+            self._on = resolved_on
+            return self._df
+
+        if hasattr(self.settings, "anchor"):
+            self._guard_anchor(ref)
+        id_col = target.settings.id_column
+        partial_lf = self._compute_t0(ref)
+        self._on = resolved_on
         return self._finalize(partial_lf, target._id_lf, id_col)
 
     def _finalize(
