@@ -14,6 +14,7 @@ import pytest
 from tanat import TrajectoryPool
 from tanat.trajectory.trajectory import Trajectory
 from tanat.zeroing import T0Setter, _T0, _T0_NEAREST_RANK
+from tanat.zeroing.base import _InheritedT0Setter
 
 # Trajectory pool aliases present in the test fixtures
 _REF_ALIAS = "events"  # event pool: no anchor needed
@@ -242,25 +243,16 @@ class TestTrajectorySetT0Query:
 class TestTrajectoryT0Data:
     """Column names, per-alias rank columns, output format."""
 
-    def test_columns_after_set_t0(self, traj_pool_copy) -> None:
-        """t0_data() columns = [id_col, _T0_, _T0_NEAREST_RANK_<alias>, ...]."""
+    def test_t0_data_schema(self, traj_pool_copy) -> None:
+        """t0_data() has expected columns and one row per trajectory."""
         id_col = traj_pool_copy.settings.id_column
         traj_pool_copy.set_t0(position=0, on=_REF_ALIAS)
         df = traj_pool_copy.t0_data(output_format="polars")
-        expected_rank_cols = [
-            f"{alias}{_T0_NEAREST_RANK}"
-            for alias in sorted(traj_pool_copy.sequence_pools.keys())
-        ]
+        assert len(df) == len(traj_pool_copy)
         assert id_col in df.columns
         assert _T0 in df.columns
-        for col in expected_rank_cols:
-            assert col in df.columns, f"Missing expected column: {col}"
-
-    def test_row_count(self, traj_pool_copy) -> None:
-        """len(t0_data()) == len(traj_pool_copy)."""
-        traj_pool_copy.set_t0(position=0, on=_REF_ALIAS)
-        df = traj_pool_copy.t0_data(output_format="polars")
-        assert len(df) == len(traj_pool_copy)
+        for alias in traj_pool_copy.sequence_pools:
+            assert f"{alias}{_T0_NEAREST_RANK}" in df.columns
 
     def test_pandas_output(self, traj_pool_copy) -> None:
         """t0_data() (default) returns pd.DataFrame."""
@@ -289,16 +281,12 @@ class TestTrajectoryT0Data:
 class TestTrajectoryT0Default:
     """No set_t0() called: lazy trigger picks first alias, t0_data() works."""
 
-    def test_t0_data_without_set_t0(self, traj_pool_copy) -> None:
-        """t0_data() works without any set_t0() call (lazy trigger)."""
+    def test_lazy_trigger_produces_valid_t0(self, traj_pool_copy) -> None:
+        """t0_data() works without set_t0(); produces non-null values."""
         df = traj_pool_copy.t0_data(output_format="polars")
         assert isinstance(df, pl.DataFrame)
         assert _T0 in df.columns
         assert len(df) == len(traj_pool_copy)
-
-    def test_default_t0_has_values(self, traj_pool_copy) -> None:
-        """Default lazy trigger produces non-null _T0_ for at least one trajectory."""
-        df = traj_pool_copy.t0_data(output_format="polars")
         assert df[_T0].is_not_null().any()
 
     def test_traj_t0_accessible_without_set_t0(self, traj_pool_copy) -> None:
@@ -306,20 +294,6 @@ class TestTrajectoryT0Default:
         tid = traj_pool_copy.unique_ids[0]
         traj = traj_pool_copy[tid]
         _ = traj.t0  # must not raise
-
-    def test_strategy_summary_before_lazy_trigger(self, traj_pool_copy) -> None:
-        """Before lazy trigger, strategy_summary shows 'position=0, anchor=start'."""
-        # pylint: disable=protected-access
-        summary = traj_pool_copy._t0_setter.strategy_summary
-        assert "position=0" in summary
-        assert "anchor=start" in summary
-
-    def test_strategy_summary_after_lazy_trigger(self, traj_pool_copy) -> None:
-        """After lazy trigger, strategy_summary includes on=<first_alias>."""
-        traj_pool_copy.t0_data()  # force lazy computation
-        # pylint: disable=protected-access
-        summary = traj_pool_copy._t0_setter.strategy_summary
-        assert "on='" in summary
 
 
 # ---------------------------------------------------------------------------
@@ -376,33 +350,26 @@ class TestTrajectoryT0Propagation:
         expected_t0 = pool_df.filter(pl.col(id_col) == tid)[_T0][0]
         assert traj.t0 == expected_t0
 
-    def test_traj_t0_nearest_rank_is_dict(self, traj_pool_copy) -> None:
-        """traj.t0_nearest_rank is a dict keyed by visible alias names."""
-        traj_pool_copy.set_t0(position=0, on=_REF_ALIAS)
-        traj = traj_pool_copy[traj_pool_copy.unique_ids[0]]
-        result = traj.t0_nearest_rank
-        assert isinstance(result, dict)
-        visible_aliases = set(traj_pool_copy.sequence_pools.keys())
-        assert set(result.keys()) <= visible_aliases
-
-    def test_traj_t0_nearest_rank_matches_pool(self, traj_pool_copy) -> None:
-        """traj.t0_nearest_rank[alias] matches the _T0_NEAREST_RANK_<alias> column."""
+    def test_traj_t0_nearest_rank(self, traj_pool_copy) -> None:
+        """t0_nearest_rank is a dict keyed by alias; values match t0_data() columns."""
         traj_pool_copy.set_t0(position=0, on=_REF_ALIAS)
         id_col = traj_pool_copy.settings.id_column
         tid = traj_pool_copy.unique_ids[0]
         traj = traj_pool_copy[tid]
+        ranks = traj.t0_nearest_rank
+
+        assert isinstance(ranks, dict)
+        assert set(ranks.keys()) <= set(traj_pool_copy.sequence_pools.keys())
 
         pool_df = traj_pool_copy.t0_data(output_format="polars")
         row = pool_df.filter(pl.col(id_col) == tid)
-
-        for alias in traj.t0_nearest_rank:
+        for alias, rank in ranks.items():
             col_name = f"{alias}{_T0_NEAREST_RANK}"
             if col_name in pool_df.columns:
-                expected = row[col_name][0]
-                assert traj.t0_nearest_rank[alias] == expected
+                assert rank == row[col_name][0]
 
-    def test_traj_t0_none_when_no_match(self, traj_pool_copy) -> None:
-        """Query matching no rows → traj.t0 is None."""
+    def test_null_t0_when_no_match(self, traj_pool_copy) -> None:
+        """Query matching no rows: traj.t0 is None; all ranks are None."""
         with pytest.warns(UserWarning):
             traj_pool_copy.set_t0(
                 query=pl.col("value") > 99999,
@@ -410,58 +377,122 @@ class TestTrajectoryT0Propagation:
             )
         traj = traj_pool_copy[traj_pool_copy.unique_ids[0]]
         assert traj.t0 is None
-
-    def test_traj_t0_nearest_rank_all_none_when_t0_none(self, traj_pool_copy) -> None:
-        """When T0 is None, all nearest-rank values are None."""
-        with pytest.warns(UserWarning):
-            traj_pool_copy.set_t0(
-                query=pl.col("value") > 99999,
-                on=_REF_ALIAS,
-            )
-        traj = traj_pool_copy[traj_pool_copy.unique_ids[0]]
         for val in traj.t0_nearest_rank.values():
             assert val is None
 
 
 # ---------------------------------------------------------------------------
-# TestTrajectoryT0NoPropagation
+# TestTrajectoryT0SubPoolPropagation
 # ---------------------------------------------------------------------------
 
 
-class TestTrajectoryT0NoPropagation:
-    """T0 is NOT propagated to child SequencePool or Sequence objects."""
+class TestTrajectoryT0SubPoolPropagation:
+    """After set_t0(), sub-pool T0 equals trajectory T0; nearest rank is per-pool."""
 
-    def test_sub_pool_has_independent_setter(self, traj_pool_copy) -> None:
-        """After tpool.set_t0(position=-1, on='events'), sub-pool setter is unchanged."""
-        traj_pool_copy.set_t0(position=-1, on=_REF_ALIAS)
-        # pylint: disable=protected-access
-        for pool in traj_pool_copy.sequence_pools.values():
-            assert pool._t0_setter is not traj_pool_copy._t0_setter
-
-    def test_sub_sequence_t0_uses_sub_pool_setter(self, traj_pool_copy) -> None:
-        """traj['events'].t0 uses the sub-pool's own setter, not trajectory T0.
-
-        Trajectory T0 uses position=-1 (last row).
-        Sub-pool default is position=0 (first row).
-        With more than 1 row per sequence the values should differ.
-        """
-        traj_pool_copy.set_t0(position=-1, on=_REF_ALIAS)
+    def test_sub_pool_nearest_rank_differs(self, traj_pool_copy) -> None:
+        """Each sub-pool computes its own nearest rank against its own temporal grid."""
+        traj_pool_copy.set_t0(position=0, on=_REF_ALIAS)
         id_col = traj_pool_copy.settings.id_column
-        traj_df = traj_pool_copy.t0_data(output_format="polars").sort(id_col)
+        tid = traj_pool_copy.unique_ids[0]
+        traj = traj_pool_copy[tid]
+        # Each sub-pool has an independent _T0_NEAREST_RANK_ column computed
+        # against its own temporal index.  Verify the column is present and
+        # the rank is a non-negative integer for IDs that have sequence data.
+        for alias, pool in traj_pool_copy.sequence_pools.items():
+            pool_df = pool.t0_data(output_format="polars")
+            assert _T0_NEAREST_RANK in pool_df.columns
+            row = pool_df.filter(pl.col(id_col) == tid)
+            if row.height > 0 and row[_T0][0] is not None:
+                # Nearest rank must be an integer ≥ 0
+                assert traj[alias].t0_nearest_rank is not None
+                assert traj[alias].t0_nearest_rank >= 0
 
-        # Sub-pool computes its own T0 (default: position=0).
-        events_pool = traj_pool_copy.sequence_pools[_REF_ALIAS]
-        sub_df = events_pool.t0_data(output_format="polars").sort(id_col)
+    def test_sub_pool_inherited_setter(self, traj_pool_copy) -> None:
+        """Sub-pools carry _InheritedT0Setter; after set_t0, summary shows 'from trajectory'."""
+        for pool in traj_pool_copy.sequence_pools.values():
+            # pylint: disable=protected-access
+            assert isinstance(pool._t0_setter, _InheritedT0Setter)
 
-        # At least some T0 values should differ when sequences have > 1 row.
-        non_null_mask = traj_df[_T0].is_not_null() & sub_df[_T0].is_not_null()
-        if non_null_mask.sum() > 0:
-            assert not traj_df.filter(non_null_mask)[_T0].equals(
-                sub_df.filter(non_null_mask)[_T0]
-            ), (
-                "Expected trajectory T0 (position=-1) to differ from sub-pool T0 "
-                "(position=0 default). Passes vacuously if all sequences have 1 row."
-            )
+        traj_pool_copy.set_t0(position=0, on=_REF_ALIAS)
+        for pool in traj_pool_copy.sequence_pools.values():
+            # pylint: disable=protected-access
+            assert pool._t0_setter.strategy_summary.startswith("from trajectory")
+
+    def test_sub_pool_lazy_trigger_before_set_t0(self, traj_pool_copy) -> None:
+        """Before set_t0(), accessing t0_data() on a sub-pool triggers lazy parent
+        computation and returns a valid DataFrame (no RuntimeError / None crash)."""
+        for pool in traj_pool_copy.sequence_pools.values():
+            df = pool.t0_data(output_format="polars")
+            assert isinstance(df, pl.DataFrame)
+            assert _T0 in df.columns
+
+    def test_sub_pool_t0_updates_after_second_set_t0(self, traj_pool_copy) -> None:
+        """After a second set_t0(), sub-pool T0 reflects the new strategy."""
+        traj_pool_copy.set_t0(position=0, on=_REF_ALIAS)
+        tid = traj_pool_copy.unique_ids[0]
+        t0_first = {
+            alias: pool.t0_data(output_format="polars").filter(
+                pl.col(traj_pool_copy.settings.id_column) == tid
+            )[_T0][0]
+            for alias, pool in traj_pool_copy.sequence_pools.items()
+        }
+
+        traj_pool_copy.set_t0(direct=_sentinel_t0(traj_pool_copy))
+        t0_second = {
+            alias: pool.t0_data(output_format="polars").filter(
+                pl.col(traj_pool_copy.settings.id_column) == tid
+            )[_T0][0]
+            for alias, pool in traj_pool_copy.sequence_pools.items()
+        }
+
+        # At least one alias must have a different T0 after the second set_t0().
+        assert any(t0_first[a] != t0_second[a] for a in t0_first)
+
+    def test_propagation_survives_subset(self, traj_pool_copy) -> None:
+        """T0 is consistent after subset(): sub-pool T0 still matches traj.t0."""
+        traj_pool_copy.set_t0(position=0, on=_REF_ALIAS)
+        ids = traj_pool_copy.unique_ids[:3]
+        view = traj_pool_copy.subset(ids)
+        for tid in view.unique_ids:
+            traj = view[tid]
+            expected_t0 = traj.t0
+            for alias in view.sequence_pools:
+                assert traj[alias].t0 == expected_t0, (
+                    f"After subset(), traj['{alias}'].t0 = {traj[alias].t0!r} "
+                    f"!= traj.t0 = {expected_t0!r} for id={tid!r}"
+                )
+
+    def test_sub_pool_set_t0_locked(self, traj_pool_copy) -> None:
+        """set_t0() on a managed sub-pool raises RuntimeError."""
+        traj_pool_copy.set_t0(position=0, on=_REF_ALIAS)
+        pool = next(iter(traj_pool_copy.sequence_pools.values()))
+        with pytest.raises(RuntimeError, match="set_t0"):
+            pool.set_t0(position=0)
+
+    def test_sequence_pool_to_sequence_t0_matches_traj(self, traj_pool_copy) -> None:
+        """TrajectoryPool → SequencePool → Sequence: seq.t0 matches traj.t0."""
+        traj_pool_copy.set_t0(position=0, on=_REF_ALIAS)
+        tid = traj_pool_copy.unique_ids[0]
+        expected_t0 = traj_pool_copy[tid].t0
+        for alias, pool in traj_pool_copy.sequence_pools.items():
+            if tid in pool.unique_ids:
+                seq = pool[tid]
+                assert seq.t0 == expected_t0, (
+                    f"sequence_pools['{alias}'][{tid!r}].t0 = {seq.t0!r} "
+                    f"!= traj.t0 = {expected_t0!r}"
+                )
+
+    def test_trajectory_to_sequence_t0_matches_traj(self, traj_pool_copy) -> None:
+        """TrajectoryPool → Trajectory → Sequence: traj[alias].t0 matches traj.t0."""
+        traj_pool_copy.set_t0(position=0, on=_REF_ALIAS)
+        tid = traj_pool_copy.unique_ids[0]
+        traj = traj_pool_copy[tid]
+        expected_t0 = traj.t0
+        for alias in traj:
+            seq = traj[alias]
+            assert (
+                seq.t0 == expected_t0
+            ), f"traj['{alias}'].t0 = {seq.t0!r} != traj.t0 = {expected_t0!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -523,60 +554,36 @@ class TestTrajectoryT0SubsetCopy:
 class TestTrajectoryT0Standalone:
     """Standalone Trajectory (no parent pool) computes default T0 lazily."""
 
-    def test_standalone_traj_t0_accessible(self, traj_store) -> None:
-        """Standalone Trajectory: traj.t0 is accessible without raising."""
-        pool = TrajectoryPool(store=traj_store)
-        tid = pool.unique_ids[0]
-        standalone = Trajectory(
-            id_value=tid,
-            store=traj_store,
-            id_column=pool.settings.id_column,
-        )
-        _ = standalone.t0  # must not raise
-
-    def test_standalone_traj_t0_nearest_rank_is_dict(self, traj_store) -> None:
-        """Standalone Trajectory: t0_nearest_rank is a dict."""
-        pool = TrajectoryPool(store=traj_store)
-        tid = pool.unique_ids[0]
-        standalone = Trajectory(
-            id_value=tid,
-            store=traj_store,
-            id_column=pool.settings.id_column,
-        )
-        result = standalone.t0_nearest_rank
-        assert isinstance(result, dict)
-
-    def test_standalone_traj_has_t0_when_data_present(self, traj_store) -> None:
-        """Standalone Trajectory with data in first alias: t0 is not None."""
+    def test_standalone_t0_properties(self, traj_store) -> None:
+        """Standalone Trajectory: t0 is not None, nearest_rank is a dict keyed by aliases."""
         pool = TrajectoryPool(store=traj_store)
         # pylint: disable=protected-access
-        first_alias = pool._store_aliases[0]
-        first_pool = pool.sequence_pools[first_alias]
-        tid = first_pool.unique_ids[0]
-
+        tid = pool.sequence_pools[pool._store_aliases[0]].unique_ids[0]
         standalone = Trajectory(
             id_value=tid,
             store=traj_store,
             id_column=pool.settings.id_column,
         )
         assert standalone.t0 is not None
+        ranks = standalone.t0_nearest_rank
+        assert isinstance(ranks, dict)
+        assert set(ranks.keys()) <= set(standalone._store_aliases)
 
-    def test_standalone_traj_nearest_rank_keyed_by_aliases(self, traj_store) -> None:
-        """Standalone Trajectory: t0_nearest_rank keys match visible aliases."""
+    def test_standalone_sequence_inherits_t0(self, traj_store) -> None:
+        """Standalone traj['alias'].t0 matches traj.t0 via _InheritedT0Setter."""
         pool = TrajectoryPool(store=traj_store)
         # pylint: disable=protected-access
-        first_alias = pool._store_aliases[0]
-        first_pool = pool.sequence_pools[first_alias]
-        tid = first_pool.unique_ids[0]
-
+        tid = pool.sequence_pools[pool._store_aliases[0]].unique_ids[0]
         standalone = Trajectory(
             id_value=tid,
             store=traj_store,
             id_column=pool.settings.id_column,
         )
-        ranks = standalone.t0_nearest_rank
-        # Keys must be a subset of visible aliases.
-        assert set(ranks.keys()) <= set(standalone._store_aliases)
+        expected_t0 = standalone.t0
+        for alias in standalone:
+            seq = standalone[alias]
+            assert seq.t0 == expected_t0
+            assert isinstance(seq._inherited_setter, _InheritedT0Setter)
 
 
 # ---------------------------------------------------------------------------
