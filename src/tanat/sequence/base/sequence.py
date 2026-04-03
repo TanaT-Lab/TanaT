@@ -77,6 +77,7 @@ class Sequence(
 
         self._parent_pool: SequencePool | None = None
         self._own_row_mask: pl.Series | None = None
+        self._inherited_setter: T0Setter | None = None
 
     @classmethod
     def from_parent(
@@ -170,13 +171,18 @@ class Sequence(
     def _t0_setter(self) -> T0Setter:
         """Active T0 setter for this sequence.
 
-        * **Pool path:** returns the parent pool's setter directly.
-          Already computed and validated.
-        * **Standalone path:** instantiates and runs the default
-          ``position=0`` setter on demand.  Cached after the first access.
+        Resolution order:
+
+        1. **Pool path:** the parent pool's setter (already computed).
+        2. **Trajectory path:** an inherited setter that delegates to the
+           parent trajectory's T0.
+        3. **Standalone path:** a default ``position=0`` setter, computed
+           on demand and cached.
         """
         if self._parent_pool is not None:
             return self._parent_pool._t0_setter
+        if self._inherited_setter is not None:
+            return self._inherited_setter
         setter = T0Setter.default(is_event=self.get_registration_name() == "event")
         setter.compute_from_sequence(self)
         return setter
@@ -201,6 +207,8 @@ class Sequence(
 
         # Standalone path
         setter = self._t0_setter
+        if setter.df is None:
+            setter.compute_from_sequence(self)
         if setter.df is None:
             return (None, None)
         df = setter.df.filter(pl.col(self.settings.id_column) == self._id_value)
