@@ -142,6 +142,100 @@ two read-only properties:
 
 ----
 
+Trajectory-Level Zeroing
+========================
+
+``TrajectoryPool.set_t0`` accepts the same four strategy keywords as the
+sequence-level ``set_t0``, plus an additional ``on=`` parameter that selects
+the **reference sub-pool** from which T0 is computed.
+
+The ``on=`` parameter
+---------------------
+
+Strategies that inspect temporal rows (``position``, ``query``) **require**
+``on=`` because the row index or filter expression is evaluated against a
+specific sub-pool.  Strategies that do not read rows (``direct``, ``feature``)
+do **not** need ``on=``; if provided it is ignored with a warning.
+
+.. code-block:: python
+
+   # position: first admission, start of interval
+   tpool.set_t0(position=0, anchor="start", on="admissions")
+
+   # direct: no on= needed
+   tpool.set_t0(direct=datetime(2010, 6, 1))
+
+   # feature: trajectory-level static column
+   tpool.set_t0(feature="admission_date")
+
+   # query: first lab matching a condition
+   tpool.set_t0(query=pl.col("status") == "error", on="labs")
+
+Trajectory-Level Inspection
+---------------------------
+
+``tpool.t0_data()`` returns one row per trajectory with columns
+``[id, _T0_, <alias1>_T0_NEAREST_RANK_, <alias2>_T0_NEAREST_RANK_, ...]``.
+
+Each sub-pool gets its **own** nearest-rank column because the floor-index
+depends on each pool's temporal grid.  The column is named
+``<alias>_T0_NEAREST_RANK_`` (alias prefix, then the constant suffix).
+
+.. code-block:: python
+
+   tpool.set_t0(position=0, anchor="start", on="admissions")
+   tpool.t0_data().head()  # columns: id, _T0_, admissions_T0_NEAREST_RANK_, labs_T0_NEAREST_RANK_, ...
+
+Trajectory Properties
+---------------------
+
+Once ``set_t0`` has been called on the trajectory pool, every
+:class:`~tanat.trajectory.trajectory.Trajectory` exposes:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 20 50
+
+   * - Property
+     - Type
+     - Description
+   * - ``traj.t0``
+     - scalar or ``None``
+     - T0 for this trajectory.  ``None`` when no T0 could be determined.
+   * - ``traj.t0_nearest_rank``
+     - ``dict[str, int | None]``
+     - Per-alias floor index: ``{"admissions": 0, "labs": 2, ...}``.
+       ``None`` per alias when ``traj.t0`` is ``None``.
+
+.. code-block:: python
+
+   traj = tpool[tpool.unique_ids[0]]
+   print(traj.t0)               # e.g. datetime(2020, 3, 15, ...)
+   print(traj.t0_nearest_rank)  # e.g. {'admissions': 0, 'labs': 2, 'phases': 1}
+
+T0 is shared across all children
+---------------------------------
+
+A single ``tpool.set_t0(...)`` call is enough.  Every object you retrieve
+from the pool (a sub-pool, a trajectory, or an individual sequence)
+automatically returns the same ``t0`` value.  ``t0_nearest_rank`` still
+varies: each pool computes its floor index on its own temporal grid.
+
+.. code-block:: python
+
+   tpool.set_t0(position=0, anchor="start", on="admissions")
+
+   traj = tpool[tpool.unique_ids[0]]
+   print(traj.t0)                      # e.g. datetime(2020, 3, 15, ...)
+
+   seq = traj["labs"]
+   print(seq.t0)                       # == traj.t0
+   print(seq.t0_nearest_rank)          # floor index on the labs temporal grid
+
+   tpool.sequence_pools["labs"].t0_data().head()   # _T0_ column == traj.t0
+
+----
+
 Null Handling
 =============
 
