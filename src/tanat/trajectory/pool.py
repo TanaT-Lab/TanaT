@@ -33,6 +33,7 @@ from ..sequence.base.pool import BinSize, SequencePool
 from ..sequence.base._utils import merge_optional_frames, resolve_ids_to_add
 from ..core import registry as _registry
 from ..store.base.utils import normalise_to_lazyframe
+from ..zeroing import T0Setter, T0Value, _T0, _T0_NEAREST_RANK
 from .cast import TrajectoryCastRecipe
 from .settings import TrajectorySettings
 from .trajectory import Trajectory
@@ -95,6 +96,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         self._virtual_id: str | None = None
         self._pools: dict | None = None
         self._has_soft_drops: bool = False
+        self._t0_setter: T0Setter = T0Setter.default()
 
         CachableSettings.__init__(
             self, settings=TrajectorySettings(id_column=id_column, static_features=sf)
@@ -177,6 +179,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         self._id_mask = None
         self._has_soft_drops = False
         self._pools = None  # force rebuild against new/updated store
+        self._t0_setter = T0Setter.default(is_event=False)
         self.clear_cache()
 
     @classmethod
@@ -191,6 +194,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         alias_mask: set[str] | None,
         has_soft_drops: bool,
         pools: dict | None,
+        t0_setter: T0Setter | None = None,
     ) -> TrajectoryPool:
         """Construct a :class:`TrajectoryPool` without going through ``__init__``.
 
@@ -208,6 +212,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             alias_mask: Set of sequence-store aliases to expose (or ``None`` for all).
             has_soft_drops: Whether soft-dropped trajectories exist.
             pools: Pre-built sequence pool registry (or ``None`` to rebuild lazily).
+            t0_setter: T0 strategy to propagate.  ``None`` creates a fresh default.
         """
         pool = object.__new__(cls)
         pool._store = store
@@ -220,6 +225,9 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         pool._alias_mask = alias_mask
         pool._has_soft_drops = has_soft_drops
         pool._pools = pools
+        pool._t0_setter = (
+            t0_setter if t0_setter is not None else T0Setter.default(is_event=False)
+        )
         return pool
 
     # ------------------------------------------------------------------
@@ -387,7 +395,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         """
         return self._id_lf.collect().to_series().to_list()
 
-    @property
+    @CachableSettings.cached_property
     def _store_aliases(self) -> list[str]:
         """Aliases visible through the current view mask."""
         all_aliases = self._store.store_aliases
@@ -418,6 +426,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         ]
         ti_section = [
             format_kv("Type", str(meta.time_index)),
+            format_kv("t0", self._t0_setter.strategy_summary),
         ]
         seq_bullets = [
             format_bullet(alias, repr(pool)) for alias, pool in pools.items()
@@ -791,6 +800,217 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             "Expected one of: 'pandas', 'polars'."
         )
 
+    # ------------------------------------------------------------------
+    # T0 / Zeroing
+    # ------------------------------------------------------------------
+
+    def set_t0(
+        self,
+        *,
+        position: int | None = None,
+        direct: T0Value | dict[Any, T0Value] | None = None,
+        feature: str | None = None,
+        query: pl.Expr | None = None,
+        anchor: Literal["start", "end", "middle"] | None = None,
+        use_first: bool = True,
+        on: str | None = None,
+    ) -> TrajectoryPool:
+        """Configure the T0 strategy for this trajectory pool.
+
+        Builds a :class:`~tanat.zeroing.base.T0Setter` via the registry and
+        delegates to ``setter.compute_from_trajectory(self, on=on)``.  The
+        setter stores the resulting ``[id_col, _T0_]`` DataFrame; per-alias
+        nearest ranks are computed lazily in :meth:`_get_traj_t0_df`.
+
+        Args:
+            position: Row index (0-based; negative indexing supported).
+            direct:   Scalar value or ``{traj_id: value}`` dict.
+            feature:  Trajectory-level static feature column name.
+            query:    Polars boolean expression evaluated on the reference
+                      sub-pool's columns.
+            anchor:   ``"start"`` / ``"end"`` / ``"middle"`` for interval/state pools.
+            use_first: For the *query* strategy only.
+            on:       Alias of the sub-pool used to compute T0.
+                      Required for ``position`` and ``query`` strategies.
+                      Ignored (with warning) for ``direct`` and ``feature``.
+
+        Returns:
+            ``self`` for chaining.
+
+        Raises:
+            TypeError: If ``on`` is missing for ``position``/``query``.
+            KeyError:  If ``on`` refers to an alias not visible in this pool.
+        """
+        strategies = {
+            "position": position,
+            "direct": direct,
+            "feature": feature,
+            "query": query,
+        }
+        provided = [k for k, v in strategies.items() if v is not None]
+        if len(provided) == 0:
+            raise TypeError(
+                "set_t0() requires exactly one strategy keyword: "
+                "position, direct, feature, or query."
+            )
+        if len(provided) > 1:
+            raise TypeError(
+                f"set_t0() accepts exactly one strategy keyword, got: {provided}."
+            )
+
+        name = provided[0]
+
+        # Validate/warn about `on=` usage.
+        if name in ("position", "query") and on is None:
+            raise TypeError(
+                f"set_t0() with strategy '{name}' requires the 'on=' parameter "
+                "to designate the reference sub-pool."
+            )
+        if name in ("direct", "feature") and on is not None:
+            warnings.warn(
+                f"'on=' is ignored for the '{name}' strategy and will be silently "
+                "discarded.",
+                UserWarning,
+                stacklevel=2,
+            )
+            on = None
+
+        # Build setter + compute (UNIFORM: no per-strategy branching).
+        strategy_kwargs: dict[str, dict] = {
+            "position": {"position": position, "anchor": anchor},
+            "direct": {"direct": direct},
+            "feature": {"feature": feature},
+            "query": {"query": query, "anchor": anchor, "use_first": use_first},
+        }
+        setter = T0Setter.get_registered(name)(**strategy_kwargs[name])
+        setter.compute_from_trajectory(self, on=on)
+
+        self._t0_setter = setter
+        self.clear_cache()
+        return self
+
+    @CachableSettings.cached_method()
+    def _get_traj_t0_df(self) -> pl.DataFrame:
+        """Cached trajectory-level T0 DataFrame.
+
+        Reads ``_T0_`` from ``self._t0_setter.df``, then computes per-alias
+        nearest ranks via ``pool._nearest_rank_lf()`` in a single lazy plan.
+        One ``.collect()`` at the end.
+
+        Returns:
+            Polars DataFrame with columns
+            ``[id_col, _T0_, <alias1>_T0_NEAREST_RANK_, ...]``.
+        """
+        if self._t0_setter.df is None:
+            # Lazy trigger: no explicit set_t0() yet.  Default setter
+            # (position=0, anchor=start) resolves on=None to the first
+            # visible alias.
+            self._t0_setter.compute_from_trajectory(self)
+
+        id_col = self.settings.id_column
+        t0_lf = self._t0_setter.df.lazy()
+        if self._id_mask is not None:
+            t0_lf = t0_lf.filter(pl.col(id_col).is_in(self._id_mask))
+
+        result_lf = t0_lf.select([id_col, _T0])
+        for alias, pool in self.sequence_pools.items():
+            # pylint: disable=protected-access
+            rank_lf = pool._nearest_rank_lf(t0_lf).rename(
+                {_T0_NEAREST_RANK: f"{alias}{_T0_NEAREST_RANK}"}
+            )
+            result_lf = result_lf.join(rank_lf, on=id_col, how="left")
+
+        # Apply same null-handling as _resolve_nearest_rank:
+        # _T0_ null → rank null; _T0_ set but no floor → rank 0.
+        rank_cols = [f"{a}{_T0_NEAREST_RANK}" for a in self.sequence_pools]
+        result_lf = result_lf.with_columns(
+            pl.when(pl.col(_T0).is_null())
+            .then(pl.lit(None, dtype=pl.UInt32))
+            .otherwise(pl.col(rc).fill_null(pl.lit(0, dtype=pl.UInt32)).cast(pl.UInt32))
+            .alias(rc)
+            for rc in rank_cols
+        )
+        return result_lf.collect()
+
+    @CachableSettings.cached_method()
+    def _get_traj_t0_lookup(self) -> dict:
+        """O(1)-per-trajectory lookup built once from :meth:`_get_traj_t0_df`.
+
+        Returns ``{id_value: (t0, {alias: nearest_rank})}`` where each
+        trajectory's alias dict contains only the aliases where that
+        trajectory has data, computed in a single trajectory-index read
+        rather than one per trajectory.
+
+        Cache invalidated by :meth:`clear_cache`.
+        """
+        df = self._get_traj_t0_df()
+        id_col = self.settings.id_column
+        # Columns are named f"{alias}{_T0_NEAREST_RANK}"
+        rank_cols = [c for c in df.columns if c.endswith(_T0_NEAREST_RANK)]
+
+        # Build presence map {alias: frozenset_of_ids} from the trajectory
+        # index: one .collect() for all aliases instead of one per trajectory.
+        traj_id_col = self._store.traj_id_col
+        traj_idx = self._store.trajectory_index.collect()
+        id_caster = self._casts.id_caster()
+        if id_caster is not None:
+            traj_idx = traj_idx.with_columns(id_caster(pl.col(traj_id_col)))
+
+        presence: dict[str, frozenset] = {}
+        for rc in rank_cols:
+            alias = rc[: -len(_T0_NEAREST_RANK)]
+            if alias in traj_idx.columns:
+                presence[alias] = frozenset(
+                    traj_idx.filter(pl.col(alias))[traj_id_col].to_list()
+                )
+            else:
+                presence[alias] = frozenset()
+
+        # Vectorised extraction: all columns in one pass.
+        ids = df[id_col].to_list()
+        t0s = df[_T0].to_list()
+        alias_ranks: dict[str, list] = {
+            rc[: -len(_T0_NEAREST_RANK)]: df[rc].to_list() for rc in rank_cols
+        }
+
+        return {
+            tid: (
+                t0,
+                {
+                    alias: alias_ranks[alias][i]
+                    for alias in alias_ranks
+                    if tid in presence.get(alias, frozenset())
+                },
+            )
+            for i, (tid, t0) in enumerate(zip(ids, t0s))
+        }
+
+    def t0_data(
+        self,
+        output_format: Literal["pandas", "polars"] = "pandas",
+    ) -> pl.DataFrame | pd.DataFrame:
+        """Return the T0 table for all visible trajectories.
+
+        Columns: ``[id_col, _T0_, <alias1>_T0_NEAREST_RANK_, ...]``.
+        Each alias gets its own nearest-rank column because the floor lookup
+        depends on the alias-specific temporal index.
+
+        Args:
+            output_format: ``"pandas"`` (default) or ``"polars"``.
+
+        Returns:
+            One row per visible trajectory ID.
+        """
+        df = self._get_traj_t0_df()
+        if output_format == "polars":
+            return df
+        if output_format == "pandas":
+            return df.to_pandas()
+        raise ValueError(
+            f"Invalid output_format {output_format!r}. "
+            "Expected one of: 'pandas', 'polars'."
+        )
+
     def copy(self) -> TrajectoryPool:
         """Return a shallow copy sharing the same store, with all view state preserved.
 
@@ -837,6 +1057,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             alias_mask=set(self._alias_mask) if self._alias_mask is not None else None,
             has_soft_drops=self._has_soft_drops,
             pools=copied_pools,
+            t0_setter=self._t0_setter,
         )
 
     def subset(self, ids, *, inplace: bool = False) -> TrajectoryPool:
