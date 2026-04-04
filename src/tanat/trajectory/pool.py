@@ -34,7 +34,6 @@ from ..sequence.base._utils import merge_optional_frames, resolve_ids_to_add
 from ..core import registry as _registry
 from ..store.base.utils import normalise_to_lazyframe
 from ..zeroing import T0Setter, T0Value, _T0, _T0_NEAREST_RANK
-from ..zeroing.base import _InheritedT0Setter
 from .cast import TrajectoryCastRecipe
 from .settings import TrajectorySettings
 from .trajectory import Trajectory
@@ -254,29 +253,12 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         )
 
     def _build_pools(self) -> dict[str, SequencePool]:
-        """Create pool objects for all store aliases and apply current casts."""
+        """Create pool objects for all store aliases via :meth:`SequencePool.from_parent`."""
         result = {}
         for alias in self._store.store_aliases:  # ALL aliases, unfiltered
             store_path = self._store.sequence_stores[alias].root_path
-            pool = _registry.build_pool("sequence", store_path)
             # pylint: disable=protected-access
-            # Align id_column with the trajectory-level user-facing name.
-            pool.update_settings(id_column=self.settings.id_column)
-            # Propagate id/time index casts - already validated at trajectory level.
-            pool._casts = pool._casts.replace(
-                id=self._casts.id, time_index=self._casts.time_index
-            )
-            # Propagate trajectory-level ID mask as a silent intersection.
-            # IDs absent from this sub-pool's store are silently excluded.
-            if self._id_mask is not None:
-                store_ids = set(pool.unique_ids)  # pool._id_mask is None here
-                # pylint: disable=protected-access
-                pool._id_mask = self._id_mask & store_ids
-                pool.clear_cache()
-            # Lock to prevent accidental casts or in-place mutations at pool level.
-            pool._locked = True
-            # Sub-pools always inherit the trajectory T0.  _InheritedT0Setter
-            pool._t0_setter = _InheritedT0Setter(parent=self)
+            pool = SequencePool.from_parent(store_path, parent_pool=self)
             result[alias] = pool
         return result
 
@@ -878,7 +860,6 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             )
             on = None
 
-        # Build setter + compute (UNIFORM: no per-strategy branching).
         strategy_kwargs: dict[str, dict] = {
             "position": {"position": position, "anchor": anchor},
             "direct": {"direct": direct},
@@ -889,41 +870,29 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         setter.compute_from_trajectory(self, on=on)
 
         self._t0_setter = setter
-        self._propagate_t0()
+        # Clear sub-pool caches so they pick up the new setter on next access.
+        if self._pools is not None:
+            for pool in self._pools.values():
+                pool.clear_cache()
         self.clear_cache()
         return self
 
-    def _propagate_t0(self) -> None:
-        """Install a fresh :class:`_InheritedT0Setter` on every sub-pool.
-
-        Called by :meth:`set_t0` after the trajectory-level setter has been
-        computed, so that every sub-pool delegates its T0 to this pool.
-        Each sub-pool's cache is cleared to pick up the new T0 on next access.
-        """
-        for pool in self.sequence_pools.values():
-            pool._t0_setter = _InheritedT0Setter(parent=self)
-            pool.clear_cache()
-
     @CachableSettings.cached_method()
     def _get_traj_t0_df(self) -> pl.DataFrame:
-        """Cached trajectory-level T0 DataFrame.
+        """Cached T0 DataFrame with columns ``[id_col, _T0_, <alias>_T0_NEAREST_RANK_, ...]``.
 
-        Reads ``_T0_`` from ``self._t0_setter.df``, then computes per-alias
-        nearest ranks via ``pool._nearest_rank_lf()`` in a single lazy plan.
-        One ``.collect()`` at the end.
-
-        Returns:
-            Polars DataFrame with columns
-            ``[id_col, _T0_, <alias1>_T0_NEAREST_RANK_, ...]``.
+        Triggers lazy computation if ``set_t0()`` was never called, then
+        joins per-alias nearest ranks.
         """
-        if self._t0_setter.df is None:
+        setter = self._t0_setter
+        if setter.df is None:
             # Lazy trigger: no explicit set_t0() yet.  Default setter
             # (position=0, anchor=start) resolves on=None to the first
             # visible alias.
-            self._t0_setter.compute_from_trajectory(self)
+            setter.compute_from_trajectory(self)
 
         id_col = self.settings.id_column
-        t0_lf = self._t0_setter.df.lazy()
+        t0_lf = setter.df.lazy()
         if self._id_mask is not None:
             t0_lf = t0_lf.filter(pl.col(id_col).is_in(self._id_mask))
 
@@ -1062,8 +1031,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             copied_pools = None
 
         # pylint: disable=protected-access
-        # _construct bypasses TrajectoryPool.__init__ (validation, resolution, ...).
-        return TrajectoryPool._construct(
+        new_pool = TrajectoryPool._construct(
             store=self._store,
             settings=self.settings,
             cast_recipe=self._casts,
@@ -1074,6 +1042,11 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             pools=copied_pools,
             t0_setter=self._t0_setter,
         )
+        # Re-point sub-pools to the new TrajectoryPool.
+        if copied_pools is not None:
+            for p in copied_pools.values():
+                p._parent_pool = new_pool
+        return new_pool
 
     def subset(self, ids, *, inplace: bool = False) -> TrajectoryPool:
         """Return a view restricted to the given trajectory IDs.
