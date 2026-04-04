@@ -20,8 +20,8 @@ from tanat_utils.pretty_format import (
 
 from ..sequence.base.sequence import Sequence
 from ..store.trajectory.store import TrajectoryStore
+from ..core import registry as _registry
 from ..zeroing import T0Setter, T0Value, _T0, _T0_NEAREST_RANK
-from ..zeroing.base import _InheritedT0Setter
 from .cast import TrajectoryCastRecipe
 from .settings import TrajectorySettings
 from .view_mixin import TrajectoryViewMixin
@@ -72,6 +72,7 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
         )
 
         self._parent_pool: TrajectoryPool | None = None
+        self._fallback_t0_setter: T0Setter = T0Setter.default()
 
     @classmethod
     def from_parent(
@@ -85,7 +86,7 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
     ) -> Trajectory:
         """Create a pool-managed trajectory.  **Not part of the public API.**
 
-        Bypasses store resolution, feature resolution, and cast probe — all
+        Bypasses store resolution, feature resolution, and cast probe: all
         already performed by the pool.  Pool context (casts, virtual ID,
         sequence pools, metadata) is read lazily from *parent_pool* via
         the corresponding properties.
@@ -107,6 +108,7 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
         new_traj._alias_mask = alias_mask
         CachableSettings.__init__(new_traj, settings=settings)
         new_traj._parent_pool = parent_pool
+        new_traj._fallback_t0_setter = T0Setter.default()
         return new_traj
 
     # ------------------------------------------------------------------
@@ -220,32 +222,27 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
     # Access
     # ------------------------------------------------------------------
 
-    def _build_sequence(self, store_alias: str):
-        """Build the :class:`Sequence` for *store_alias* without any validity check.
-
-        For internal use only - callers must guarantee that *store_alias* is
-        present in :attr:`_store_aliases` (e.g. when iterating or building
-        :attr:`sequences`).
-
-        When created from a :class:`TrajectoryPool` (via
-        :meth:`from_parent`), delegates to ``pool.sequence_pools[alias][id]``
-        so that all pool-level mutations (casts, features, drops) propagate
-        automatically.  Falls back to building directly from the store when
-        the :class:`Trajectory` is used standalone.
-        """
-        if self._parent_pool is not None:
-            return self._parent_pool.sequence_pools[store_alias][self._id_value]
-        # Standalone fallback: no casts, no pool context.
+    def _build_raw_sequence(self, store_alias: str):
+        """Build a plain :class:`Sequence` for *store_alias* without T0 binding."""
         seq_store = self._store.sequence_stores[store_alias]
         seq_type = seq_store.get_sequence_type()
         seq_cls = Sequence.get_registered(seq_type)
-        seq = seq_cls(
+        return seq_cls(
             id_value=self._id_value,
             store=seq_store,
             id_column=self.settings.id_column,
         )
-        seq._inherited_setter = _InheritedT0Setter(parent=self)
-        return seq
+
+    def _build_sequence(self, store_alias: str):
+        """Build the :class:`Sequence` for *store_alias*."""
+        if self._parent_pool is not None:
+            return self._parent_pool.sequence_pools[store_alias][self._id_value]
+        seq_store = self._store.sequence_stores[store_alias]
+        standalone_pool = _registry.build_pool("sequence", seq_store.root_path)
+        standalone_pool.update_settings(id_column=self.settings.id_column)
+        # pylint: disable=protected-access
+        standalone_pool._fallback_t0_setter = self._fallback_t0_setter
+        return standalone_pool[self._id_value]
 
     def __getitem__(self, store_alias: str):
         if store_alias not in self._store_aliases:
@@ -300,39 +297,34 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
     # T0 / Zeroing
     # ------------------------------------------------------------------
 
-    @CachableSettings.cached_property
+    @property
     def _t0_setter(self):
-        """Active T0 setter for this trajectory.
+        """Effective T0 setter for this trajectory.
 
-        * **Pool path:** returns the parent pool's setter directly.
-          Already computed and validated.
-        * **Standalone path:** instantiates the default ``position=0`` setter
-          and runs :meth:`~tanat.zeroing.base.T0Setter.compute_from_trajectory`
-          on this trajectory.  Cached after the first access.
+        Delegates to the parent pool's :attr:`_t0_setter` when managed,
+        otherwise returns :attr:`_fallback_t0_setter` (computation deferred
+        to :attr:`_t0_result`).
         """
-
         if self._parent_pool is not None:
-            # pylint: disable=protected-access
             return self._parent_pool._t0_setter
-        setter = T0Setter.default()
-        setter.compute_from_trajectory(self)
-        return setter
+        return self._fallback_t0_setter
 
     @CachableSettings.cached_property
     def _t0_result(self) -> tuple:
-        """T0 ``(value, {alias: nearest_rank})`` pair for this trajectory.
+        """Cached T0 ``(value, {alias: nearest_rank})`` pair for this trajectory.
 
-        * **Pool path:** filters the parent pool's cached
-          :meth:`~TrajectoryPool._get_traj_t0_df` result (zero extra I/O).
-        * **Standalone path:** uses :attr:`_t0_setter` (which triggers lazy
-          computation on first access) and resolves per-alias nearest ranks
-          via :meth:`~tanat.sequence.base.view_mixin.SequenceViewMixin._resolve_nearest_rank`.
-
-        Cached by :class:`~tanat_utils.CachableSettings`.
+        * **Pool path:** reads from the parent pool's cached T0 lookup.
+        * **Standalone path:** computes lazily via :attr:`_t0_setter` and
+          resolves per-alias nearest ranks.
         """
         if self._parent_pool is None:
-            # Standalone path: trigger lazy T0 computation via _t0_setter.
             setter = self._t0_setter
+            if setter.df is None:
+                aliases = self._store_aliases
+                if aliases:
+                    raw_seq = self._build_raw_sequence(aliases[0])
+                    setter.compute_from_sequence(raw_seq)
+                    setter._on = aliases[0]
             df = setter.df
             if df is None or df.height == 0:
                 return (None, {})
@@ -350,10 +342,6 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
                 nearest_ranks[alias] = rank_df[_T0_NEAREST_RANK][0]
             return (t0_value, nearest_ranks)
 
-        # Pool path: O(1) dict lookup. The pool builds the full
-        # {id: (t0, {alias: rank})} mapping once (cached) from the
-        # trajectory index + T0 DataFrame, avoiding both a per-trajectory
-        # DataFrame filter and a per-trajectory trajectory-index disk scan.
         # pylint: disable=protected-access
         lookup = self._parent_pool._get_traj_t0_lookup()
         if self._id_value not in lookup:
