@@ -28,6 +28,7 @@ from tanat_utils.pretty_format import (
 )
 
 from ...core.path import resolve_path
+from ...core import registry as _registry
 from ...store.base.utils import normalise_to_lazyframe, check_no_reserved_names
 from ...store.sequence.builder.base import SequenceStoreBuilder
 from .cast import SequenceCastRecipe
@@ -39,6 +40,7 @@ from ...zeroing import T0Setter
 if TYPE_CHECKING:
     from ...store.sequence.store import SequenceStore
     from .settings import SequenceSettings
+    from ...trajectory.pool import TrajectoryPool
 
 
 LOGGER = logging.getLogger(__name__)
@@ -91,13 +93,11 @@ class SequencePool(
         self._casts: SequenceCastRecipe = SequenceCastRecipe.coerce(cast_recipe)
         if not self._casts.is_empty():
             self._casts.probe(self._store)
-        self._t0_setter: T0Setter = T0Setter.default(
+        self._fallback_t0_setter: T0Setter = T0Setter.default(
             is_event=self.get_registration_name() == "event"
-        )  # always set; default = position=0, anchor pre-resolved
-
-        # Locking: when a pool is managed by a TrajectoryPool, it is locked.
-        # Prevent any operations that would desynchronise it from its siblings.
+        )
         self._locked: bool = False
+        self._parent_pool: TrajectoryPool | None = None
 
         # -- GC safety --------------------------------------------------------
         # Registered at the very end: if __init__ raises (e.g. during probe()),
@@ -107,6 +107,43 @@ class SequencePool(
         self._gc_state: list = [store, None]  # [store, virtual_id]
         weakref.finalize(self, SequencePool._finalize_cleanup, self._gc_state)
         # ---------------------------------------------------------------------
+
+    @classmethod
+    def from_parent(
+        cls,
+        store_path: Path,
+        *,
+        parent_pool: TrajectoryPool,
+    ) -> SequencePool:
+        """Create a managed sub-pool owned by *parent_pool*.
+
+        Builds the pool from *store_path*, aligns settings and casts with the
+        parent :class:`~tanat.trajectory.pool.TrajectoryPool`, and marks it
+        locked.  T0 is resolved lazily via the :attr:`_t0_setter` property
+        which delegates to *parent_pool*.
+
+        Args:
+            store_path: Root path of the sequence store to load.
+            parent_pool: The owning
+                :class:`~tanat.trajectory.pool.TrajectoryPool`.
+
+        Returns:
+            A locked :class:`SequencePool` whose T0 delegates to *parent_pool*.
+        """
+        # pylint: disable=protected-access
+        pool = _registry.build_pool("sequence", store_path)
+        pool.update_settings(id_column=parent_pool.settings.id_column)
+        pool._casts = pool._casts.replace(
+            id=parent_pool._casts.id,
+            time_index=parent_pool._casts.time_index,
+        )
+        if parent_pool._id_mask is not None:
+            store_ids = set(pool.unique_ids)
+            pool._id_mask = parent_pool._id_mask & store_ids
+            pool.clear_cache()
+        pool._locked = True
+        pool._parent_pool = parent_pool
+        return pool
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -199,13 +236,12 @@ class SequencePool(
         row_mask: pl.Series | None,
         has_soft_drops: bool,
         t0_setter: T0Setter,
+        parent_pool: TrajectoryPool | None = None,
     ) -> SequencePool:
         """Construct a pool of type *cls* without going through ``__init__``.
 
-        Bypasses all store probing and feature validation: *settings* and
+        Bypasses store probing and feature validation: *settings* and
         *cast_recipe* must already be fully resolved.
-
-        Called by :meth:`copy` and :meth:`_reinterpret_as`.
 
         Args:
             store: Already-resolved :class:`~tanat.store.sequence.store.SequenceStore`.
@@ -215,20 +251,24 @@ class SequencePool(
             id_mask: Set of sequence IDs to expose (or ``None`` for all).
             row_mask: Row-level boolean mask (or ``None``).
             has_soft_drops: Whether soft-dropped sequences exist.
-            t0_setter: T0 strategy to propagate from a parent pool.
+            t0_setter: T0 strategy (own setter; ignored for managed pools).
+            parent_pool: Owning
+                :class:`~tanat.trajectory.pool.TrajectoryPool` when this pool
+                is managed (or ``None`` for standalone pools).
         """
         pool = object.__new__(cls)
         pool._store = store
         CachableSettings.__init__(pool, settings=settings)
         pool._locked = False
         pool._casts = cast_recipe
-        pool._t0_setter = t0_setter
+        pool._fallback_t0_setter = t0_setter
         pool._gc_state = [store, virtual_id]
         weakref.finalize(pool, SequencePool._finalize_cleanup, pool._gc_state)
         pool._virtual_id = virtual_id
         pool._id_mask = id_mask
         pool._row_mask = row_mask
         pool._has_soft_drops = has_soft_drops
+        pool._parent_pool = parent_pool
         return pool
 
     # ------------------------------------------------------------------
@@ -274,7 +314,7 @@ class SequencePool(
         ti_section = [
             format_kv("Type", str(meta.time_index)),
             format_kv("Columns", str(t_cols)),
-            format_kv("t0", self._t0_setter.strategy_summary),
+            format_kv("t0", self._t0_display_label()),
         ]
 
         parts = [
@@ -327,28 +367,47 @@ class SequencePool(
     # ------------------------------------------------------------------
     # T0 / Zeroing
     # ------------------------------------------------------------------
+
+    @property
+    def _t0_setter(self) -> T0Setter:
+        """Effective T0 setter.
+
+        Delegates to the parent :class:`~tanat.trajectory.pool.TrajectoryPool`
+        when this pool is managed; returns the pool's own standalone setter
+        otherwise.
+        """
+        if self._parent_pool is not None:
+            return self._parent_pool._t0_setter
+        return self._fallback_t0_setter
+
+    def _t0_display_label(self) -> str:
+        """Return the T0 strategy label for display in :meth:`__str__`.
+
+        Managed pools append ``" (from trajectory)"`` to the parent's summary.
+        """
+        label = self._t0_setter.strategy_summary
+        if self._parent_pool is not None:
+            return f"{label} (from trajectory)"
+        return label
+
     @CachableSettings.cached_method()
     def _get_t0_df(
         self,
     ) -> pl.DataFrame:
-        """Internal cached T0 computation. Always returns a Polars DataFrame.
+        """Cached T0 DataFrame with columns ``[id_col, _T0_, _T0_NEAREST_RANK_]``.
 
-        Computes ``[id_col, _T0_, _T0_NEAREST_RANK_]`` in one shot: lazy trigger,
-        mask filter, then floor lookup via :meth:`_resolve_nearest_rank`.
-        Result invalidated by :meth:`clear_cache`.
-
-        Returns:
-            Polars DataFrame with columns ``[id_col, _T0_, _T0_NEAREST_RANK_]``,
-            one row per visible sequence.
+        Triggers lazy computation if ``set_t0()`` was never called, then
+        filters by ``_id_mask`` and resolves nearest ranks.
         """
-        df = self._t0_setter.df
+        setter = self._t0_setter
+        df = setter.df
         if df is None:
-            # No explicit set_t0() yet: trigger default (position=0) lazily.
-            # compute_from_sequence(self) uses _temporal_data_lf() → already respects _id_mask.
-            self._t0_setter.compute_from_sequence(self)
-            df = self._t0_setter.df
-        elif self._id_mask is not None:
-            # Pre-computed df may contain IDs no longer in view: filter now.
+            if self._parent_pool is not None:
+                setter.compute_from_trajectory(self._parent_pool)
+            else:
+                setter.compute_from_sequence(self)
+            df = setter.df
+        if self._id_mask is not None:
             df = df.filter(pl.col(self.settings.id_column).is_in(self._id_mask))
         return self._resolve_nearest_rank(df)
 
@@ -452,7 +511,7 @@ class SequencePool(
         setter.compute_from_sequence(
             self
         )  # eager: sets setter._df; errors surface here
-        self._t0_setter = setter
+        self._fallback_t0_setter = setter
 
         self.clear_cache()
         return self
@@ -1140,6 +1199,7 @@ class SequencePool(
             row_mask=self._row_mask.clone() if self._row_mask is not None else None,
             has_soft_drops=self._has_soft_drops,
             t0_setter=self._t0_setter,
+            parent_pool=self._parent_pool,
         )
 
     def subset(self, ids, *, inplace=False) -> SequencePool:
