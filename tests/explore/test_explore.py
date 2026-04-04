@@ -275,6 +275,42 @@ class TestTrajectoryFromParentAttrs:
         assert from_pool._parent_pool is not None  # pylint: disable=protected-access
 
 
+class TestSequencePoolFromParentAttrs:
+    """``from_parent`` must set the same instance attributes as ``__init__``.
+
+    Guards against fields silently added in ``SequencePool.__init__`` that
+    ``from_parent`` would miss.
+    """
+
+    def test_from_parent_sets_same_attrs_as_standalone_init(
+        self, traj_pool: TrajectoryPool
+    ) -> None:
+        """Ensure from_parent sets the same instance attributes as __init__."""
+        alias = next(iter(traj_pool.sequence_pools))
+        from_parent_pool = traj_pool.sequence_pools[alias]
+
+        # Build a standalone pool of the same concrete type from the same store.
+        store_path = (
+            from_parent_pool._store.root_path
+        )  # pylint: disable=protected-access
+        pool_cls = type(from_parent_pool)
+        standalone = pool_cls(store=store_path)
+
+        standalone_attrs = {k for k in vars(standalone) if not k.startswith("__")}
+        from_parent_attrs = {
+            k for k in vars(from_parent_pool) if not k.startswith("__")
+        }
+
+        # Both must expose exactly the same set of instance attributes.
+        assert from_parent_attrs == standalone_attrs
+
+        # Sanity: standalone has no pool ref, pool-built does.
+        assert standalone._parent_pool is None  # pylint: disable=protected-access
+        assert (
+            from_parent_pool._parent_pool is not None
+        )  # pylint: disable=protected-access
+
+
 @pytest.mark.parametrize("pool_type", ["interval", "event", "state"])
 class TestFromParentAttrs:
     """``from_parent`` must set the same instance attributes as ``__init__``.
