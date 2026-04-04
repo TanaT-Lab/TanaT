@@ -14,7 +14,6 @@ import pytest
 from tanat import TrajectoryPool
 from tanat.trajectory.trajectory import Trajectory
 from tanat.zeroing import T0Setter, _T0, _T0_NEAREST_RANK
-from tanat.zeroing.base import _InheritedT0Setter
 
 # Trajectory pool aliases present in the test fixtures
 _REF_ALIAS = "events"  # event pool: no anchor needed
@@ -407,16 +406,16 @@ class TestTrajectoryT0SubPoolPropagation:
                 assert traj[alias].t0_nearest_rank is not None
                 assert traj[alias].t0_nearest_rank >= 0
 
-    def test_sub_pool_inherited_setter(self, traj_pool_copy) -> None:
-        """Sub-pools carry _InheritedT0Setter; after set_t0, summary shows 'from trajectory'."""
+    def test_sub_pool_parent_pool(self, traj_pool_copy) -> None:
+        """Sub-pools reference parent via _parent_pool; after set_t0 display shows 'from trajectory'."""
         for pool in traj_pool_copy.sequence_pools.values():
             # pylint: disable=protected-access
-            assert isinstance(pool._t0_setter, _InheritedT0Setter)
+            assert pool._parent_pool is traj_pool_copy
 
         traj_pool_copy.set_t0(position=0, on=_REF_ALIAS)
         for pool in traj_pool_copy.sequence_pools.values():
             # pylint: disable=protected-access
-            assert pool._t0_setter.strategy_summary.startswith("from trajectory")
+            assert "(from trajectory)" in pool._t0_display_label()
 
     def test_sub_pool_lazy_trigger_before_set_t0(self, traj_pool_copy) -> None:
         """Before set_t0(), accessing t0_data() on a sub-pool triggers lazy parent
@@ -570,7 +569,7 @@ class TestTrajectoryT0Standalone:
         assert set(ranks.keys()) <= set(standalone._store_aliases)
 
     def test_standalone_sequence_inherits_t0(self, traj_store) -> None:
-        """Standalone traj['alias'].t0 matches traj.t0 via _InheritedT0Setter."""
+        """Standalone traj['alias'].t0 matches traj.t0 via ephemeral pool delegation."""
         pool = TrajectoryPool(store=traj_store)
         # pylint: disable=protected-access
         tid = pool.sequence_pools[pool._store_aliases[0]].unique_ids[0]
@@ -583,7 +582,6 @@ class TestTrajectoryT0Standalone:
         for alias in standalone:
             seq = standalone[alias]
             assert seq.t0 == expected_t0
-            assert isinstance(seq._inherited_setter, _InheritedT0Setter)
 
 
 # ---------------------------------------------------------------------------
