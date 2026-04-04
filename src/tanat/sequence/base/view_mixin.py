@@ -121,7 +121,11 @@ class SequenceViewMixin:
         or ``drop_features``).
         """
         # Propagated from parent Pool, scoped to this view's feature selection.
-        if getattr(self, "_parent_pool", None) is not None:
+        # hasattr(self, "_id_value") avoid scoping trajectory metadata for Sequence views.
+        if (
+            hasattr(self, "_id_value")
+            and getattr(self, "_parent_pool", None) is not None
+        ):
             return self._parent_pool.metadata.scope(
                 entity_features=self.settings.entity_features,
                 static_features=self.settings.static_features,
