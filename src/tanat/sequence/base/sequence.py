@@ -77,7 +77,9 @@ class Sequence(
 
         self._parent_pool: SequencePool | None = None
         self._own_row_mask: pl.Series | None = None
-        self._inherited_setter: T0Setter | None = None
+        self._fallback_t0_setter: T0Setter = T0Setter.default(
+            is_event=self.get_registration_name() == "event"
+        )
 
     @classmethod
     def from_parent(
@@ -90,7 +92,7 @@ class Sequence(
     ) -> Sequence:
         """Create a pool-managed sequence.  **Not part of the public API.**
 
-        Bypasses store resolution, feature resolution, and cast probe — all
+        Bypasses store resolution, feature resolution, and cast probe: all
         already performed by the pool.  Every piece of pool context
         (casts, row mask, virtual ID, T0) is read lazily from *parent_pool*
         via the corresponding cached properties.
@@ -167,36 +169,25 @@ class Sequence(
         """The sequence identifier."""
         return self._id_value
 
-    @CachableSettings.cached_property
+    @property
     def _t0_setter(self) -> T0Setter:
-        """Active T0 setter for this sequence.
+        """Effective T0 setter for this sequence.
 
-        Resolution order:
-
-        1. **Pool path:** the parent pool's setter (already computed).
-        2. **Trajectory path:** an inherited setter that delegates to the
-           parent trajectory's T0.
-        3. **Standalone path:** a default ``position=0`` setter, computed
-           on demand and cached.
+        Delegates to the parent pool's :attr:`_t0_setter` when managed,
+        otherwise returns :attr:`_fallback_t0_setter` (computation deferred
+        to :attr:`_t0_result`).
         """
         if self._parent_pool is not None:
             return self._parent_pool._t0_setter
-        if self._inherited_setter is not None:
-            return self._inherited_setter
-        setter = T0Setter.default(is_event=self.get_registration_name() == "event")
-        setter.compute_from_sequence(self)
-        return setter
+        return self._fallback_t0_setter
 
     @CachableSettings.cached_property
     def _t0_result(self) -> tuple[T0Value | None, int | None]:
-        """T0 ``(value, nearest_rank)`` pair for this sequence.
+        """Cached T0 ``(value, nearest_rank)`` pair for this sequence.
 
-        * **Pool path:** filters the pool's cached :meth:`_get_t0_df` result
-          (single vectorised pass already computed by the pool, zero extra I/O).
-        * **Standalone path:** computes from scratch via :attr:`_t0_setter`
-          and :meth:`_resolve_nearest_rank`.
-
-        Cached by :class:`~tanat_utils.CachableSettings`.
+        * **Pool path:** filters the pool's cached :meth:`_get_t0_df`.
+        * **Standalone path:** computes via :attr:`_t0_setter` and
+          :meth:`_resolve_nearest_rank`.
         """
         if self._parent_pool is not None:
             df = self._parent_pool._get_t0_df()
