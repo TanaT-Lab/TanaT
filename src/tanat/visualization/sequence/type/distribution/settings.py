@@ -12,7 +12,7 @@ from tanat_utils import settings_dataclass as dataclass
 
 from ....style.base import BaseVizSettings
 from ....style.legend import LegendSettings
-from ...base.literals import TimeMode
+from ...base.literals import DisplayUnit, TimeMode
 
 # Supported aggregation modes for the distribution chart.
 DistributionMode = Literal["count", "proportion", "percentage"]
@@ -38,14 +38,20 @@ class DistributionAesthetics:
         stacked: When ``True`` (default) render a stacked area chart.
             When ``False`` render overlapping transparent fills, one per label.
         time_mode: ``"absolute"`` (default) uses real timestamps on the x-axis.
-            ``"relative"`` is reserved for future use and raises
-            :exc:`NotImplementedError` at ``prepare_data`` time.
+            ``"relative"`` aligns all sequences to their per-ID T0 reference date;
+            the x-axis shows a numeric offset from T0.  Requires :meth:`set_t0` to
+            have been called (or uses the lazy default of ``position=0``).
+        display_unit: Target unit for the x-axis when ``time_mode="relative"`` and
+            the pool is datetime-based.  One of ``"days"`` (default), ``"hours"``,
+            ``"minutes"``, or ``"seconds"``.  Ignored for timestep pools (a
+            :class:`UserWarning` is emitted if explicitly set).
     """
 
     mode: DistributionMode = "percentage"
     bin_size: str | int | float = "1d"
     stacked: bool = True
     time_mode: TimeMode = "absolute"
+    display_unit: DisplayUnit | None = None
 
 
 @dataclass
