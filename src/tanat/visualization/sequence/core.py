@@ -179,6 +179,7 @@ class SequenceVisualizer:
         bin_size: str | int | float = "1d",
         stacked: bool = True,
         time_mode: TimeMode = "absolute",
+        display_unit: DisplayUnit | None = None,
         allow_large: bool = False,
     ) -> DistributionVizBuilder:
         """Create a distribution builder.
@@ -207,8 +208,12 @@ class SequenceVisualizer:
             stacked: ``True`` (default) renders a stacked area chart.
                 ``False`` renders overlapping transparent fills.
             time_mode: ``"absolute"`` (default) uses real timestamps on the
-                x-axis. ``"relative"`` raises :exc:`NotImplementedError` until
-                alignment logic is implemented.
+                x-axis. ``"relative"`` aligns all sequences to their per-ID T0
+                reference date; the x-axis shows a numeric offset from T0.
+            display_unit: Target unit for the x-axis when ``time_mode="relative"``
+                and the pool is datetime-based.  One of ``"days"`` (default when
+                ``None``), ``"hours"``, ``"minutes"``, or ``"seconds"``.
+                Ignored for timestep pools (a :class:`UserWarning` is emitted).
             allow_large: Bypass the
                 :attr:`~BaseSequenceVizBuilder.MAX_CATEGORY` safety guard.
 
@@ -222,6 +227,7 @@ class SequenceVisualizer:
                 "bin_size": bin_size,
                 "stacked": stacked,
                 "time_mode": time_mode,
+                "display_unit": display_unit,
             }
         )
         return DistributionVizBuilder(settings=settings, allow_large=allow_large)
