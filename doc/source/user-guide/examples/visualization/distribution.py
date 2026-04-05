@@ -195,6 +195,48 @@ SequenceVisualizer.distribution(mode="count", bin_size="1mo") \
 # fmt: on
 
 # %% [markdown]
+# Relative time mode
+# ~~~~~~~~~~~~~~~~~~
+#
+# ``time_mode="relative"`` shifts every sequence so that T0 becomes the
+# origin of the x-axis (0 days). The axis then shows a numeric offset in
+# days, and ``bin_size`` retains its usual Polars duration meaning
+# (e.g. ``"1d"`` → one-day bins).
+#
+# Call :meth:`~tanat.sequence.SequencePool.set_t0` to set the reference
+# point; without it the lazy default (``position=0``) is used.
+
+# %%
+# Anchor T0 to the first state of every sequence.
+pool.set_t0(position=0, anchor="start")
+
+# %%
+
+# Pool: state distribution relative to each sequence's T0
+# fmt: off
+SequenceVisualizer.distribution(time_mode="relative", bin_size="1d") \
+    .title("State distribution from T0 (pool)") \
+    .x_axis(label="Days from T0") \
+    .y_axis(label="% of sequences") \
+    .colors("Set2") \
+    .draw(pool, entity_feature="status") \
+    .show()
+# fmt: on
+
+# %%
+
+# Single sequence: occupancy relative to that individual's T0
+# fmt: off
+SequenceVisualizer.distribution(time_mode="relative", mode="count", bin_size="1d") \
+    .title(f"State occupancy from T0 (ID {seq.id_value})") \
+    .x_axis(label="Days from T0") \
+    .y_axis(label="Occupied") \
+    .colors("Set2") \
+    .draw(seq, entity_feature="status") \
+    .show()
+# fmt: on
+
+# %% [markdown]
 # Faceting
 # ~~~~~~~~
 #
