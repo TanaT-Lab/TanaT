@@ -189,24 +189,10 @@ class Sequence(
         * **Standalone path:** computes via :attr:`_t0_setter` and
           :meth:`_resolve_nearest_rank`.
         """
-        if self._parent_pool is not None:
-            df = self._parent_pool._get_t0_df()
-            row = df.filter(pl.col(self.settings.id_column) == self._id_value)
-            if row.height > 0:
-                return (row[_T0][0], row[_T0_NEAREST_RANK][0])
+        df = self._get_t0_df()
+        if df.is_empty():
             return (None, None)
-
-        # Standalone path
-        setter = self._t0_setter
-        if setter.df is None:
-            setter.compute_from_sequence(self)
-        if setter.df is None:
-            return (None, None)
-        df = setter.df.filter(pl.col(self.settings.id_column) == self._id_value)
-        resolved = self._resolve_nearest_rank(df)
-        if len(resolved) > 0:
-            return (resolved[_T0][0], resolved[_T0_NEAREST_RANK][0])
-        return (None, None)
+        return (df[_T0][0], df[_T0_NEAREST_RANK][0])
 
     @property
     def t0(self) -> T0Value | None:
@@ -225,6 +211,30 @@ class Sequence(
         T0 before all timestamps, or no row matched the query).
         """
         return self._t0_result[1]
+
+    def _get_t0_df(self) -> pl.DataFrame:
+        """Single-row T0 table ``[id_col, _T0_, _T0_NEAREST_RANK_]`` for this sequence.
+
+        Mirrors :meth:`~tanat.sequence.base.pool.SequencePool._get_t0_df`.
+
+        Returns:
+            Polars DataFrame with one row and columns
+            ``[id_col, _T0_, _T0_NEAREST_RANK_]``.
+        """
+        id_col = self.settings.id_column
+        if self._parent_pool is not None:
+            # Fast path: filter the parent pool's already-cached result.
+            full = self._parent_pool._get_t0_df()
+            return full.filter(pl.col(id_col) == self._id_value)
+        # Standalone path: trigger computation if needed, then filter to this ID.
+        setter = self._t0_setter
+        if setter.df is None:
+            setter.compute_from_sequence(self)
+        df = setter.df
+        if df is None:
+            return pl.DataFrame()
+        row = df.filter(pl.col(id_col) == self._id_value)
+        return self._resolve_nearest_rank(row)
 
     def __len__(self) -> int:
         """Number of events/states in this sequence (respects row mask)."""
