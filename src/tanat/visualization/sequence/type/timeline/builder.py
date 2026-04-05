@@ -10,7 +10,14 @@ from typing import TYPE_CHECKING, Any
 import polars as pl
 
 from ...base.builder import BaseSequenceVizBuilder
-from ...base.utils import rename_id_column, resolve_label, drop_null_labels
+from ...base.utils import (
+    rename_id_column,
+    resolve_label,
+    drop_null_labels,
+    shift_time_to_relative,
+    resolve_display_unit,
+    UNIT_LABELS,
+)
 from .data import (
     assign_y_positions,
     build_y_tick_map,
@@ -149,7 +156,6 @@ class TimelineVizBuilder(BaseSequenceVizBuilder, register_name="timeline"):
 
         Raises:
             TypeError: If *entity_feature* is not a categorical feature.
-            NotImplementedError: If ``time_mode="relative"`` (not yet implemented).
             ValueError: If safety guards are exceeded and ``allow_large=False``.
         """
         if not sequence_or_pool.metadata.is_categorical_feature(entity_feature):
@@ -159,11 +165,6 @@ class TimelineVizBuilder(BaseSequenceVizBuilder, register_name="timeline"):
             )
 
         allow_large = self.allow_large
-
-        if self.settings.aesthetics.time_mode == "relative":
-            raise NotImplementedError(
-                "time_mode='relative' is not yet implemented. Use time_mode='absolute'."
-            )
 
         id_col = sequence_or_pool.settings.id_column
         time_cols = sequence_or_pool.settings.get_time_columns()
@@ -178,6 +179,22 @@ class TimelineVizBuilder(BaseSequenceVizBuilder, register_name="timeline"):
         lf = rename_id_column(lf, id_col)
         lf = rename_time_index_columns(lf, time_cols)
         lf = resolve_label(lf, entity_feature)
+
+        # Relative time: subtract per-ID T0 from temporal columns.
+        if self.settings.aesthetics.time_mode == "relative":
+            is_dt = sequence_or_pool.metadata.time_index.is_datetime
+            resolved_unit = resolve_display_unit(
+                self.settings.aesthetics.display_unit,
+                is_datetime=is_dt,
+            )
+            x_unit_label = UNIT_LABELS[resolved_unit] if is_dt else None
+            self._default_x_label = (
+                f"{x_unit_label} from T0" if x_unit_label else "Time from T0"
+            )
+            end_col = "__END__" if "__END__" in lf.collect_schema().names() else None
+            lf = shift_time_to_relative(
+                lf, sequence_or_pool, "__TIME__", end_col, display_unit=resolved_unit
+            )
 
         if drop_na:
             lf = drop_null_labels(lf)
