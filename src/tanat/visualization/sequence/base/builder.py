@@ -48,6 +48,7 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
     ) -> None:
         CachableSettings.__init__(self, settings=settings)
         self.allow_large: bool = allow_large
+        self._default_x_label: str | None = None
 
     # ------------------------------------------------------------------
     # Chainable configuration: figure layout
@@ -576,6 +577,8 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
         else:
             if x.label:
                 ax.set_xlabel(x.label)
+            elif self._default_x_label:
+                ax.set_xlabel(self._default_x_label)
             if x.tick_rotation:
                 ax.tick_params(axis="x", rotation=x.tick_rotation)
             if x.limit_min is not None or x.limit_max is not None:
