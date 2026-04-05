@@ -9,7 +9,7 @@ from dataclasses import field
 
 from tanat_utils import settings_dataclass as dataclass
 
-from ...base.literals import GroupBy, TimeMode
+from ...base.literals import DisplayUnit, GroupBy, TimeMode
 from ....style.axis import XAxisSettings, YAxisSettings
 from ....style.base import BaseVizSettings
 
@@ -21,12 +21,19 @@ class TimelineAesthetics:
     Attributes:
         group_by: Row organisation. ``"id"`` (default) for one row per sequence ID,
             or ``"category"`` for one row per unique label value.
-        time_mode: ``"absolute"`` (default) displays real timestamps.
-            ``"relative"`` would align all sequences to t=0 (not yet implemented).
+        time_mode: ``"absolute"`` (default) displays real timestamps on the x-axis.
+            ``"relative"`` aligns all sequences to their per-ID T0 reference date;
+            the x-axis shows a numeric offset from T0.  Requires :meth:`set_t0` to
+            have been called (or uses the lazy default of ``position=0``).
+        display_unit: Target unit for the x-axis when ``time_mode="relative"`` and
+            the pool is datetime-based.  One of ``"days"`` (default), ``"hours"``,
+            ``"minutes"``, or ``"seconds"``.  Ignored for timestep pools (a
+            :class:`UserWarning` is emitted if explicitly set).
     """
 
     group_by: GroupBy = "id"
     time_mode: TimeMode = "absolute"
+    display_unit: DisplayUnit | None = None
 
 
 @dataclass
