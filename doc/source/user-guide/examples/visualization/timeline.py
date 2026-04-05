@@ -179,6 +179,44 @@ SequenceVisualizer.timeline() \
 # fmt: on
 
 # %% [markdown]
+# Relative time (aligned to T0)
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#
+# ``time_mode="relative"`` aligns every sequence to its own T0 reference
+# point so that the x-axis shows an offset in days from that anchor instead
+# of absolute timestamps.  Call :meth:`~tanat.sequence.SequencePool.set_t0`
+# first to define the reference date; without it the lazy default
+# (``position=0``, i.e. the first row) is used.
+
+# %%
+# Anchor T0 to the first interval of every sequence.
+pool.set_t0(position=0, anchor="start")
+
+# %%
+
+# Pool: all sequences aligned to their own t0
+# fmt: off
+SequenceVisualizer.timeline(time_mode="relative") \
+    .title("Timeline aligned to T0 (pool)") \
+    .x_axis(label="Days from T0") \
+    .colors("Set2") \
+    .draw(pool, entity_feature="status") \
+    .show()
+# fmt: on
+
+# %%
+
+# Single sequence: the same shift applied to one individual
+# fmt: off
+SequenceVisualizer.timeline(time_mode="relative") \
+    .title(f"Timeline aligned to T0 (ID {seq.id_value})") \
+    .x_axis(label="Days from T0") \
+    .colors("Set2") \
+    .draw(seq, entity_feature="status") \
+    .show()
+# fmt: on
+
+# %% [markdown]
 # Faceting
 # ~~~~~~~~
 #
