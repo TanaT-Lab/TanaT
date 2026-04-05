@@ -11,7 +11,14 @@ import numpy as np
 import polars as pl
 
 from ...base.builder import BaseSequenceVizBuilder
-from ...base.utils import drop_null_labels, rename_id_column, resolve_label
+from ...base.utils import (
+    drop_null_labels,
+    rename_id_column,
+    resolve_label,
+    shift_time_to_relative,
+    resolve_display_unit,
+    UNIT_LABELS,
+)
 from ...base.exceptions import UnsupportedSequenceTypeError
 from .data import aggregate_distribution, assign_time_bins, rename_time_index_columns
 from .settings import DistributionSettings
@@ -148,9 +155,9 @@ class DistributionVizBuilder(BaseSequenceVizBuilder, register_name="distribution
         Steps:
 
         1. Guard: pool type must be ``"state"``.
-        2. Guard: ``time_mode="relative"`` is not yet implemented.
-        3. Guard: *bin_size* type must match the pool temporal type.
-        4. Rename ID and time columns, resolve label, optionally drop nulls.
+        2. Guard: *bin_size* type must match the pool temporal type.
+        3. Rename ID and time columns, resolve label, optionally drop nulls.
+        4. Relative time shift (when ``time_mode="relative"``).
         5. Inject ``__FACET__`` when *facet_by* is set.
         6. Assign time bins (occupancy-based, one collect for global bounds).
         7. Aggregate by ``[__TIME_BIN__, __LABEL__]`` (plus ``__FACET__``)
@@ -169,18 +176,12 @@ class DistributionVizBuilder(BaseSequenceVizBuilder, register_name="distribution
 
         Raises:
             UnsupportedSequenceTypeError: If pool type is not ``"state"``.
-            NotImplementedError: If ``time_mode="relative"`` is requested.
             TypeError: If *bin_size* type does not match the pool temporal type.
         """
         pool_type = sequence_or_pool.get_registration_name()
         if pool_type not in self._COMPATIBLE_TYPES:
             raise UnsupportedSequenceTypeError(
                 pool_type, compatible_types=self._COMPATIBLE_TYPES
-            )
-
-        if self.settings.aesthetics.time_mode == "relative":
-            raise NotImplementedError(
-                "time_mode='relative' is not yet implemented. Use time_mode='absolute'."
             )
 
         ti = sequence_or_pool.metadata.time_index
@@ -216,12 +217,30 @@ class DistributionVizBuilder(BaseSequenceVizBuilder, register_name="distribution
         if drop_na:
             lf = drop_null_labels(lf)
 
+        # Relative time: subtract per-ID T0 from the start and end columns.
+        resolved_unit = None
+        if self.settings.aesthetics.time_mode == "relative":
+            is_dt = sequence_or_pool.metadata.time_index.is_datetime
+            resolved_unit = resolve_display_unit(
+                self.settings.aesthetics.display_unit,
+                is_datetime=is_dt,
+            )
+            x_unit_label = UNIT_LABELS[resolved_unit] if is_dt else None
+            self._default_x_label = (
+                f"{x_unit_label} from T0" if x_unit_label else "Time from T0"
+            )
+            lf = shift_time_to_relative(
+                lf, sequence_or_pool, "__START__", "__END__", display_unit=resolved_unit
+            )
+
         # Inject __FACET__ column (cross-join in assign_time_bins preserves all cols)
         if facet_by:
             lf = self._inject_facet_column(lf, sequence_or_pool, id_col="__ID__")
 
         # Occupancy-based binning: 1 collect (2 scalars), then cross-join + filter
-        lf = assign_time_bins(lf, bin_size, is_datetime=is_datetime)
+        lf = assign_time_bins(
+            lf, bin_size, is_datetime=is_datetime, display_unit=resolved_unit
+        )
 
         # Aggregate counts / proportion / percentage
         mode = self.settings.aesthetics.mode
