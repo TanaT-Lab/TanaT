@@ -1,16 +1,6 @@
 #!/usr/bin/env python3
 """
 Pure-Polars data preparation for DistributionVizBuilder.
-
-Functions
----------
-rename_time_index_columns
-    Rename raw start/end columns to ``__START__`` / ``__END__``.
-assign_time_bins
-    Cross-join each segment against a generated bin axis; keep only bins the
-    segment occupies (occupancy-based binning).
-aggregate_distribution
-    Count label occurrences per bin, then derive proportion or percentage.
 """
 
 from __future__ import annotations
