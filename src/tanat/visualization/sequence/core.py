@@ -77,6 +77,7 @@ class SequenceVisualizer:
         *,
         group_by: GroupBy = "id",
         time_mode: TimeMode = "absolute",
+        display_unit: DisplayUnit | None = None,
         allow_large: bool = False,
     ) -> TimelineVizBuilder:
         """Create a timeline builder.
@@ -88,9 +89,11 @@ class SequenceVisualizer:
                 * ``"category"``: one row per unique label value.
 
             time_mode: ``"absolute"`` (real timestamps as-is) or ``"relative"``
-                (all sequences aligned to t=0). Note: ``"relative"`` is accepted
-                by the settings layer but raises :exc:`NotImplementedError` at
-                ``prepare_data`` time until the alignment logic is implemented.
+                (all sequences aligned to their per-ID T0 reference date).
+            display_unit: Target unit for the x-axis when ``time_mode="relative"``
+                and the pool is datetime-based.  One of ``"days"`` (default when
+                ``None``), ``"hours"``, ``"minutes"``, or ``"seconds"``.
+                Ignored for timestep pools (a :class:`UserWarning` is emitted).
             allow_large: Bypass the :attr:`~TimelineVizBuilder.MAX_MARKERS` and
                 :attr:`~TimelineVizBuilder.MAX_IDS` safety guards.
 
@@ -101,6 +104,7 @@ class SequenceVisualizer:
             aesthetics={
                 "group_by": group_by,
                 "time_mode": time_mode,
+                "display_unit": display_unit,
             }
         )
         return TimelineVizBuilder(settings=settings, allow_large=allow_large)
