@@ -15,7 +15,56 @@ aggregate_distribution
 
 from __future__ import annotations
 
+import re
+from typing import TYPE_CHECKING
+
+import numpy as np
 import polars as pl
+
+from ...base.utils import MS_PER_DISPLAY_UNIT
+
+if TYPE_CHECKING:
+    from ...base.literals import DisplayUnit
+
+
+# Milliseconds per Polars duration unit suffix.
+_MS_PER_UNIT: dict[str, float] = {
+    "ns": 1e-6,
+    "us": 1e-3,
+    "ms": 1.0,
+    "s": 1_000.0,
+    "m": 60_000.0,
+    "h": 3_600_000.0,
+    "d": 86_400_000.0,
+    "w": 604_800_000.0,
+    "mo": 30 * 86_400_000.0,  # approximate: 30 days
+    "y": 365 * 86_400_000.0,  # approximate: 365 days
+}
+
+
+def _parse_bin_size_to_unit(bin_size: str, display_unit: str) -> float:
+    """Convert a Polars duration string to a numeric step in *display_unit*.
+
+    Args:
+        bin_size: Polars duration string, e.g. ``"1d"``, ``"12h"``, ``"1w"``,
+            ``"1mo"``, ``"1y"``.
+        display_unit: Target display unit matching a key in
+            :data:`~tanat.visualization.sequence.base.utils.MS_PER_DISPLAY_UNIT`.
+
+    Returns:
+        Equivalent step value in *display_unit* as a ``float``.
+
+    Raises:
+        ValueError: If *bin_size* cannot be parsed.
+    """
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)(ns|us|ms|s|m|h|d|w|mo|y)", bin_size.strip())
+    if not m:
+        raise ValueError(
+            f"Cannot parse bin_size {bin_size!r} as a Polars duration string "
+            "(expected format: '<number><unit>', e.g. '1d', '12h', '1w', '1mo')."
+        )
+    ms = float(m.group(1)) * _MS_PER_UNIT[m.group(2)]
+    return ms / MS_PER_DISPLAY_UNIT[display_unit]
 
 
 def rename_time_index_columns(
@@ -48,6 +97,7 @@ def assign_time_bins(
     bin_size: str | int | float,
     *,
     is_datetime: bool,
+    display_unit: DisplayUnit | None = None,
 ) -> pl.LazyFrame:
     """Add ``__TIME_BIN__`` via occupancy-based binning.
 
@@ -63,25 +113,15 @@ def assign_time_bins(
         bin_size: Polars duration string (e.g. ``"1d"`` or ``"12h"``) for
             datetime pools, or a numeric step for timestep pools.
         is_datetime: ``True`` when the pool uses ``Datetime`` time columns.
+        display_unit: When set (relative mode with a datetime pool), *bin_size* is
+            parsed and converted to the target unit via
+            :func:`_parse_bin_size_to_unit` and ``np.arange`` generates numeric bins.
+            ``None`` (default) keeps the original datetime / numeric behaviour.
 
     Returns:
         LazyFrame with ``__TIME_BIN__`` added and one row per
         *(original row, bin)* pair.
-
-    Raises:
-        TypeError: If *bin_size* type does not match the pool temporal type.
     """
-    if is_datetime and not isinstance(bin_size, str):
-        raise TypeError(
-            f"bin_size must be a Polars duration string for datetime pools "
-            f"(e.g. '1d', '12h', '1w'), got {type(bin_size).__name__!r}."
-        )
-    if not is_datetime and isinstance(bin_size, str):
-        raise TypeError(
-            f"bin_size must be int or float for numeric timestep pools, "
-            f"got a string {bin_size!r}. Use a numeric value instead."
-        )
-
     # Single collect to read the two global bounds
     bounds = lf.select(
         pl.col("__START__").min().alias("t_min"),
@@ -91,7 +131,13 @@ def assign_time_bins(
     t_max = bounds["t_max"][0]
 
     if is_datetime:
-        bins_series = pl.datetime_range(t_min, t_max, bin_size, eager=True)
+        if (
+            display_unit is not None
+        ):  # relative mode: columns converted to Float64 offset
+            step = _parse_bin_size_to_unit(bin_size, display_unit)  # type: ignore[arg-type]
+            bins_series = pl.Series("__TIME_BIN__", np.arange(t_min, t_max, step))
+        else:
+            bins_series = pl.datetime_range(t_min, t_max, bin_size, eager=True)
     else:
         step = int(bin_size) if isinstance(bin_size, int) else float(bin_size)
         bins_series = pl.arange(t_min, t_max, step, eager=True)
