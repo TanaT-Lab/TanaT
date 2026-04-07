@@ -13,7 +13,8 @@ from ...base.builder import BaseSequenceVizBuilder
 from ...base.utils import (
     rename_id_column,
     resolve_label,
-    drop_null_labels,
+    handle_null_time_index,
+    handle_null_labels,
     shift_time_to_relative,
     resolve_display_unit,
     UNIT_LABELS,
@@ -149,7 +150,6 @@ class TimelineVizBuilder(BaseSequenceVizBuilder, register_name="timeline"):
         sequence_or_pool: SequencePool | Sequence,
         *,
         entity_feature: str,
-        drop_na: bool,
         facet_by: str | None = None,
     ) -> pl.DataFrame:
         """Orchestrate data transformations for the timeline (see ``data.py``).
@@ -178,7 +178,9 @@ class TimelineVizBuilder(BaseSequenceVizBuilder, register_name="timeline"):
         lf = sequence_or_pool._temporal_data_lf(features=features)
         lf = rename_id_column(lf, id_col)
         lf = rename_time_index_columns(lf, time_cols)
+        lf = handle_null_time_index(lf, self.settings.null_handling.na_time_index)
         lf = resolve_label(lf, entity_feature)
+        lf = handle_null_labels(lf, self.settings.null_handling.na_label)
 
         # Relative time: subtract per-ID T0 from temporal columns.
         if self.settings.aesthetics.time_mode == "relative":
@@ -196,9 +198,6 @@ class TimelineVizBuilder(BaseSequenceVizBuilder, register_name="timeline"):
                 lf, sequence_or_pool, "__TIME__", end_col, display_unit=resolved_unit
             )
 
-        if drop_na:
-            lf = drop_null_labels(lf)
-
         # Inject __FACET__ column (propagates naturally — no explicit select drops it)
         if facet_by:
             lf = self._inject_facet_column(lf, sequence_or_pool, id_col="__ID__")
@@ -206,7 +205,7 @@ class TimelineVizBuilder(BaseSequenceVizBuilder, register_name="timeline"):
         lf = assign_y_positions(lf, mode=self.settings.aesthetics.group_by)
 
         df = lf.collect()
-        df = df.with_columns(pl.col("__LABEL__").cast(pl.Utf8).fill_null("null"))
+        df = df.with_columns(pl.col("__LABEL__").cast(pl.Utf8))
 
         # Safety guard: total markers
         n = len(df)
