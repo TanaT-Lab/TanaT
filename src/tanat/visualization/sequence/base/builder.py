@@ -217,7 +217,6 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
         sequence_or_pool: SequencePool | Sequence,
         *,
         entity_feature: str,
-        drop_na: bool = False,
     ) -> pl.DataFrame:
         """Prepare the aggregated Polars DataFrame for rendering.
 
@@ -226,7 +225,6 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
                 individual :class:`~tanat.sequence.base.sequence.Sequence`
                 (e.g. obtained via ``pool[42]``).
             entity_feature: Entity feature column to use as category labels.
-            drop_na: Drop rows where the label is null before aggregation.
 
         Returns:
             Polars DataFrame with columns ``[__LABEL__, __VALUE__]``,
@@ -247,7 +245,6 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
         df = self._prepare_data(
             sequence_or_pool,
             entity_feature=entity_feature,
-            drop_na=drop_na,
             facet_by=self.settings.facet.by if self._facet_enabled else None,
         )
 
@@ -267,7 +264,6 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
         sequence_or_pool: SequencePool | Sequence,
         *,
         entity_feature: str,
-        drop_na: bool = False,
     ) -> VisualizationResult:
         """Full pipeline: prepare data, create figure, render, return result.
 
@@ -276,7 +272,6 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
                 individual :class:`~tanat.sequence.base.sequence.Sequence`
                 (e.g. obtained via ``pool[42]``).
             entity_feature: Entity feature column to use as category labels.
-            drop_na: Drop rows where the label is null before aggregation.
 
         Returns:
             A :class:`~tanat.visualization.utils.result.VisualizationResult`.
@@ -285,13 +280,11 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
             return self._draw_faceted(
                 sequence_or_pool,
                 entity_feature=entity_feature,
-                drop_na=drop_na,
             )
 
         data = self.prepare_data(
             sequence_or_pool,
             entity_feature=entity_feature,
-            drop_na=drop_na,
         )
 
         fig, ax = plt.subplots(figsize=self.settings.figsize)
@@ -366,7 +359,6 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
         pool: SequencePool,
         *,
         entity_feature: str,
-        drop_na: bool,
     ) -> VisualizationResult:
         """Orchestrate the faceted (small-multiples) render.
 
@@ -380,7 +372,6 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
         full_df = self._prepare_data(
             pool,
             entity_feature=entity_feature,
-            drop_na=drop_na,
             facet_by=f.by,
         )
         if "__FACET__" not in full_df.columns:
@@ -532,7 +523,6 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
         sequence_or_pool: SequencePool | Sequence,
         *,
         entity_feature: str,
-        drop_na: bool,
         facet_by: str | None = None,
     ) -> pl.DataFrame:
         """Subclass-specific data preparation (aggregation, labelling, guards).
