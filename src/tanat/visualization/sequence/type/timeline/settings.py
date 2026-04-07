@@ -10,6 +10,7 @@ from dataclasses import field
 from tanat_utils import settings_dataclass as dataclass
 
 from ...base.literals import DisplayUnit, GroupBy, TimeMode
+from ...base.settings import NullHandling
 from ....style.axis import XAxisSettings, YAxisSettings
 from ....style.base import BaseVizSettings
 
@@ -62,6 +63,7 @@ class TimelineSettings(BaseVizSettings):
 
     # pylint: disable=invalid-field-call
     aesthetics: TimelineAesthetics = field(default_factory=TimelineAesthetics)
+    null_handling: NullHandling = field(default_factory=NullHandling)
     marker: TimelineMarkerSettings = field(default_factory=TimelineMarkerSettings)
     # Override BaseVizSettings defaults for timeline
     y_axis: YAxisSettings = field(
