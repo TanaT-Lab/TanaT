@@ -12,7 +12,13 @@ import polars as pl
 
 from ...base.builder import BaseSequenceVizBuilder
 from ...base.exceptions import IncompatibleDisplayUnitError
-from ...base.utils import resolve_label, drop_null_labels, rename_id_column
+from ...base.utils import (
+    resolve_label,
+    handle_null_labels,
+    handle_null_time_index,
+    rename_id_column,
+    rename_time_index_columns,
+)
 from .exception import UnsupportedShowAsError
 from .data import (
     aggregate_count,
@@ -144,7 +150,6 @@ class BarplotVizBuilder(BaseSequenceVizBuilder, register_name="barplot"):
         sequence_or_pool: SequencePool | Sequence,
         *,
         entity_feature: str,
-        drop_na: bool,
         facet_by: str | None = None,
     ) -> pl.DataFrame:
         """Aggregate sequence data into a barplot-ready DataFrame (see ``data.py``).
@@ -189,16 +194,20 @@ class BarplotVizBuilder(BaseSequenceVizBuilder, register_name="barplot"):
         lf = sequence_or_pool._temporal_data_lf(features=features)
 
         # Rename ID column (needed for static-facet join; harmless otherwise)
-        if facet_by:
-            id_col = sequence_or_pool.settings.id_column
-            lf = rename_id_column(lf, id_col)
+        id_col = sequence_or_pool.settings.id_column
+        lf = rename_id_column(lf, id_col)
+
+        # Handle null time index for duration mode (uses start/end columns)
+        if show_as == "duration":
+            time_cols = sequence_or_pool.settings.get_time_columns()
+            lf = rename_time_index_columns(lf, time_cols)
+            lf = handle_null_time_index(lf, self.settings.null_handling.na_time_index)
 
         # Resolve label column
         lf = resolve_label(lf, feature)
         label_col = "__LABEL__"
 
-        if drop_na:
-            lf = drop_null_labels(lf)
+        lf = handle_null_labels(lf, self.settings.null_handling.na_label)
 
         # Inject __FACET__ column
         if facet_by:
@@ -206,15 +215,13 @@ class BarplotVizBuilder(BaseSequenceVizBuilder, register_name="barplot"):
 
         # Aggregate
         facet_col = "__FACET__" if facet_by else None
-        lf = self._aggregate(
-            lf, sequence_or_pool, label_col, show_as, facet_col=facet_col
-        )
+        lf = self._aggregate(lf, label_col, show_as, facet_col=facet_col)
         lf = apply_sort(lf, self.settings.aesthetics.sort)
 
         df = lf.collect()
 
-        # Cast labels to string and fill nulls so None becomes "null" and sort is stable
-        df = df.with_columns(pl.col("__LABEL__").cast(pl.Utf8).fill_null("null"))
+        # Cast labels to string
+        df = df.with_columns(pl.col("__LABEL__").cast(pl.Utf8))
 
         # Always assign colors (defaults to tab10 when no spec is provided)
         color_map = self._build_color_map(
@@ -227,7 +234,6 @@ class BarplotVizBuilder(BaseSequenceVizBuilder, register_name="barplot"):
     def _aggregate(
         self,
         lf: pl.LazyFrame,
-        sequence_or_pool: SequencePool | Sequence,
         label_col: str,
         show_as: str,
         *,
@@ -241,13 +247,11 @@ class BarplotVizBuilder(BaseSequenceVizBuilder, register_name="barplot"):
             return aggregate_rate(lf, label_col, facet_col=facet_col)
 
         # DURATION (Interval or State pools only)
-        time_cols = sequence_or_pool.settings.get_time_columns()
-        start_col, end_col = time_cols[0], time_cols[1]
         return aggregate_duration(
             lf,
             label_col,
-            start_col,
-            end_col,
+            "__START__",
+            "__END__",
             display_unit=self.settings.aesthetics.display_unit,
             facet_col=facet_col,
         )
