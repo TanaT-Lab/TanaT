@@ -57,31 +57,6 @@ def _parse_bin_size_to_unit(bin_size: str, display_unit: str) -> float:
     return ms / MS_PER_DISPLAY_UNIT[display_unit]
 
 
-def rename_time_index_columns(
-    lf: pl.LazyFrame,
-    time_cols: list[str],
-) -> pl.LazyFrame:
-    """Rename the two time index boundary columns to internal names.
-
-    Args:
-        lf: Input LazyFrame.
-        time_cols: Exactly two time index column names ``[start_col, end_col]``.
-
-    Returns:
-        LazyFrame with the boundary columns renamed to
-        ``__START__`` and ``__END__``.
-
-    Raises:
-        ValueError: If *time_cols* does not contain exactly two entries.
-    """
-    if len(time_cols) != 2:
-        raise ValueError(
-            f"Expected exactly 2 time columns, got {len(time_cols)}: " f"{time_cols!r}."
-        )
-    start_col, end_col = time_cols
-    return lf.rename({start_col: "__START__", end_col: "__END__"})
-
-
 def assign_time_bins(
     lf: pl.LazyFrame,
     bin_size: str | int | float,
