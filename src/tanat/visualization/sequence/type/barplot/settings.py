@@ -11,6 +11,7 @@ from typing import Literal
 from tanat_utils import settings_dataclass as dataclass
 
 from ...base.literals import DisplayUnit, Orientation, SortOrder
+from ...base.settings import NullHandling
 from ....style.base import BaseVizSettings
 from ....style.legend import LegendSettings
 
@@ -56,6 +57,7 @@ class BarplotSettings(BaseVizSettings):
 
     # pylint: disable=invalid-field-call
     aesthetics: BarAesthetics = field(default_factory=BarAesthetics)
+    null_handling: NullHandling = field(default_factory=NullHandling)
     marker: BarMarkerSettings = field(default_factory=BarMarkerSettings)
     # Override BaseVizSettings default: barplots hide the legend by default.
     legend: LegendSettings = field(default_factory=lambda: LegendSettings(show=False))
