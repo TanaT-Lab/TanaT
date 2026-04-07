@@ -10,7 +10,13 @@ from typing import Literal
 
 from tanat_utils import settings_dataclass as dataclass
 
-from ...base.literals import DisplayUnit, GroupBy, Orientation, SortOrder
+from ...base.literals import (
+    DisplayUnit,
+    GroupBy,
+    Orientation,
+    SortOrder,
+)
+from ...base.settings import NullHandling
 from ....style.base import BaseVizSettings
 from ....style.legend import LegendSettings
 
@@ -67,6 +73,7 @@ class SpanplotSettings(BaseVizSettings):
 
     # pylint: disable=invalid-field-call
     aesthetics: SpanAesthetics = field(default_factory=SpanAesthetics)
+    null_handling: NullHandling = field(default_factory=NullHandling)
     marker: SpanMarkerSettings = field(default_factory=SpanMarkerSettings)
     # Override BaseVizSettings default: spanplots hide the legend by default.
     legend: LegendSettings = field(default_factory=lambda: LegendSettings(show=False))
