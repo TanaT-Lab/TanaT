@@ -11,14 +11,19 @@ import numpy as np
 import polars as pl
 
 from ...base.builder import BaseSequenceVizBuilder
-from ...base.utils import resolve_label, drop_null_labels, rename_id_column
+from ...base.utils import (
+    resolve_label,
+    handle_null_labels,
+    handle_null_time_index,
+    rename_id_column,
+    rename_time_index_columns,
+)
 from ...base.exceptions import (
     IncompatibleDisplayUnitError,
     UnsupportedSequenceTypeError,
 )
 from .data import (
     extract_durations,
-    rename_time_index_columns,
     sort_ids,
     sort_labels,
 )
@@ -174,7 +179,6 @@ class SpanplotVizBuilder(BaseSequenceVizBuilder, register_name="spanplot"):
         sequence_or_pool: SequencePool | Sequence,
         *,
         entity_feature: str,
-        drop_na: bool,
         facet_by: str | None = None,
     ) -> pl.DataFrame:
         """Orchestrate data transformations for the spanplot (see ``data.py``).
@@ -209,10 +213,9 @@ class SpanplotVizBuilder(BaseSequenceVizBuilder, register_name="spanplot"):
         lf = sequence_or_pool._temporal_data_lf(features=features)
         lf = rename_id_column(lf, id_col)
         lf = rename_time_index_columns(lf, time_cols)
+        lf = handle_null_time_index(lf, self.settings.null_handling.na_time_index)
         lf = resolve_label(lf, entity_feature)
-
-        if drop_na:
-            lf = drop_null_labels(lf)
+        lf = handle_null_labels(lf, self.settings.null_handling.na_label)
 
         # Inject __FACET__ column (must happen before extract_durations)
         if facet_by:
@@ -222,7 +225,7 @@ class SpanplotVizBuilder(BaseSequenceVizBuilder, register_name="spanplot"):
         lf = extract_durations(lf, display_unit, extra_cols=extra)
 
         df = lf.collect()
-        df = df.with_columns(pl.col("__LABEL__").cast(pl.Utf8).fill_null("null"))
+        df = df.with_columns(pl.col("__LABEL__").cast(pl.Utf8))
 
         # Mode-sensitive size guards
         group_by = self.settings.aesthetics.group_by
