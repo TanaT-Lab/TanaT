@@ -13,6 +13,7 @@ from tanat_utils import settings_dataclass as dataclass
 from ....style.base import BaseVizSettings
 from ....style.legend import LegendSettings
 from ...base.literals import DisplayUnit, TimeMode
+from ...base.settings import NullHandling
 
 # Supported aggregation modes for the distribution chart.
 DistributionMode = Literal["count", "proportion", "percentage"]
@@ -79,6 +80,7 @@ class DistributionSettings(BaseVizSettings):
 
     # pylint: disable=invalid-field-call
     aesthetics: DistributionAesthetics = field(default_factory=DistributionAesthetics)
+    null_handling: NullHandling = field(default_factory=NullHandling)
     marker: DistributionMarkerSettings = field(
         default_factory=DistributionMarkerSettings
     )
