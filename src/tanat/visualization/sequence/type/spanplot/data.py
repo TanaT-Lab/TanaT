@@ -11,31 +11,6 @@ from ...base.literals import DisplayUnit
 from ...base.utils import MS_PER_DISPLAY_UNIT
 
 
-def rename_time_index_columns(
-    lf: pl.LazyFrame,
-    time_cols: list[str],
-) -> pl.LazyFrame:
-    """Rename the two time index columns to ``__START__`` and ``__END__``.
-
-    Args:
-        lf: Input LazyFrame.
-        time_cols: List of exactly two time index column names (start, end).
-
-    Returns:
-        LazyFrame with time index columns renamed to ``__START__`` and ``__END__``.
-
-    Raises:
-        ValueError: If *time_cols* does not contain exactly 2 elements.
-    """
-    if len(time_cols) != 2:
-        raise ValueError(
-            f"spanplot requires exactly 2 time index columns (start + end), "
-            f"got {len(time_cols)}: {time_cols}. "
-            "Only state and interval sequences expose a duration."
-        )
-    return lf.rename({time_cols[0]: "__START__", time_cols[1]: "__END__"})
-
-
 def extract_durations(
     lf: pl.LazyFrame,
     display_unit: DisplayUnit | None,
