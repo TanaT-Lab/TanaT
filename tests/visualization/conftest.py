@@ -37,6 +37,12 @@ def interval_pool_ts_copy(interval_pool_ts):
 
 
 @pytest.fixture
+def event_pool_copy(event_pool):
+    """Fresh copy of the session EventSequencePool (datetime)."""
+    return event_pool.copy()
+
+
+@pytest.fixture
 def trajectory_pool_dt_copy(trajectory_pool_dt):
     """Fresh copy of the session TrajectoryPool (datetime)."""
     return trajectory_pool_dt.copy()
