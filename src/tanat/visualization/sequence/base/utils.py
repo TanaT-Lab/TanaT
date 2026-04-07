@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from ....zeroing import _T0
-from .literals import DisplayUnit
+from .literals import DisplayUnit, NaLabel, NaTimeIndex
 
 if TYPE_CHECKING:
     from ....sequence.base.pool import SequencePool
@@ -83,6 +83,33 @@ def rename_id_column(
     return lf.rename({id_col: "__ID__"})
 
 
+def rename_time_index_columns(
+    lf: pl.LazyFrame,
+    time_cols: list[str],
+) -> pl.LazyFrame:
+    """Rename the two time index boundary columns to ``__START__`` / ``__END__``.
+
+    Used by builders that operate on interval or state pools
+    (barplot-duration, distribution, spanplot).  The timeline builder
+    uses its own variant because events have a single ``__TIME__`` column.
+
+    Args:
+        lf: Input LazyFrame.
+        time_cols: Exactly two time index column names ``[start_col, end_col]``.
+
+    Returns:
+        LazyFrame with *start_col* → ``__START__`` and *end_col* → ``__END__``.
+
+    Raises:
+        ValueError: If *time_cols* does not contain exactly two entries.
+    """
+    if len(time_cols) != 2:
+        raise ValueError(
+            f"Expected exactly 2 time columns, got {len(time_cols)}: {time_cols!r}."
+        )
+    return lf.rename({time_cols[0]: "__START__", time_cols[1]: "__END__"})
+
+
 def resolve_label(
     lf: pl.LazyFrame,
     feature: str,
@@ -99,15 +126,128 @@ def resolve_label(
     return lf.rename({feature: "__LABEL__"})
 
 
-def drop_null_labels(lf: pl.LazyFrame) -> pl.LazyFrame:
-    """Drop rows where ``__LABEL__`` is null.
+def handle_null_time_index(
+    lf: pl.LazyFrame,
+    strategy: NaTimeIndex,
+) -> pl.LazyFrame:
+    """Handle null values in time index columns (``__TIME__``, ``__START__``, ``__END__``).
+
+    Inspects the schema to determine which internal time columns are present
+    and applies the chosen *strategy* uniformly.
+
+    Args:
+        lf: Input LazyFrame (columns already renamed to internal names).
+        strategy: ``"drop"`` removes null rows with a :class:`UserWarning`;
+            ``"raise"`` raises :exc:`ValueError` immediately.
+
+    Returns:
+        LazyFrame with null time index rows handled.
+
+    Raises:
+        ValueError: If *strategy* is ``"raise"`` and nulls are found, **or**
+            if ``"drop"`` would remove every row.
+    """
+    time_cols = [
+        c
+        for c in ("__TIME__", "__START__", "__END__")
+        if c in lf.collect_schema().names()
+    ]
+    if not time_cols:
+        return lf
+
+    # Build a filter: row is null if ANY time column is null.
+    null_mask = pl.lit(False)
+    for col in time_cols:
+        null_mask = null_mask | pl.col(col).is_null()
+
+    # Materialise counts (two scalars only).
+    counts = lf.select(
+        null_mask.sum().alias("n_null"),
+        pl.len().alias("n_total"),
+    ).collect()
+    n_null = counts["n_null"][0]
+    n_total = counts["n_total"][0]
+
+    if n_null == 0:
+        return lf
+
+    # Identify which columns actually have nulls (for the message).
+    null_col_counts = lf.select(
+        [pl.col(c).is_null().sum().alias(c) for c in time_cols]
+    ).collect()
+    affected = [c for c in time_cols if null_col_counts[c][0] > 0]
+    col_list = ", ".join(affected)
+
+    if strategy == "raise":
+        raise ValueError(
+            f"{n_null} row(s) have a null time index ({col_list}). "
+            "Clean your data or use na_time_index='drop' to exclude them."
+        )
+
+    # strategy == "drop"
+    if n_null >= n_total:
+        raise ValueError(
+            f"All {n_total} row(s) have a null time index ({col_list}). "
+            "Nothing to render."
+        )
+
+    warnings.warn(
+        f"{n_null} row(s) have a null time index ({col_list}) and will be "
+        "excluded from the visualisation.",
+        UserWarning,
+        stacklevel=4,
+    )
+    return lf.filter(~null_mask)
+
+
+def handle_null_labels(
+    lf: pl.LazyFrame,
+    strategy: NaLabel,
+) -> pl.LazyFrame:
+    """Handle null values in the ``__LABEL__`` column.
 
     Args:
         lf: Input LazyFrame (must contain ``__LABEL__``).
+        strategy: ``"drop"`` removes null-label rows with a :class:`UserWarning`;
+            ``"raise"`` raises :exc:`ValueError` immediately;
+            ``"category"`` replaces nulls with the string ``"N/A"``.
 
     Returns:
-        LazyFrame with null-label rows removed.
+        LazyFrame with null labels handled.
+
+    Raises:
+        ValueError: If *strategy* is ``"raise"`` and nulls are found, **or**
+            if ``"drop"`` would remove every row.
     """
+    counts = lf.select(
+        pl.col("__LABEL__").is_null().sum().alias("n_null"),
+        pl.len().alias("n_total"),
+    ).collect()
+    n_null = counts["n_null"][0]
+    n_total = counts["n_total"][0]
+
+    if n_null == 0:
+        return lf
+
+    if strategy == "raise":
+        raise ValueError(
+            f"{n_null} row(s) have a null label. "
+            "Clean your data or use na_label='drop' to exclude them."
+        )
+
+    if strategy == "category":
+        return lf.with_columns(pl.col("__LABEL__").fill_null(pl.lit("N/A")))
+
+    # strategy == "drop"
+    if n_null >= n_total:
+        raise ValueError(f"All {n_total} row(s) have a null label. Nothing to render.")
+
+    warnings.warn(
+        f"{n_null} row(s) have a null label and will be excluded "
+        "from the visualisation.",
+        UserWarning,
+        stacklevel=4,
+    )
     return lf.filter(pl.col("__LABEL__").is_not_null())
 
 
