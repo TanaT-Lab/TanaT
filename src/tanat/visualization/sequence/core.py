@@ -17,7 +17,14 @@ from .type.timeline.builder import TimelineVizBuilder
 from .type.timeline.settings import TimelineSettings
 
 if TYPE_CHECKING:
-    from .base.literals import DisplayUnit, GroupBy, Orientation, SortOrder
+    from .base.literals import (
+        DisplayUnit,
+        GroupBy,
+        NaLabel,
+        NaTimeIndex,
+        Orientation,
+        SortOrder,
+    )
     from .type.barplot.settings import ShowAs
     from .type.distribution.settings import DistributionMode
     from .type.spanplot.settings import SpanKind
@@ -45,6 +52,8 @@ class SequenceVisualizer:
         sort: SortOrder = "alphabetic",
         orientation: Orientation = "vertical",
         display_unit: DisplayUnit | None = None,
+        na_time_index: NaTimeIndex = "drop",
+        na_label: NaLabel = "drop",
         allow_large: bool = False,
     ) -> BarplotVizBuilder:
         """Create a barplot builder.
@@ -56,6 +65,13 @@ class SequenceVisualizer:
             display_unit: Output unit for DURATION mode ("days", "hours",
                           "minutes", "seconds"). None keeps raw ms / raw timestep.
                           Only meaningful when show_as="duration" and the pool is datetime-based.
+            na_time_index: Strategy for null time index columns (only relevant
+                for ``show_as="duration"``): ``"drop"`` (default) removes with
+                warning, ``"raise"`` raises immediately.
+            na_label: Strategy for null entity feature labels:
+                ``"drop"`` (default) removes with warning,
+                ``"raise"`` raises immediately,
+                ``"category"`` renders nulls as ``"N/A"``.
             allow_large: Bypass the :attr:`~BaseSequenceVizBuilder.MAX_CATEGORY` safety guard.
 
         Returns:
@@ -67,7 +83,11 @@ class SequenceVisualizer:
                 "sort": sort,
                 "orientation": orientation,
                 "display_unit": display_unit,
-            }
+            },
+            null_handling={
+                "na_time_index": na_time_index,
+                "na_label": na_label,
+            },
         )
         return BarplotVizBuilder(settings=settings, allow_large=allow_large)
 
@@ -78,6 +98,8 @@ class SequenceVisualizer:
         group_by: GroupBy = "id",
         time_mode: TimeMode = "absolute",
         display_unit: DisplayUnit | None = None,
+        na_time_index: NaTimeIndex = "drop",
+        na_label: NaLabel = "drop",
         allow_large: bool = False,
     ) -> TimelineVizBuilder:
         """Create a timeline builder.
@@ -94,6 +116,13 @@ class SequenceVisualizer:
                 and the pool is datetime-based.  One of ``"days"`` (default when
                 ``None``), ``"hours"``, ``"minutes"``, or ``"seconds"``.
                 Ignored for timestep pools (a :class:`UserWarning` is emitted).
+            na_time_index: Strategy for null time index columns:
+                ``"drop"`` (default) removes with warning,
+                ``"raise"`` raises immediately.
+            na_label: Strategy for null entity feature labels:
+                ``"drop"`` (default) removes with warning,
+                ``"raise"`` raises immediately,
+                ``"category"`` renders nulls as ``"N/A"``.
             allow_large: Bypass the :attr:`~TimelineVizBuilder.MAX_MARKERS` and
                 :attr:`~TimelineVizBuilder.MAX_IDS` safety guards.
 
@@ -105,7 +134,11 @@ class SequenceVisualizer:
                 "group_by": group_by,
                 "time_mode": time_mode,
                 "display_unit": display_unit,
-            }
+            },
+            null_handling={
+                "na_time_index": na_time_index,
+                "na_label": na_label,
+            },
         )
         return TimelineVizBuilder(settings=settings, allow_large=allow_large)
 
@@ -118,6 +151,8 @@ class SequenceVisualizer:
         display_unit: DisplayUnit | None = None,
         sort: SortOrder = "ascending",
         orientation: Orientation = "vertical",
+        na_time_index: NaTimeIndex = "drop",
+        na_label: NaLabel = "drop",
         allow_large: bool = False,
     ) -> SpanplotVizBuilder:
         """Create a spanplot (duration distribution) builder.
@@ -153,6 +188,13 @@ class SequenceVisualizer:
                 * ``"vertical"``: groups on the x-axis, durations on y (default).
                 * ``"horizontal"``: groups on the y-axis, durations on x.
 
+            na_time_index: Strategy for null time index columns:
+                ``"drop"`` (default) removes with warning,
+                ``"raise"`` raises immediately.
+            na_label: Strategy for null entity feature labels:
+                ``"drop"`` (default) removes with warning,
+                ``"raise"`` raises immediately,
+                ``"category"`` renders nulls as ``"N/A"``.
             allow_large: Bypass the
                 :attr:`~SpanplotVizBuilder.MAX_CATEGORY` /
                 :attr:`~SpanplotVizBuilder.MAX_IDS` safety guards.
@@ -167,7 +209,11 @@ class SequenceVisualizer:
                 "display_unit": display_unit,
                 "sort": sort,
                 "orientation": orientation,
-            }
+            },
+            null_handling={
+                "na_time_index": na_time_index,
+                "na_label": na_label,
+            },
         )
         return SpanplotVizBuilder(settings=settings, allow_large=allow_large)
 
@@ -180,6 +226,8 @@ class SequenceVisualizer:
         stacked: bool = True,
         time_mode: TimeMode = "absolute",
         display_unit: DisplayUnit | None = None,
+        na_time_index: NaTimeIndex = "drop",
+        na_label: NaLabel = "drop",
         allow_large: bool = False,
     ) -> DistributionVizBuilder:
         """Create a distribution builder.
@@ -214,6 +262,13 @@ class SequenceVisualizer:
                 and the pool is datetime-based.  One of ``"days"`` (default when
                 ``None``), ``"hours"``, ``"minutes"``, or ``"seconds"``.
                 Ignored for timestep pools (a :class:`UserWarning` is emitted).
+            na_time_index: Strategy for null time index columns:
+                ``"drop"`` (default) removes with warning,
+                ``"raise"`` raises immediately.
+            na_label: Strategy for null entity feature labels:
+                ``"drop"`` (default) removes with warning,
+                ``"raise"`` raises immediately,
+                ``"category"`` renders nulls as ``"N/A"``.
             allow_large: Bypass the
                 :attr:`~BaseSequenceVizBuilder.MAX_CATEGORY` safety guard.
 
@@ -228,6 +283,10 @@ class SequenceVisualizer:
                 "stacked": stacked,
                 "time_mode": time_mode,
                 "display_unit": display_unit,
-            }
+            },
+            null_handling={
+                "na_time_index": na_time_index,
+                "na_label": na_label,
+            },
         )
         return DistributionVizBuilder(settings=settings, allow_large=allow_large)
