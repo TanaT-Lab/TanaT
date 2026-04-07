@@ -12,15 +12,17 @@ import polars as pl
 
 from ...base.builder import BaseSequenceVizBuilder
 from ...base.utils import (
-    drop_null_labels,
+    handle_null_labels,
+    handle_null_time_index,
     rename_id_column,
+    rename_time_index_columns,
     resolve_label,
     shift_time_to_relative,
     resolve_display_unit,
     UNIT_LABELS,
 )
 from ...base.exceptions import UnsupportedSequenceTypeError
-from .data import aggregate_distribution, assign_time_bins, rename_time_index_columns
+from .data import aggregate_distribution, assign_time_bins
 from .settings import DistributionSettings
 
 if TYPE_CHECKING:
@@ -147,7 +149,6 @@ class DistributionVizBuilder(BaseSequenceVizBuilder, register_name="distribution
         sequence_or_pool: SequencePool | Sequence,
         *,
         entity_feature: str,
-        drop_na: bool,
         facet_by: str | None = None,
     ) -> pl.DataFrame:
         """Orchestrate data transformations for the distribution chart.
@@ -156,7 +157,8 @@ class DistributionVizBuilder(BaseSequenceVizBuilder, register_name="distribution
 
         1. Guard: pool type must be ``"state"``.
         2. Guard: *bin_size* type must match the pool temporal type.
-        3. Rename ID and time columns, resolve label, optionally drop nulls.
+        3. Rename ID and time columns, handle null time index, resolve label,
+           handle null labels.
         4. Relative time shift (when ``time_mode="relative"``).
         5. Inject ``__FACET__`` when *facet_by* is set.
         6. Assign time bins (occupancy-based, one collect for global bounds).
@@ -168,7 +170,6 @@ class DistributionVizBuilder(BaseSequenceVizBuilder, register_name="distribution
         Args:
             sequence_or_pool: Input pool (must be ``StateSequencePool``).
             entity_feature: Categorical feature column to use as the state label.
-            drop_na: Drop rows with a null entity feature value when ``True``.
 
         Returns:
             Collected DataFrame with columns
@@ -212,10 +213,9 @@ class DistributionVizBuilder(BaseSequenceVizBuilder, register_name="distribution
         lf = sequence_or_pool._temporal_data_lf(features=features)
         lf = rename_id_column(lf, id_col)
         lf = rename_time_index_columns(lf, time_cols)
+        lf = handle_null_time_index(lf, self.settings.null_handling.na_time_index)
         lf = resolve_label(lf, entity_feature)
-
-        if drop_na:
-            lf = drop_null_labels(lf)
+        lf = handle_null_labels(lf, self.settings.null_handling.na_label)
 
         # Relative time: subtract per-ID T0 from the start and end columns.
         resolved_unit = None
@@ -248,7 +248,7 @@ class DistributionVizBuilder(BaseSequenceVizBuilder, register_name="distribution
         lf = aggregate_distribution(lf, mode, facet_col=facet_col)
 
         df = lf.collect()
-        df = df.with_columns(pl.col("__LABEL__").cast(pl.Utf8).fill_null("null"))
+        df = df.with_columns(pl.col("__LABEL__").cast(pl.Utf8))
 
         # Category count guard
         n_cat = df["__LABEL__"].n_unique()
