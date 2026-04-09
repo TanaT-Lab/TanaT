@@ -11,7 +11,7 @@ from typing import Any, TYPE_CHECKING
 
 import matplotlib.pyplot as plt
 import polars as pl
-from tanat_utils import CachableSettings, Registrable
+from tanat_utils import Cachable, CachableSettings, Registrable
 
 from ....sequence.base.pool import SequencePool
 from ....sequence.base.sequence import Sequence
@@ -211,7 +211,7 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
     # Public API
     # ------------------------------------------------------------------
 
-    @CachableSettings.cached_method()
+    @Cachable.cached_method()
     def prepare_data(
         self,
         sequence_or_pool: SequencePool | Sequence,

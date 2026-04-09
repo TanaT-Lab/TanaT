@@ -19,7 +19,7 @@ import weakref
 import numpy as np
 import polars as pl
 import pandas as pd
-from tanat_utils import CachableSettings, Registrable
+from tanat_utils import Cachable, CachableSettings, Registrable
 from tanat_utils.pretty_format import (
     format_header,
     format_section,
@@ -275,7 +275,7 @@ class SequencePool(
     # Properties
     # ------------------------------------------------------------------
 
-    @CachableSettings.cached_property
+    @Cachable.cached_property
     def unique_ids(self) -> list:
         """Visible sequence IDs in store order as a plain Python list.
 
@@ -357,7 +357,7 @@ class SequencePool(
             or self._has_soft_drops
         )
 
-    @CachableSettings.cached_property
+    @Cachable.cached_property
     def _target_seq_cls(self) -> type[Sequence]:
         """Determine the Sequence subclass to use for this pool (e.g. event, state, interval)."""
         reg_name = self.get_registration_name()
@@ -390,7 +390,7 @@ class SequencePool(
             return f"{label} (from trajectory)"
         return label
 
-    @CachableSettings.cached_method()
+    @Cachable.cached_method()
     def _get_t0_df(
         self,
     ) -> pl.DataFrame:
@@ -520,7 +520,7 @@ class SequencePool(
     # Access
     # ------------------------------------------------------------------
 
-    @CachableSettings.cached_method()
+    @Cachable.cached_method()
     def get_sequences(
         self,
         entity_features: list[str] | None = None,
@@ -1098,7 +1098,7 @@ class SequencePool(
         """Type-appropriate describe expressions for this pool."""
         return self._target_seq_cls._exprs_for_describe(self.settings)
 
-    @CachableSettings.cached_method()
+    @Cachable.cached_method()
     def _describe_result(self) -> pl.DataFrame:
         """Compute the per-ID describe result as a Polars DataFrame (cached)."""
         result: pl.DataFrame = self.apply(

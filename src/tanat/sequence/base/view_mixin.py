@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import polars as pl
-from tanat_utils import CachableSettings
+from tanat_utils import Cachable
 
 from ...metadata.sequence import SequenceMetadata
 from ...store.sequence.store import SequenceStore
@@ -74,7 +74,7 @@ class SequenceViewMixin:
     # Properties
     # ------------------------------------------------------------------
 
-    @CachableSettings.cached_property
+    @Cachable.cached_property
     def _id_lf(self) -> pl.LazyFrame:
         """Lazy frame of visible IDs with the correct dtype.
 
@@ -101,7 +101,7 @@ class SequenceViewMixin:
     # Metadata
     # ------------------------------------------------------------------
 
-    @CachableSettings.cached_property
+    @Cachable.cached_property
     def metadata(self) -> SequenceMetadata:
         """
         Returns rich metadata fully reflecting this view's cast recipes,
@@ -230,7 +230,7 @@ class SequenceViewMixin:
     # Collected data (cached)
     # ------------------------------------------------------------------
 
-    @CachableSettings.cached_method()
+    @Cachable.cached_method()
     def _temporal_data_df(
         self,
         features: list[str] | str | None = None,
@@ -243,7 +243,7 @@ class SequenceViewMixin:
         """
         return self._temporal_data_lf(features).collect()
 
-    @CachableSettings.cached_method()
+    @Cachable.cached_method()
     def _static_data_df(
         self,
         features: list[str] | str | None = None,

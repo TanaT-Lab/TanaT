@@ -17,7 +17,7 @@ import weakref
 import numpy as np
 import polars as pl
 import pandas as pd
-from tanat_utils import CachableSettings
+from tanat_utils import Cachable, CachableSettings
 from tanat_utils.pretty_format import (
     format_header,
     format_section,
@@ -283,7 +283,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             )
             pool.clear_cache()
 
-    @CachableSettings.cached_method()
+    @Cachable.cached_method()
     def get_trajectories(
         self,
         static_features: list[str] | None = None,
@@ -367,7 +367,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
     # Properties (delegated to store, filtered by view)
     # ------------------------------------------------------------------
 
-    @CachableSettings.cached_property
+    @Cachable.cached_property
     def unique_ids(self) -> list:
         """Visible trajectory IDs as a plain Python list.
 
@@ -380,7 +380,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         """
         return self._id_lf.collect().to_series().to_list()
 
-    @CachableSettings.cached_property
+    @Cachable.cached_property
     def _store_aliases(self) -> list[str]:
         """Aliases visible through the current view mask."""
         all_aliases = self._store.store_aliases
@@ -558,7 +558,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
     # Data access
     # ------------------------------------------------------------------
 
-    @CachableSettings.cached_method()
+    @Cachable.cached_method()
     def _static_data_raw(
         self,
         features: list[str] | str | None = None,
@@ -681,7 +681,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
     # Describe
     # ------------------------------------------------------------------
 
-    @CachableSettings.cached_method()
+    @Cachable.cached_method()
     def _describe_result(self, separator: str = "_") -> pl.DataFrame:
         """Cached polars result (one row per trajectory) for :meth:`describe`.
 
@@ -877,7 +877,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         self.clear_cache()
         return self
 
-    @CachableSettings.cached_method()
+    @Cachable.cached_method()
     def _get_traj_t0_df(self) -> pl.DataFrame:
         """Cached T0 DataFrame with columns ``[id_col, _T0_, <alias>_T0_NEAREST_RANK_, ...]``.
 
@@ -916,7 +916,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         )
         return result_lf.collect()
 
-    @CachableSettings.cached_method()
+    @Cachable.cached_method()
     def _get_traj_t0_lookup(self) -> dict:
         """O(1)-per-trajectory lookup built once from :meth:`_get_traj_t0_df`.
 

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Iterator, Literal
 import polars as pl
 import pandas as pd
 
-from tanat_utils import CachableSettings
+from tanat_utils import Cachable, CachableSettings
 from tanat_utils.pretty_format import (
     format_header,
     format_section,
@@ -146,7 +146,7 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
         """The trajectory identifier, in the cast type if a cast is active."""
         return self._id_value
 
-    @CachableSettings.cached_property
+    @Cachable.cached_property
     def _store_aliases(self) -> list[str]:
         """Aliases where this trajectory has data, filtered by mask."""
         all_aliases = self._store.store_aliases
@@ -270,7 +270,7 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
         for alias in self._store_aliases:
             yield alias, self._build_sequence(alias)
 
-    @CachableSettings.cached_property
+    @Cachable.cached_property
     def sequences(self) -> dict:
         """
         All visible :class:`Sequence` instances for this trajectory,
@@ -309,7 +309,7 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
             return self._parent_pool._t0_setter
         return self._fallback_t0_setter
 
-    @CachableSettings.cached_property
+    @Cachable.cached_property
     def _t0_result(self) -> tuple:
         """Cached T0 ``(value, {alias: nearest_rank})`` pair for this trajectory.
 
@@ -371,7 +371,7 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
     # Data access
     # ------------------------------------------------------------------
 
-    @CachableSettings.cached_method()
+    @Cachable.cached_method()
     def _static_data_raw(
         self,
         features: list[str] | str | None = None,
@@ -414,7 +414,7 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
     # Describe
     # ------------------------------------------------------------------
 
-    @CachableSettings.cached_method()
+    @Cachable.cached_method()
     def _describe_result(self, separator: str = "_") -> pl.DataFrame:
         """Cached polars result for :meth:`describe`.
 

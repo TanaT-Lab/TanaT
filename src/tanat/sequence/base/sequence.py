@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Literal
 
 import polars as pl
 import pandas as pd
-from tanat_utils import CachableSettings, Registrable
+from tanat_utils import Cachable, CachableSettings, Registrable
 from tanat_utils.pretty_format import (
     format_header,
     format_section,
@@ -137,7 +137,7 @@ class Sequence(
             return self._parent_pool._virtual_id
         return None
 
-    @CachableSettings.cached_property
+    @Cachable.cached_property
     def _row_mask(self) -> pl.Series | None:
         """Composed row mask for this sequence.
 
@@ -181,7 +181,7 @@ class Sequence(
             return self._parent_pool._t0_setter
         return self._fallback_t0_setter
 
-    @CachableSettings.cached_property
+    @Cachable.cached_property
     def _t0_result(self) -> tuple[T0Value | None, int | None]:
         """Cached T0 ``(value, nearest_rank)`` pair for this sequence.
 
@@ -556,7 +556,7 @@ class Sequence(
         """Type-appropriate describe expressions for this sequence."""
         return type(self)._exprs_for_describe(self.settings)
 
-    @CachableSettings.cached_method()
+    @Cachable.cached_method()
     def _describe_result(self) -> pl.DataFrame:
         """Compute the describe result as a Polars DataFrame (cached)."""
         return self.apply(self._describe_exprs(), output_format="polars")

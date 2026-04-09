@@ -13,7 +13,7 @@ from pathlib import Path
 
 import polars as pl
 import pandas as pd
-from tanat_utils import CachableSettings
+from tanat_utils import Cachable
 
 from ..core.path import resolve_path
 from ..metadata.trajectory import TrajectoryMetadata
@@ -72,7 +72,7 @@ class TrajectoryViewMixin:
     # Properties
     # ------------------------------------------------------------------
 
-    @CachableSettings.cached_property
+    @Cachable.cached_property
     def _id_lf(self) -> pl.LazyFrame:
         """Lazy frame of visible IDs with the correct dtype.
 
@@ -98,7 +98,7 @@ class TrajectoryViewMixin:
     # Metadata
     # ------------------------------------------------------------------
 
-    @CachableSettings.cached_property
+    @Cachable.cached_property
     def metadata(self) -> TrajectoryMetadata:
         """
         Returns trajectory-level metadata, fully reflecting this view's
