@@ -1,0 +1,13 @@
+# serializer version: 1
+# name: TestConfigRoundtrip.test_to_config_snapshot
+  dict({
+    'settings': dict({
+      'cost': dict({
+        'A,B': 0.3,
+      }),
+      'entity_feature': 'status',
+      'mismatch_cost': 0.7,
+    }),
+    'type': 'hamming',
+  })
+# ---
