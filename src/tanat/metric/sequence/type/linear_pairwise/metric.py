@@ -1,0 +1,318 @@
+#!/usr/bin/env python3
+"""
+LinearPairwiseSequenceMetric: align sequences position-by-position and aggregate entity distances.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Callable
+
+import numpy as np
+
+from tanat_utils import settings_dataclass as dataclass
+
+from ...base import SequenceMetric
+from ....entity.base import EntityMetric
+from ....matrix import DistanceMatrix
+from .kernels import compute_pairwise_matrix, _AGG_NUMBA_KERNELS
+
+if TYPE_CHECKING:
+    from .....sequence.base.sequence import Sequence
+    from .....sequence.base.pool import SequencePool
+
+
+# ---------------------------------------------------------------------------
+# Aggregation helpers
+# ---------------------------------------------------------------------------
+
+_AGG_FUNCTIONS: dict[str, Callable] = {
+    "mean": np.mean,
+    "sum": np.sum,
+}
+
+
+# ---------------------------------------------------------------------------
+# Settings
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class LinearPairwiseSettings:
+    """Settings for :class:`LinearPairwiseSequenceMetric`.
+
+    Args:
+        entity_metric: Entity-level metric.  Accepts a registration name
+            (string) or an :class:`~tanat.metric.entity.base.EntityMetric`
+            instance.  Default: ``"hamming"``.
+        agg_fun: Aggregation function applied to the vector of entity
+            distances.  One of ``"mean"`` (default) or ``"sum"``.
+        padding_penalty: Distance value used for unmatched positions when
+            sequences have different lengths.  ``None`` → unmatched
+            positions are ignored (only the overlap is aggregated).
+            When the overlap is empty (one sequence has length 0),
+            ``None`` makes the distance undefined (``nan`` in a matrix,
+            :class:`ValueError` on a direct call).
+    """
+
+    entity_metric: EntityMetric | str = "hamming"
+    agg_fun: str = "mean"
+    padding_penalty: float | None = None
+
+
+# ---------------------------------------------------------------------------
+# Metric
+# ---------------------------------------------------------------------------
+
+
+class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise"):
+    """Sequence metric by linear (position-wise) alignment of entities.
+
+    Aligns ``seq_a`` and ``seq_b`` rank-by-rank and applies the
+    configured entity metric to each aligned pair.  The resulting vector
+    of entity distances is aggregated (mean, sum, ...) to produce a single
+    scalar sequence distance.
+
+    When sequences differ in length, ``padding_penalty`` is applied for
+    each unmatched position of the longer sequence.  If
+    ``padding_penalty`` is ``None``, only the overlapping prefix is used.
+
+    Empty-sequence behaviour:
+
+    * **Both empty** → ``nan`` (distance is undefined).
+    * **One empty, padding_penalty is set** → all positions are padded.
+    * **One empty, padding_penalty is None** → direct call raises
+      :class:`ValueError`; matrix computation inserts ``nan``.
+
+    Example::
+
+        hamming = HammingEntityMetric(entity_feature="status")
+        lp = LinearPairwiseSequenceMetric(entity_metric=hamming)
+
+        dist = lp(seq_a, seq_b)
+        dm   = lp.compute_matrix(pool)
+    """
+
+    SETTINGS_CLASS = LinearPairwiseSettings
+
+    def __init__(
+        self,
+        entity_metric: EntityMetric | str = "hamming",
+        agg_fun: str = "mean",
+        padding_penalty: float | None = None,
+    ) -> None:
+        super().__init__(
+            settings=LinearPairwiseSettings(
+                entity_metric=entity_metric,
+                agg_fun=agg_fun,
+                padding_penalty=padding_penalty,
+            )
+        )
+
+    # ------------------------------------------------------------------
+    # Composition validation
+    # ------------------------------------------------------------------
+
+    def validate_composition(
+        self, seq_a: Sequence, seq_b: Sequence | None = None
+    ) -> None:
+        """Probe the first entity of each sequence through the entity metric."""
+        em = self.entity_metric
+        if seq_a:
+            em.validate_entity(seq_a[0])
+        if seq_b:
+            em.validate_entity(seq_b[0])
+
+    # ------------------------------------------------------------------
+    # Core computation
+    # ------------------------------------------------------------------
+
+    def _compute(self, seq_a: Sequence, seq_b: Sequence) -> float:
+        """Compute distance for a single pair of sequences (already validated).
+
+        Delegates to :meth:`_compute_pair` after resolving the entity metric
+        and aggregation function.
+
+        Args:
+            seq_a: First sequence.
+            seq_b: Second sequence.
+
+        Returns:
+            Aggregated scalar distance.
+
+        Raises:
+            ValueError: If one sequence is empty and the other is not,
+                with ``padding_penalty`` set to ``None``.
+        """
+        n_a, n_b = len(seq_a), len(seq_b)
+        if (
+            min(n_a, n_b) == 0
+            and max(n_a, n_b) > 0
+            and self.settings.padding_penalty is None
+        ):
+            raise ValueError(
+                f"Cannot compute distance: one sequence is empty "
+                f"(lengths {n_a} vs {n_b}) and padding_penalty is None. "
+                f"Set padding_penalty to a numeric value to handle "
+                f"length-mismatched sequences."
+            )
+        return self._compute_pair(seq_a, seq_b, self.entity_metric, self._get_agg_fn())
+
+    def _compute_matrix_impl(self, pool: SequencePool) -> DistanceMatrix:
+        """Dispatch to the Numba fast path or the Python fallback.
+
+        Uses the Numba batch path when the entity metric declares
+        ``NUMBA_OPTIM = True`` (e.g. :class:`~.entity.HammingEntityMetric`).
+        Falls back to the Python double-loop otherwise.
+
+        Args:
+            pool: Sequence pool.
+
+        Returns:
+            Symmetric :class:`DistanceMatrix` (may contain ``nan``).
+        """
+        em = self.entity_metric
+        if em.NUMBA_OPTIM:
+            return self._compute_matrix_numba(pool, em)
+        return self._compute_matrix_python(pool, em)
+
+    def _compute_matrix_python(
+        self, pool: SequencePool, em: EntityMetric
+    ) -> DistanceMatrix:
+        """Python double-loop fallback (always correct, slower for large pools).
+
+        Resolves entity metric and aggregation once, then iterates all
+        O(n²) pairs.  Pairs whose distance is undefined produce ``nan``.
+
+        Args:
+            pool: Sequence pool.
+            em:   Resolved entity metric instance.
+
+        Returns:
+            Symmetric :class:`DistanceMatrix` (may contain ``nan``).
+        """
+        agg_fn = self._get_agg_fn()
+        ids = pool.unique_ids
+        n = len(ids)
+        result = np.zeros((n, n), dtype=np.float32)
+        seqs = {sid: pool[sid] for sid in ids}
+
+        with self._create_progress_bar(total=n * (n - 1) // 2, desc="Pairs") as pbar:
+            for i in range(n):
+                for j in range(i + 1, n):
+                    d = self._compute_pair(seqs[ids[i]], seqs[ids[j]], em, agg_fn)
+                    result[i, j] = result[j, i] = float(d)
+                    pbar.update(1)
+
+        return DistanceMatrix(result, ids)
+
+    def _compute_matrix_numba(
+        self, pool: SequencePool, em: EntityMetric
+    ) -> DistanceMatrix:
+        """Numba fast path: pre-extract data then run the parallel kernel.
+
+        Delegates feature extraction to :meth:`prepare_batch_data` on the
+        entity metric, then calls the parallelised Numba kernel.  The first
+        call per process triggers JIT compilation (~1-3 s); subsequent calls
+        use the cached compiled binary.
+
+        Pairs whose distance is undefined (both sequences empty, or one
+        empty with ``padding_penalty=None``) produce ``nan`` entries.
+
+        Args:
+            pool: Sequence pool.
+            em:   Resolved entity metric instance (must have ``NUMBA_OPTIM=True``).
+
+        Returns:
+            Symmetric :class:`DistanceMatrix` (may contain ``nan``).
+        """
+        arrays, lengths, context = em.prepare_batch_data(pool)
+
+        agg_kernel = _AGG_NUMBA_KERNELS.get(self.settings.agg_fun)
+        if agg_kernel is None:
+            raise ValueError(
+                f"Unknown agg_fun '{self.settings.agg_fun}' for Numba path. "
+                f"Supported: {list(_AGG_NUMBA_KERNELS.keys())}"
+            )
+
+        padding = (
+            np.float32(self.settings.padding_penalty)
+            if self.settings.padding_penalty is not None
+            else np.float32(np.nan)
+        )
+
+        n = len(arrays)
+        result = np.zeros((n, n), dtype=np.float32)
+
+        if n > 1:
+            compute_pairwise_matrix(
+                result,
+                arrays,
+                lengths,
+                em.distance_kernel,
+                context,
+                agg_kernel,
+                padding,
+            )
+
+        return DistanceMatrix(result, pool.unique_ids)
+
+    def _compute_pair(
+        self,
+        seq_a: Sequence,
+        seq_b: Sequence,
+        em: EntityMetric,
+        agg_fn: Callable,
+    ) -> float:
+        """Compute distance for a single pair with pre-resolved dependencies.
+
+        Aligns entities by rank, aggregates distances.  Returns ``nan`` when
+        the distance is undefined (both empty, or one empty with no padding).
+
+        Args:
+            seq_a:  First sequence.
+            seq_b:  Second sequence.
+            em:     Resolved entity metric instance.
+            agg_fn: Resolved aggregation callable.
+
+        Returns:
+            Aggregated scalar distance, or ``nan`` for undefined pairs.
+        """
+        n_a = len(seq_a)
+        n_b = len(seq_b)
+
+        if n_a == 0 and n_b == 0:
+            return float("nan")
+
+        if min(n_a, n_b) == 0 and self.settings.padding_penalty is None:
+            return float("nan")
+
+        min_len = min(n_a, n_b)
+        max_len = max(n_a, n_b)
+        distances: list[float] = []
+
+        for i in range(min_len):
+            distances.append(em(seq_a[i], seq_b[i]))
+
+        if max_len > min_len and self.settings.padding_penalty is not None:
+            for _ in range(max_len - min_len):
+                distances.append(float(self.settings.padding_penalty))
+
+        return float(agg_fn(distances))
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _get_agg_fn(self) -> Callable:
+        """Return the aggregation callable for the configured ``agg_fun``.
+
+        Raises:
+            ValueError: If ``agg_fun`` is not a key of :data:`_AGG_FUNCTIONS`.
+        """
+        fn = _AGG_FUNCTIONS.get(self.settings.agg_fun)
+        if fn is None:
+            raise ValueError(
+                f"Unknown agg_fun '{self.settings.agg_fun}'. "
+                f"Supported: {list(_AGG_FUNCTIONS.keys())}"
+            )
+        return fn
