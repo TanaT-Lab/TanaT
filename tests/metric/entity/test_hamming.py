@@ -128,6 +128,21 @@ class TestHammingValidation:
         with pytest.raises(KeyError, match="nonexistent_feature"):
             h(ent, ent)
 
+    def test_asymmetric_cost_raises(self) -> None:
+        """Conflicting asymmetric cost entries raise ValueError."""
+        with pytest.raises((ValueError, Exception), match="Asymmetric"):
+            HammingEntityMetric(cost={("A", "B"): 0.3, ("B", "A"): 0.7})
+
+    def test_symmetric_cost_accepted(self) -> None:
+        """Same value for both orderings is accepted."""
+        h = HammingEntityMetric(cost={("A", "B"): 0.5, ("B", "A"): 0.5})
+        assert h.settings.cost == {("A", "B"): 0.5, ("B", "A"): 0.5}
+
+    def test_single_direction_cost_accepted(self) -> None:
+        """Only one ordering defined is accepted (symmetric by fallback)."""
+        h = HammingEntityMetric(cost={("A", "B"): 0.3})
+        assert h.settings.cost == {("A", "B"): 0.3}
+
 
 # ---------------------------------------------------------------------------
 # Config serialisation round-trip
