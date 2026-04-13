@@ -131,6 +131,53 @@ def compute_single_pair(
 
 
 @njit(parallel=True)
+def compute_pairwise_chunk(
+    result,
+    start,
+    end,
+    arrays,
+    lengths,
+    dist_kernel,
+    context,
+    aggregator,
+    padding_penalty,
+):
+    """Compute a chunk of rows ``[start, end)`` of the distance matrix.
+
+    Only fills ``result[i, j]`` and ``result[j, i]`` for ``i`` in
+    ``[start, end)`` and ``j`` in ``[i+1, n)``. Uses ``prange`` on the
+    chunk rows.  The diagonal is **not** set by this kernel.
+
+    Args:
+        result:          The full (n × n) memmap/array. Only rows
+                         ``[start:end]`` are written.
+        start:           First row index of the chunk (inclusive).
+        end:             Last row index of the chunk (exclusive).
+        arrays:          Per-sequence int32 encoded arrays.
+        lengths:         Per-sequence lengths.
+        dist_kernel:     Entity distance kernel.
+        context:         Opaque context for the kernel.
+        aggregator:      Aggregation kernel.
+        padding_penalty: Padding value (NaN = no padding).
+    """
+    n = len(lengths)
+    for i in prange(start, end):  # pylint: disable=not-an-iterable
+        for j in range(i + 1, n):
+            d = compute_single_pair(
+                arrays[i],
+                arrays[j],
+                lengths[i],
+                lengths[j],
+                dist_kernel,
+                context,
+                aggregator,
+                padding_penalty,
+            )
+            result[i, j] = d
+            result[j, i] = d
+
+
+@njit(parallel=True)
 def compute_pairwise_matrix(
     result,
     arrays,
