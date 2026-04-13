@@ -11,6 +11,7 @@ import numpy as np
 import polars as pl
 from numba.typed import List as NumbaList
 
+from pydantic import field_validator
 from tanat_utils import settings_dataclass as dataclass
 
 from .....metadata.feature import CategoricalInfo, FeatureInfo
@@ -28,10 +29,11 @@ class HammingSettings:
 
     Args:
         entity_feature: Name of the categorical feature to compare.
-            ``None`` → first entity feature from the pool/entity metadata.
-        cost: Asymmetric cost lookup.  Keys are ``(val_a, val_b)`` tuples.
-            Symmetric: ``(A, B)`` and ``(B, A)`` are both checked.
-            ``None`` → use ``mismatch_cost`` for every mismatch.
+            ``None`` - first entity feature from the pool/entity metadata.
+        cost: Pairwise cost lookup. Keys are ``(val_a, val_b)`` tuples;
+            order does not matter (both ``(A, B)`` and ``(B, A)`` are
+            checked). Conflicting entries are rejected at construction.
+            Default: ``None`` (every mismatch uses ``mismatch_cost``).
         mismatch_cost: Default cost applied when the pair is not in ``cost``
             and values differ (default: ``1.0``).
     """
@@ -40,13 +42,28 @@ class HammingSettings:
     cost: dict[tuple, float] | None = None
     mismatch_cost: float = 1.0
 
+    @field_validator("cost", mode="before")
+    @classmethod
+    def validate_cost_symmetry(cls, v):
+        """Reject cost dicts with conflicting asymmetric entries."""
+        if v is None:
+            return v
+        for (a, b), val in v.items():
+            if (b, a) in v and v[(b, a)] != val:
+                raise ValueError(
+                    f"Asymmetric cost entries are not supported: "
+                    f"({a!r}, {b!r})={val} vs ({b!r}, {a!r})={v[(b, a)]}. "
+                    f"Use the same value for both orderings."
+                )
+        return v
+
 
 class HammingEntityMetric(EntityMetric, register_name="hamming"):
     """Categorical Hamming distance between two entities.
 
     Returns ``0.0`` when both entities share the same value for the
     configured feature, and ``mismatch_cost`` (default ``1.0``) when
-    they differ.  A custom ``cost`` dict enables asymmetric / partial costs.
+    they differ.  A custom ``cost`` dict enables partial costs.
 
     Example::
 
@@ -127,22 +144,9 @@ class HammingEntityMetric(EntityMetric, register_name="hamming"):
     def prepare_batch_data(self, pool: SequencePool) -> tuple:
         """Extract categorical feature from pool, encode to int32 for Numba.
 
-        Implementation steps:
-            1. Resolve feature name (settings or first entity feature).
-            2. Validate that the feature is categorical.
-            3. Build a lazy temporal frame restricted to that feature.
-            4. Group by id_col, aggregate feature as list (still lazy).
-            5. Collect once; build dict id → values (handles empty sequences).
-            6. Iterate pool.unique_ids to get per-sequence value lists.
-            7. Build a shared vocabulary: unique values → int32 codes.
-            8. Encode + pack per-sequence int32 arrays into a
-               ``numba.typed.List``.
-            9. Build a lengths array (int32).
-            10. Build context tuple:
-                - simple mode (cost=None): ``()``
-                - weighted mode: ``(cost_matrix,)`` where cost_matrix
-                  is a float32 (V × V) array indexed by vocabulary codes,
-                  mirroring the Python symmetric cost-dict lookup.
+        Resolves the feature name, validates it, encodes each sequence's
+        values into int32 arrays using a shared vocabulary, and builds the
+        context tuple expected by the Numba distance kernel.
 
         Args:
             pool: The sequence pool to extract data from.
