@@ -5,6 +5,8 @@ Tests: LinearPairwiseSequenceMetric
 
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import polars as pl
 import pytest
@@ -16,6 +18,11 @@ from tanat.metric.sequence import (
     LinearPairwiseSequenceMetric,
 )
 from tanat.metric.matrix import DistanceMatrix
+from tanat.metric.sequence.type.linear_pairwise.kernels import (
+    compute_pairwise_chunk,
+    compute_pairwise_matrix,
+    _AGG_NUMBA_KERNELS,
+)
 
 # ---------------------------------------------------------------------------
 # Single-pair computation
@@ -247,9 +254,8 @@ class TestNumbaConsistency:
         """Numba and Python paths produce identical matrices (NaN-aware)."""
         lp = LinearPairwiseSequenceMetric(entity_metric=entity_metric)
         fast = lp.compute_matrix(cat_pool).to_numpy()  # auto-selects Numba
-        slow = lp._compute_matrix_python(
-            cat_pool, lp.entity_metric
-        ).to_numpy()  # pylint: disable=protected-access
+        # pylint: disable=protected-access
+        slow = lp._compute_matrix_python(cat_pool).to_numpy()
         # NaN positions must match
         np.testing.assert_array_equal(np.isnan(fast), np.isnan(slow))
         # Finite values must be close
@@ -262,9 +268,8 @@ class TestNumbaConsistency:
             entity_metric=entity_metric, padding_penalty=1.0
         )
         fast = lp.compute_matrix(cat_pool).to_numpy()
-        slow = lp._compute_matrix_python(
-            cat_pool, lp.entity_metric
-        ).to_numpy()  # pylint: disable=protected-access
+        # pylint: disable=protected-access
+        slow = lp._compute_matrix_python(cat_pool).to_numpy()
         np.testing.assert_array_almost_equal(fast, slow, decimal=5)
 
     def test_matrix_numba_vs_python_with_cost(self, cat_pool) -> None:
@@ -276,9 +281,8 @@ class TestNumbaConsistency:
         )
         lp = LinearPairwiseSequenceMetric(entity_metric=em)
         dm_fast = lp.compute_matrix(cat_pool)
-        dm_slow = lp._compute_matrix_python(
-            cat_pool, lp.entity_metric
-        )  # pylint: disable=protected-access
+        # pylint: disable=protected-access
+        dm_slow = lp._compute_matrix_python(cat_pool)
         np.testing.assert_array_almost_equal(
             dm_fast.to_numpy(), dm_slow.to_numpy(), decimal=5
         )
@@ -288,7 +292,178 @@ class TestNumbaConsistency:
         em = HammingEntityMetric(entity_feature="status")
         lp = LinearPairwiseSequenceMetric(entity_metric=em, agg_fun="sum")
         fast = lp.compute_matrix(cat_pool).to_numpy()
-        slow = lp._compute_matrix_python(
-            cat_pool, lp.entity_metric
-        ).to_numpy()  # pylint: disable=protected-access
+        # pylint: disable=protected-access
+        slow = lp._compute_matrix_python(cat_pool).to_numpy()
         np.testing.assert_array_almost_equal(fast, slow, decimal=5)
+
+
+# ---------------------------------------------------------------------------
+# Chunked computation (memmap + resume)
+# ---------------------------------------------------------------------------
+
+
+class TestChunkedComputation:
+    """End-to-end memmap/chunked computation and resume logic."""
+
+    def test_memmap_matches_inmemory(self, cat_pool, entity_metric, tmp_path) -> None:
+        """Memmap result matches in-memory result exactly."""
+        lp_mem = LinearPairwiseSequenceMetric(entity_metric=entity_metric)
+        lp_disk = LinearPairwiseSequenceMetric(
+            entity_metric=entity_metric, store_path=str(tmp_path), chunk_size=3
+        )
+        dm_mem = lp_mem.compute_matrix(cat_pool)
+        dm_disk = lp_disk.compute_matrix(cat_pool)
+        np.testing.assert_array_almost_equal(
+            dm_mem.to_numpy(), dm_disk.to_numpy(), decimal=5
+        )
+
+    def test_resume_skips_computed_chunks(self, cat_pool_status_only, tmp_path) -> None:
+        """Second call skips chunks and produces the same result."""
+        lp = LinearPairwiseSequenceMetric(store_path=str(tmp_path), chunk_size=3)
+        dm1 = lp.compute_matrix(cat_pool_status_only)
+        dm2 = lp.compute_matrix(cat_pool_status_only)  # all done → resume
+        np.testing.assert_array_equal(dm1.to_numpy(), dm2.to_numpy())
+
+    def test_resume_after_partial(self, cat_pool_status_only, tmp_path) -> None:
+        """Remove last chunk from progress.json → resume recomputes it."""
+        lp = LinearPairwiseSequenceMetric(store_path=str(tmp_path), chunk_size=3)
+        dm1 = lp.compute_matrix(cat_pool_status_only)
+        expected = dm1.to_numpy().copy()
+
+        # Decrement completed_chunks to simulate partial computation
+        prog_path = tmp_path / "progress.json"
+        prog = json.loads(prog_path.read_text())
+        if prog["completed_chunks"] > 0:
+            prog["completed_chunks"] -= 1
+            prog["status"] = "computing"
+            prog_path.write_text(json.dumps(prog))
+
+        dm2 = lp.compute_matrix(cat_pool_status_only)
+        np.testing.assert_array_almost_equal(dm2.to_numpy(), expected, decimal=5)
+
+    def test_settings_change_forces_recompute(
+        self, cat_pool_status_only, tmp_path
+    ) -> None:
+        """Changing agg_fun wipes the old matrix and recomputes."""
+        lp1 = LinearPairwiseSequenceMetric(
+            agg_fun="mean",
+            store_path=str(tmp_path),
+        )
+        dm1 = lp1.compute_matrix(cat_pool_status_only)
+
+        lp2 = LinearPairwiseSequenceMetric(
+            agg_fun="sum",
+            store_path=str(tmp_path),
+        )
+        dm2 = lp2.compute_matrix(cat_pool_status_only)
+        # sum vs mean → results must differ (unless all distances are 0)
+        if np.any(dm1.to_numpy() > 0):
+            assert not np.allclose(dm1.to_numpy(), dm2.to_numpy())
+
+    def test_is_memmap(self, cat_pool_status_only, tmp_path) -> None:
+        """Result from disk path has is_memmap=True."""
+        lp = LinearPairwiseSequenceMetric(
+            store_path=str(tmp_path),
+        )
+        dm = lp.compute_matrix(cat_pool_status_only)
+        assert dm.is_memmap
+
+    def test_metadata_and_progress_written(
+        self, cat_pool_status_only, tmp_path
+    ) -> None:
+        """metadata.json and progress.json are present and well-formed."""
+        lp = LinearPairwiseSequenceMetric(
+            store_path=str(tmp_path),
+        )
+        lp.compute_matrix(cat_pool_status_only)
+
+        meta = json.loads((tmp_path / "metadata.json").read_text())
+        assert meta["shape"] == [len(cat_pool_status_only), len(cat_pool_status_only)]
+        assert "metric_config" in meta
+
+        prog = json.loads((tmp_path / "progress.json").read_text())
+        assert prog["status"] == "complete"
+        assert isinstance(prog["completed_chunks"], int)
+        assert prog["completed_chunks"] > 0
+
+    def test_single_sequence_memmap(self, cat_pool, entity_metric, tmp_path) -> None:
+        """Pool with one sequence + memmap -> 1x1 matrix with a zero."""
+        sub = cat_pool.subset(cat_pool.unique_ids[:1])
+        lp = LinearPairwiseSequenceMetric(
+            entity_metric=entity_metric, store_path=str(tmp_path), chunk_size=10
+        )
+        dm = lp.compute_matrix(sub)
+        assert dm.shape == (1, 1)
+        assert dm.to_numpy()[0, 0] == 0.0
+        assert dm.is_memmap
+
+    def test_chunk_size_larger_than_pool(self, cat_pool_status_only, tmp_path) -> None:
+        """chunk_size > n -> single chunk, equivalent to in-memory."""
+        lp_mem = LinearPairwiseSequenceMetric()
+        lp_disk = LinearPairwiseSequenceMetric(
+            store_path=str(tmp_path), chunk_size=9999
+        )
+        dm_mem = lp_mem.compute_matrix(cat_pool_status_only)
+        dm_disk = lp_disk.compute_matrix(cat_pool_status_only)
+        np.testing.assert_array_almost_equal(
+            dm_mem.to_numpy(), dm_disk.to_numpy(), decimal=5
+        )
+
+    def test_callsite_store_path_override(self, cat_pool_status_only, tmp_path) -> None:
+        """store_path kwarg on compute_matrix() overrides instance default."""
+        lp = LinearPairwiseSequenceMetric()  # no storage
+        dm = lp.compute_matrix(cat_pool_status_only, store_path=str(tmp_path))
+        assert dm.is_memmap
+        assert (tmp_path / "metadata.json").exists()
+
+
+# ---------------------------------------------------------------------------
+# Chunk kernel consistency
+# ---------------------------------------------------------------------------
+
+
+class TestChunkKernelConsistency:
+    """compute_pairwise_chunk over all rows == compute_pairwise_matrix."""
+
+    def test_chunk_vs_full_matrix(self, cat_pool_status_only) -> None:
+        """Chunked iteration produces the same matrix as the full kernel."""
+        em = HammingEntityMetric(entity_feature="status")
+        arrays, lengths, context = em.prepare_batch_data(cat_pool_status_only)
+        n = len(arrays)
+        agg_kernel = _AGG_NUMBA_KERNELS["mean"]
+        padding = np.float32(np.nan)
+
+        full = np.zeros((n, n), dtype=np.float32)
+        compute_pairwise_matrix(
+            full,
+            arrays,
+            lengths,
+            em.distance_kernel,
+            context,
+            agg_kernel,
+            padding,
+        )
+
+        chunked = np.full((n, n), np.nan, dtype=np.float32)
+        chunk_size = 3
+        for start in range(0, n, chunk_size):
+            end = min(start + chunk_size, n)
+            compute_pairwise_chunk(
+                chunked,
+                start,
+                end,
+                arrays,
+                lengths,
+                em.distance_kernel,
+                context,
+                agg_kernel,
+                padding,
+            )
+            for i in range(start, end):
+                chunked[i, i] = 0.0
+
+        # NaN positions match
+        np.testing.assert_array_equal(np.isnan(full), np.isnan(chunked))
+        # Finite values match
+        mask = ~np.isnan(full)
+        np.testing.assert_array_almost_equal(full[mask], chunked[mask], decimal=5)
