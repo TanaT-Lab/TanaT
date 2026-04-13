@@ -4,6 +4,7 @@ Metric Module.
 """
 
 from .matrix import DistanceMatrix
+from ._storage import StorageOptions
 from .entity import EntityMetric, HammingEntityMetric, HammingSettings
 from .sequence import (
     SequenceMetric,
@@ -13,6 +14,7 @@ from .sequence import (
 
 __all__ = [
     "DistanceMatrix",
+    "StorageOptions",
     "EntityMetric",
     "HammingEntityMetric",
     "HammingSettings",
