@@ -45,7 +45,7 @@ class EntityMetric(SettingsMixin, Registrable, ABC):
             **kwargs: Settings overrides (e.g. ``mismatch_cost=0.5``).
 
         Returns:
-            Non-negative scalar distance.
+            Scalar distance.
         """
         self.validate_entity(ent_a, ent_b)
         return self._compute(ent_a, ent_b)
@@ -83,7 +83,7 @@ class EntityMetric(SettingsMixin, Registrable, ABC):
             ent_b: Second entity.
 
         Returns:
-            Non-negative scalar distance.
+            Scalar distance.
         """
 
     # ------------------------------------------------------------------
