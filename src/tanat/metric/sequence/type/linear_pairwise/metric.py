@@ -5,6 +5,7 @@ LinearPairwiseSequenceMetric: align sequences position-by-position and aggregate
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
 import numpy as np
@@ -14,11 +15,17 @@ from tanat_utils import settings_dataclass as dataclass
 from ...base import SequenceMetric
 from ....entity.base import EntityMetric
 from ....matrix import DistanceMatrix
-from .kernels import compute_pairwise_matrix, _AGG_NUMBA_KERNELS
+from ...._storage import (
+    compute_metric_config,
+    open_or_create_matrix,
+    save_progress,
+)
+from .kernels import compute_pairwise_matrix, compute_pairwise_chunk, _AGG_NUMBA_KERNELS
 
 if TYPE_CHECKING:
     from .....sequence.base.sequence import Sequence
     from .....sequence.base.pool import SequencePool
+    from ...._storage import StorageOptions
 
 
 # ---------------------------------------------------------------------------
@@ -93,19 +100,36 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
     """
 
     SETTINGS_CLASS = LinearPairwiseSettings
+    MEMMAP_SUPPORT = True
 
     def __init__(
         self,
         entity_metric: EntityMetric | str = "hamming",
         agg_fun: str = "mean",
         padding_penalty: float | None = None,
+        *,
+        store_path: str | Path | None = None,
+        chunk_size: int = 500,
+        resume: bool = True,
+        dtype: str = "float32",
     ) -> None:
+        if store_path is not None:
+            storage_options = {
+                "store_path": store_path,
+                "chunk_size": chunk_size,
+                "resume": resume,
+                "dtype": dtype,
+            }
+        else:
+            storage_options = None
+
         super().__init__(
             settings=LinearPairwiseSettings(
                 entity_metric=entity_metric,
                 agg_fun=agg_fun,
                 padding_penalty=padding_penalty,
-            )
+            ),
+            storage=storage_options,
         )
 
     # ------------------------------------------------------------------
@@ -157,7 +181,9 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
             )
         return self._compute_pair(seq_a, seq_b, self.entity_metric, self._get_agg_fn())
 
-    def _compute_matrix_impl(self, pool: SequencePool) -> DistanceMatrix:
+    def _compute_matrix_impl(
+        self, pool: SequencePool, storage: StorageOptions | None = None
+    ) -> DistanceMatrix:
         """Dispatch to the Numba fast path or the Python fallback.
 
         Uses the Numba batch path when the entity metric declares
@@ -165,74 +191,102 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
         Falls back to the Python double-loop otherwise.
 
         Args:
-            pool: Sequence pool.
+            pool:    Sequence pool.
+            storage: Optional :class:`~tanat.metric.StorageOptions` for
+                     disk-backed computation. ``None`` → in-memory.
 
         Returns:
             Symmetric :class:`DistanceMatrix` (may contain ``nan``).
         """
         em = self.entity_metric
         if em.NUMBA_OPTIM:
-            return self._compute_matrix_numba(pool, em)
-        return self._compute_matrix_python(pool, em)
+            return self._compute_matrix_numba(pool, storage)
+        return self._compute_matrix_python(pool, storage)
 
     def _compute_matrix_python(
-        self, pool: SequencePool, em: EntityMetric
+        self, pool: SequencePool, storage: StorageOptions | None = None
     ) -> DistanceMatrix:
-        """Python double-loop fallback (always correct, slower for large pools).
+        """Python double-loop fallback.
 
-        Resolves entity metric and aggregation once, then iterates all
-        O(n²) pairs.  Pairs whose distance is undefined produce ``nan``.
+        Iterates all O(n^2) pairs.  Undefined distances produce ``nan``.
+        Uses the memmap + chunks path when ``storage`` is set.
 
         Args:
-            pool: Sequence pool.
-            em:   Resolved entity metric instance.
+            pool:    Sequence pool.
+            storage: Optional :class:`~tanat.metric.StorageOptions`.
 
         Returns:
             Symmetric :class:`DistanceMatrix` (may contain ``nan``).
         """
+        em = self.entity_metric
         agg_fn = self._get_agg_fn()
         ids = pool.unique_ids
         n = len(ids)
-        result = np.zeros((n, n), dtype=np.float32)
         seqs = {sid: pool[sid] for sid in ids}
 
+        if storage is None:
+            result = np.zeros((n, n), dtype=np.float32)
+            is_resuming = False
+            completed = 0
+        else:
+            metric_config = compute_metric_config(self)
+            result, is_resuming, completed = open_or_create_matrix(
+                storage, n, ids, metric_config
+            )
+
+        chunk_size = storage.chunk_size if storage is not None else n
+        chunks = list(range(0, n, chunk_size))
+
         with self._create_progress_bar(total=n * (n - 1) // 2, desc="Pairs") as pbar:
-            for i in range(n):
-                for j in range(i + 1, n):
-                    d = self._compute_pair(seqs[ids[i]], seqs[ids[j]], em, agg_fn)
-                    result[i, j] = result[j, i] = float(d)
-                    pbar.update(1)
+            for chunk_idx, chunk_start in enumerate(chunks):
+                chunk_end = min(chunk_start + chunk_size, n)
+
+                if is_resuming and chunk_idx < completed:
+                    for i in range(chunk_start, chunk_end):
+                        pbar.update(n - i - 1)
+                    continue
+
+                for i in range(chunk_start, chunk_end):
+                    for j in range(i + 1, n):
+                        d = self._compute_pair(seqs[ids[i]], seqs[ids[j]], em, agg_fn)
+                        result[i, j] = result[j, i] = float(d)
+                        pbar.update(1)
+
+                if storage is not None:
+                    result.flush()
+                    completed += 1
+                    save_progress(storage, completed, status="computing")
+
+        if storage is not None:
+            np.fill_diagonal(result, 0.0)
+            result.flush()
+            save_progress(storage, completed, status="complete")
 
         return DistanceMatrix(result, ids)
 
     def _compute_matrix_numba(
-        self, pool: SequencePool, em: EntityMetric
+        self, pool: SequencePool, storage: StorageOptions | None = None
     ) -> DistanceMatrix:
-        """Numba fast path: pre-extract data then run the parallel kernel.
+        """Numba fast path: batch-extract data then run the parallel kernel.
 
-        Delegates feature extraction to :meth:`prepare_batch_data` on the
-        entity metric, then calls the parallelised Numba kernel.  The first
-        call per process triggers JIT compilation (~1-3 s); subsequent calls
-        use the cached compiled binary.
+        Delegates feature extraction to the entity metric's
+        :meth:`prepare_batch_data`, then calls the Numba kernel.
+        The first call triggers JIT compilation; subsequent calls
+        reuse the compiled binary.
 
-        Pairs whose distance is undefined (both sequences empty, or one
-        empty with ``padding_penalty=None``) produce ``nan`` entries.
+        Undefined distances produce ``nan``.
 
         Args:
-            pool: Sequence pool.
-            em:   Resolved entity metric instance (must have ``NUMBA_OPTIM=True``).
+            pool:    Sequence pool.
+            storage: Optional :class:`~tanat.metric.StorageOptions`.
 
         Returns:
             Symmetric :class:`DistanceMatrix` (may contain ``nan``).
         """
+        em = self.entity_metric
         arrays, lengths, context = em.prepare_batch_data(pool)
 
-        agg_kernel = _AGG_NUMBA_KERNELS.get(self.settings.agg_fun)
-        if agg_kernel is None:
-            raise ValueError(
-                f"Unknown agg_fun '{self.settings.agg_fun}' for Numba path. "
-                f"Supported: {list(_AGG_NUMBA_KERNELS.keys())}"
-            )
+        agg_kernel = self._get_agg_fn(numba=True)
 
         padding = (
             np.float32(self.settings.padding_penalty)
@@ -241,19 +295,59 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
         )
 
         n = len(arrays)
-        result = np.zeros((n, n), dtype=np.float32)
 
-        if n > 1:
-            compute_pairwise_matrix(
-                result,
-                arrays,
-                lengths,
-                em.distance_kernel,
-                context,
-                agg_kernel,
-                padding,
-            )
+        if storage is None:
+            # --- In-memory path (unchanged) ---
+            result = np.zeros((n, n), dtype=np.float32)
+            if n > 1:
+                compute_pairwise_matrix(
+                    result,
+                    arrays,
+                    lengths,
+                    em.distance_kernel,
+                    context,
+                    agg_kernel,
+                    padding,
+                )
+            return DistanceMatrix(result, pool.unique_ids)
 
+        # --- Memmap + chunks path ---
+        metric_config = compute_metric_config(self)
+        result, is_resuming, completed = open_or_create_matrix(
+            storage, n, pool.unique_ids, metric_config
+        )
+        chunk_size = storage.chunk_size
+        chunks = list(range(0, n, chunk_size))
+        total_chunks = len(chunks)
+
+        with self._create_progress_bar(total=total_chunks, desc="Chunks") as pbar:
+            for chunk_idx, chunk_start in enumerate(chunks):
+                chunk_end = min(chunk_start + chunk_size, n)
+
+                if is_resuming and chunk_idx < completed:
+                    pbar.update(1)
+                    continue
+
+                compute_pairwise_chunk(
+                    result,
+                    chunk_start,
+                    chunk_end,
+                    arrays,
+                    lengths,
+                    em.distance_kernel,
+                    context,
+                    agg_kernel,
+                    padding,
+                )
+
+                result.flush()
+                completed += 1
+                save_progress(storage, completed, status="computing")
+                pbar.update(1)
+
+        np.fill_diagonal(result, 0.0)
+        result.flush()
+        save_progress(storage, completed, status="complete")
         return DistanceMatrix(result, pool.unique_ids)
 
     def _compute_pair(
@@ -263,10 +357,11 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
         em: EntityMetric,
         agg_fn: Callable,
     ) -> float:
-        """Compute distance for a single pair with pre-resolved dependencies.
+        """Compute distance for a single pair of sequences.
 
-        Aligns entities by rank, aggregates distances.  Returns ``nan`` when
-        the distance is undefined (both empty, or one empty with no padding).
+        Aligns entities by rank and aggregates distances.  Returns ``nan``
+        when the distance is undefined (both empty, or one empty with no
+        padding).
 
         Args:
             seq_a:  First sequence.
@@ -303,16 +398,22 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
     # Helpers
     # ------------------------------------------------------------------
 
-    def _get_agg_fn(self) -> Callable:
+    def _get_agg_fn(self, *, numba: bool = False) -> Callable:
         """Return the aggregation callable for the configured ``agg_fun``.
 
+        Args:
+            numba: When ``True``, return the Numba JIT kernel from
+                   :data:`_AGG_NUMBA_KERNELS`; otherwise return the
+                   plain Python callable from :data:`_AGG_FUNCTIONS`.
+
         Raises:
-            ValueError: If ``agg_fun`` is not a key of :data:`_AGG_FUNCTIONS`.
+            ValueError: If ``agg_fun`` is not supported by the requested registry.
         """
-        fn = _AGG_FUNCTIONS.get(self.settings.agg_fun)
+        registry = _AGG_NUMBA_KERNELS if numba else _AGG_FUNCTIONS
+        fn = registry.get(self.settings.agg_fun)
         if fn is None:
             raise ValueError(
                 f"Unknown agg_fun '{self.settings.agg_fun}'. "
-                f"Supported: {list(_AGG_FUNCTIONS.keys())}"
+                f"Supported: {list(registry.keys())}"
             )
         return fn
