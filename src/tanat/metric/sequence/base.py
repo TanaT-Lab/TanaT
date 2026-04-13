@@ -6,6 +6,8 @@ SequenceMetric ABC: base class for all sequence-level distance metrics.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from pathlib import Path
+import warnings
 
 import numpy as np
 from tanat_utils import SettingsMixin, Registrable, DisplayMixin
@@ -14,6 +16,7 @@ from ..matrix import DistanceMatrix
 from ..entity.base import EntityMetric
 from ...sequence.base.pool import SequencePool
 from ...sequence.base.sequence import Sequence
+from .._storage import StorageOptions
 
 
 class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
@@ -25,6 +28,73 @@ class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
 
     _REGISTER: dict = {}
     _TYPE_SUBMODULE = "type"
+
+    #: Set to ``True`` in subclasses that implement disk-backed (memmap) computation.
+    #: When ``False``, passing ``store_path`` or an instance-level ``StorageOptions``
+    #: raises :class:`NotImplementedError` early with a clear message.
+    MEMMAP_SUPPORT: bool = False
+
+    def __init__(
+        self, settings=None, storage: StorageOptions | dict | None = None
+    ) -> None:
+        super().__init__(settings)
+        self._storage = self._resolve_storage(storage)
+
+    def _resolve_storage(
+        self,
+        storage: StorageOptions | dict | None = None,
+        *,
+        store_path: str | Path | None = None,
+        chunk_size: int = 500,
+        resume: bool = True,
+        dtype: str = "float32",
+    ) -> StorageOptions | None:
+        """Normalise *storage* and enforce :attr:`MEMMAP_SUPPORT`.
+
+        An explicit ``store_path`` kwarg takes priority over *storage*.
+        A plain ``dict`` is converted to :class:`~tanat.metric.StorageOptions`.
+        Returns ``None`` when no storage is requested or when the subclass
+        does not support memmap.
+
+        Args:
+            storage:    Existing :class:`~tanat.metric.StorageOptions`, plain
+                        ``dict``, or ``None``.
+            store_path: When provided, overrides *storage* entirely.
+            chunk_size: Forwarded to :class:`~tanat.metric.StorageOptions`.
+            resume:     Forwarded to :class:`~tanat.metric.StorageOptions`.
+            dtype:      Forwarded to :class:`~tanat.metric.StorageOptions`.
+
+        Returns:
+            A resolved :class:`~tanat.metric.StorageOptions` instance, or
+            ``None`` (in-memory fallback).
+        """
+        # 1. Explicit store_path wins over everything
+        if store_path is not None:
+            storage = StorageOptions(
+                store_path=store_path,
+                chunk_size=chunk_size,
+                resume=resume,
+                dtype=dtype,
+            )
+        # 2. Dict shorthand → StorageOptions
+        elif isinstance(storage, dict):
+            storage = StorageOptions(**storage)
+
+        # 3. No storage requested → in-memory
+        if storage is None:
+            return None
+
+        # 4. Guard: subclass must declare MEMMAP_SUPPORT
+        if not self.MEMMAP_SUPPORT:
+            warnings.warn(
+                f"{type(self).__name__} does not support disk-backed computation "
+                f"(MEMMAP_SUPPORT=False). Falling back to in-memory computation.",
+                UserWarning,
+                stacklevel=3,
+            )
+            return None
+
+        return storage
 
     @SettingsMixin.shadow_dispatch
     def __call__(  # pylint: disable=unused-argument
@@ -40,7 +110,7 @@ class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
             **kwargs: Settings overrides.
 
         Returns:
-            A non-negative scalar distance.
+            Scalar distance.
         """
         self._validate_sequences(seq_a, seq_b)
         self.validate_composition(seq_a, seq_b)
@@ -55,7 +125,7 @@ class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
             seq_b: Second sequence.
 
         Returns:
-            A non-negative scalar distance.
+            Scalar distance.
         """
 
     # ------------------------------------------------------------------
@@ -64,19 +134,41 @@ class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
 
     @SettingsMixin.shadow_dispatch
     def compute_matrix(  # pylint: disable=unused-argument
-        self, pool: SequencePool, **kwargs
+        self,
+        pool: SequencePool,
+        *,
+        store_path: str | Path | None = None,
+        chunk_size: int = 500,
+        resume: bool = True,
+        dtype: str = "float32",
+        **kwargs,
     ) -> DistanceMatrix:
         """Compute the full pairwise distance matrix for *pool*.
 
-        Args:
-            pool: A :class:`~tanat.sequence.base.pool.SequencePool`.
+        Storage kwargs are forwarded to
+        :class:`~tanat.metric.StorageOptions`.  Other ``kwargs``
+        (e.g. ``agg_fun``) create a temporary settings override.
 
-        Settings-matching ``kwargs`` create a temporary shadow view.
+        Args:
+            pool:       A :class:`~tanat.sequence.base.pool.SequencePool`.
+            store_path: Storage directory (``None`` → in-memory).
+            chunk_size: Rows per flush chunk (default 500).
+            resume:     Skip already-computed chunks (default ``True``).
+            dtype:      Numpy dtype for the matrix (default ``"float32"``).
+            **kwargs:   Settings overrides (e.g. ``agg_fun``, ``padding_penalty``).
 
         Returns:
-            A symmetric :class:`~tanat.metric.DistanceMatrix` with zeros
-            on the diagonal.
+            A :class:`~tanat.metric.DistanceMatrix`.
         """
+        # call-site kwargs > instance default > None
+        storage = self._resolve_storage(
+            self._storage,
+            store_path=store_path,
+            chunk_size=chunk_size,
+            resume=resume,
+            dtype=dtype,
+        )
+
         self._validate_pool(pool)
         for sid in pool.unique_ids:
             seq = pool[sid]
@@ -84,32 +176,42 @@ class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
                 self.validate_composition(seq)
                 break
         self._display_header()
-        dm = self._compute_matrix_impl(pool)
+        dm = self._compute_matrix_impl(pool, storage)
         self._display_footer(f"{len(pool)} sequences")
         return dm
 
-    def _compute_matrix_impl(self, pool: SequencePool) -> DistanceMatrix:
+    def _compute_matrix_impl(
+        self,
+        pool: SequencePool,
+        _storage=None,  # pylint: disable=unused-argument
+    ) -> DistanceMatrix:
         """Default O(n²) double-loop implementation.
 
-        Correct for all metrics.  Subclasses may override to use
-        batch-optimised kernels (e.g. Numba).
+        Correct for all metrics. Computes all n*(n-1) ordered pairs
+        without assuming symmetry. Subclasses may override to use
+        batch-optimised kernels (e.g. Numba) or exploit symmetry.
 
         Args:
-            pool: Sequence pool.
+            pool:     Sequence pool.
+            _storage: Not used.  Present only to satisfy the interface expected
+                      by subclasses that override this method with memmap support.
+                      The base class always computes in-memory.
 
         Returns:
-            Symmetric :class:`DistanceMatrix`.
+            :class:`DistanceMatrix`.
         """
         ids = pool.unique_ids
         n = len(ids)
         result = np.zeros((n, n), dtype=np.float32)
         seqs = {sid: pool[sid] for sid in ids}
 
-        with self._create_progress_bar(total=n * (n - 1) // 2, desc="Pairs") as pbar:
+        with self._create_progress_bar(total=n * (n - 1), desc="Pairs") as pbar:
             for i in range(n):
-                for j in range(i + 1, n):
+                for j in range(n):
+                    if i == j:
+                        continue
                     d = self._compute(seqs[ids[i]], seqs[ids[j]])
-                    result[i, j] = result[j, i] = float(d)
+                    result[i, j] = float(d)
                     pbar.update(1)
 
         return DistanceMatrix(result, ids)
