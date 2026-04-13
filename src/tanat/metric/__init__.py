@@ -5,7 +5,15 @@ Metric Module.
 
 from .matrix import DistanceMatrix
 from ._storage import StorageOptions
-from .entity import EntityMetric, HammingEntityMetric, HammingSettings
+
+## -- Entity Metrics --
+from .entity import (
+    EntityMetric,
+    HammingEntityMetric,
+    HammingSettings,
+)
+
+## -- Sequence Metrics --
 from .sequence import (
     SequenceMetric,
     LinearPairwiseSequenceMetric,
@@ -15,9 +23,11 @@ from .sequence import (
 __all__ = [
     "DistanceMatrix",
     "StorageOptions",
+    ## -- Entity Metrics --
     "EntityMetric",
     "HammingEntityMetric",
     "HammingSettings",
+    ## -- Sequence Metrics --
     "SequenceMetric",
     "LinearPairwiseSequenceMetric",
     "LinearPairwiseSettings",
