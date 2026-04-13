@@ -5,11 +5,15 @@ DistanceMatrix: thin numpy wrapper with associated IDs.
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Literal
 
 import numpy as np
 import pandas as pd
 import polars as pl
+
+from ..core.path import resolve_path
 
 
 class DistanceMatrix:
@@ -61,6 +65,11 @@ class DistanceMatrix:
     def shape(self) -> tuple[int, int]:
         """Shape of the underlying array."""
         return self._data.shape  # type: ignore[return-value]
+
+    @property
+    def is_memmap(self) -> bool:
+        """``True`` if the underlying data is a memory-mapped file."""
+        return isinstance(self._data, np.memmap)
 
     # ------------------------------------------------------------------
     # Conversions
@@ -118,6 +127,54 @@ class DistanceMatrix:
         """
         n = len(ids)
         return cls(np.zeros((n, n), dtype=dtype), ids)
+
+    @classmethod
+    def from_path(cls, path: str | Path) -> "DistanceMatrix":
+        """Load a previously computed distance matrix from disk.
+
+        Uses ``resolve_path`` to resolve the storage directory (workspace
+        name or filesystem path), then opens the memmap in read-only mode.
+
+        Args:
+            path: Storage directory. Same formats as ``StorageOptions.store_path``:
+                plain name (``"distances"``), relative path (``"./distances"``),
+                or absolute path.
+
+        Returns:
+            A :class:`DistanceMatrix` backed by a read-only memmap.
+
+        Raises:
+            FileNotFoundError: If the directory or required files don't exist.
+            ValueError: If progress.json status is not ``"complete"``
+                (incomplete computation).
+        """
+        resolved = resolve_path(path)
+        metadata_path = resolved / "metadata.json"
+        progress_path = resolved / "progress.json"
+        matrix_path = resolved / "matrix.dat"
+
+        if not resolved.exists():
+            raise FileNotFoundError(f"Storage directory not found: {resolved}")
+        if not metadata_path.exists():
+            raise FileNotFoundError(f"metadata.json not found in: {resolved}")
+        if not progress_path.exists():
+            raise FileNotFoundError(f"progress.json not found in: {resolved}")
+
+        progress = json.loads(progress_path.read_text())
+        if progress.get("status") != "complete":
+            raise ValueError(
+                f"Matrix at {resolved} is incomplete "
+                f"(status={progress.get('status')!r}). "
+                "Run compute_matrix() to finish computation first."
+            )
+
+        metadata = json.loads(metadata_path.read_text())
+        shape = tuple(metadata["shape"])
+        dtype = metadata["dtype"]
+        ids = metadata["ids"]
+
+        mm = np.memmap(matrix_path, dtype=dtype, mode="r", shape=shape)
+        return cls(mm, ids)
 
     # ------------------------------------------------------------------
     # Dunder
