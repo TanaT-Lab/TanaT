@@ -1,0 +1,34 @@
+# serializer version: 1
+# name: TestComputeMetricConfig.test_config_snapshot
+  dict({
+    'settings': dict({
+      'agg_fun': 'sum',
+      'entity_metric': dict({
+        'settings': dict({
+          'cost': None,
+          'entity_feature': None,
+          'mismatch_cost': 1.0,
+        }),
+        'type': 'hamming',
+      }),
+      'padding_penalty': 0.5,
+    }),
+    'type': 'linearpairwise',
+  })
+# ---
+# name: TestSaveMatrixMetadata.test_metadata_snapshot
+  dict({
+    'chunk_size': 100,
+    'dtype': 'float32',
+    'metric_config': dict({
+      'settings': dict({
+        'agg_fun': 'mean',
+      }),
+      'type': 'linearpairwise',
+    }),
+    'shape': list([
+      2,
+      2,
+    ]),
+  })
+# ---
