@@ -3,7 +3,10 @@
 
 from __future__ import annotations
 
+import polars as pl
 import pytest
+
+from tanat.metadata.sequence import CategoricalInfo
 
 
 class TestTrajectoryPoolSubset:
@@ -38,3 +41,48 @@ class TestTrajectoryPoolSubset:
         """Requesting an ID not in the pool raises an error."""
         with pytest.raises((ValueError, KeyError)):
             traj_pool.subset([-9999])
+
+
+# ---------------------------------------------------------------------------
+# Cast preservation (regression for TrajectoryPool._propagate_id_mask_to_pools)
+# ---------------------------------------------------------------------------
+
+
+class TestSubsetCastPreservation:
+    """Entity casts applied to sequence_pools must survive TrajectoryPool.subset()."""
+
+    def test_entity_cast_preserved_after_subset(self, traj_pool) -> None:
+        """Cast applied before subset() is still active after subset()."""
+        # Work on a copy so the session-scoped traj_pool is not mutated.
+        pool = traj_pool.copy()
+        for alias in pool._store_aliases:  # pylint: disable=protected-access
+            pool.sequence_pools[alias].cast_features({"status": pl.Categorical})
+
+        ids = pool.unique_ids[:4]
+        sub = pool.subset(ids)
+
+        for alias in sub._store_aliases:  # pylint: disable=protected-access
+            meta = sub.sequence_pools[alias].metadata
+            status_info = meta.feature_info("status", is_static=False)
+            assert isinstance(status_info, CategoricalInfo), (
+                f"alias={alias!r}: expected CategoricalInfo after subset(), "
+                f"got {type(status_info).__name__}"
+            )
+
+    def test_entity_cast_preserved_after_subset_inplace(self, traj_pool) -> None:
+        """Cast applied before subset(inplace=True) is still active afterwards."""
+        # Work on a copy so the session-scoped traj_pool is not mutated.
+        pool = traj_pool.copy()
+        for alias in pool._store_aliases:  # pylint: disable=protected-access
+            pool.sequence_pools[alias].cast_features({"status": pl.Categorical})
+
+        ids = pool.unique_ids[:4]
+        pool.subset(ids, inplace=True)
+
+        for alias in pool._store_aliases:  # pylint: disable=protected-access
+            meta = pool.sequence_pools[alias].metadata
+            status_info = meta.feature_info("status", is_static=False)
+            assert isinstance(status_info, CategoricalInfo), (
+                f"alias={alias!r}: expected CategoricalInfo after subset(inplace=True), "
+                f"got {type(status_info).__name__}"
+            )
