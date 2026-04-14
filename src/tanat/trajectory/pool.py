@@ -360,7 +360,10 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         if self._alias_mask is None:
             self._alias_mask = set(all_store_aliases)
         self._alias_mask -= set(aliases)
-        self._pools = None  # force rebuild - alias set has changed
+        # Remove dropped aliases from _pools directly
+        if self._pools is not None:
+            for alias in aliases:
+                self._pools.pop(alias, None)
         self.clear_cache()
 
     # ------------------------------------------------------------------
