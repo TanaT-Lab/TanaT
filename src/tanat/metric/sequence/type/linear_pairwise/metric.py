@@ -48,9 +48,9 @@ class LinearPairwiseSettings:
     """Settings for :class:`LinearPairwiseSequenceMetric`.
 
     Args:
-        entity_metric: Entity-level metric.  Accepts a registration name
-            (string) or an :class:`~tanat.metric.entity.base.EntityMetric`
-            instance.  Default: ``"hamming"``.
+        entity_metric: Entity-level metric.  Accepts a registration name (string) or an instance.
+            Pydantic auto-resolves strings via ``Registrable.__get_pydantic_core_schema__``.
+            Default: ``"hamming"``.
         agg_fun: Aggregation function applied to the vector of entity
             distances.  One of ``"mean"`` (default) or ``"sum"``.
         padding_penalty: Distance value used for unmatched positions when
@@ -61,7 +61,7 @@ class LinearPairwiseSettings:
             :class:`ValueError` on a direct call).
     """
 
-    entity_metric: EntityMetric | str = "hamming"
+    entity_metric: EntityMetric = "hamming"
     agg_fun: str = "mean"
     padding_penalty: float | None = None
 
