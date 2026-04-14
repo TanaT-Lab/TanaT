@@ -129,7 +129,7 @@ class DistanceMatrix:
         return cls(np.zeros((n, n), dtype=dtype), ids)
 
     @classmethod
-    def from_path(cls, path: str | Path) -> "DistanceMatrix":
+    def from_path(cls, path: str | Path) -> DistanceMatrix:
         """Load a previously computed distance matrix from disk.
 
         Uses ``resolve_path`` to resolve the storage directory (workspace
