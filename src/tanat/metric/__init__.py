@@ -20,6 +20,13 @@ from .sequence import (
     LinearPairwiseSettings,
 )
 
+## -- Trajectory Metrics --
+from .trajectory import (
+    TrajectoryMetric,
+    AggregationTrajectoryMetric,
+    AggregationSettings,
+)
+
 __all__ = [
     "DistanceMatrix",
     "StorageOptions",
@@ -31,4 +38,8 @@ __all__ = [
     "SequenceMetric",
     "LinearPairwiseSequenceMetric",
     "LinearPairwiseSettings",
+    ## -- Trajectory Metrics --
+    "TrajectoryMetric",
+    "AggregationTrajectoryMetric",
+    "AggregationSettings",
 ]
