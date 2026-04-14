@@ -995,13 +995,93 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             "Expected one of: 'pandas', 'polars'."
         )
 
+    # ------------------------------------------------------------------
+    # Copy / Subset
+    # ------------------------------------------------------------------
+
+    def _propagate_id_mask_to_pools(self, effective: set | None) -> None:
+        """Propagate a new trajectory-level ID mask to already-initialised sub-pools.
+
+        Each sub-pool's visible IDs are restricted to ``effective ∩ store_ids``
+        where *store_ids* is the full unfiltered ID set for that sub-pool's
+        store.  If *effective* is ``None`` (no restriction), all sub-pool
+        masks are cleared.
+
+        When ``_pools`` is ``None`` (not yet built), the mask will be applied
+        automatically on first access via :meth:`_build_pools` →
+        :meth:`SequencePool.from_parent`.
+
+        Args:
+            effective: New trajectory-level ID mask, or ``None`` to clear.
+        """
+        if self._pools is None:
+            return
+        for pool in self._pools.values():
+            # pylint: disable=protected-access
+            if effective is None:
+                pool._id_mask = None
+            else:
+                # Temporarily lift the sub-pool's mask to enumerate all IDs
+                # available in its store (same approach as from_parent()).
+                pool._id_mask = None
+                pool.clear_cache()
+                store_ids = set(pool.unique_ids)
+                pool._id_mask = effective & store_ids
+            pool.clear_cache()
+
+    def _copy_with_mask(self, id_mask: set | None) -> TrajectoryPool:
+        """Build a pool copy with *id_mask* applied in a single pass.
+
+        Handles two cases transparently:
+
+        * **Sub-pools already initialised**: each pool is shallow-copied
+          (preserving entity casts from
+          :meth:`~tanat.sequence.base.pool.SequencePool.cast_features`) and
+          re-parented; :meth:`_propagate_id_mask_to_pools` then applies the
+          intersection ``id_mask ∩ store_ids`` exactly once.
+
+        * **Sub-pools not yet built**: ``_pools`` is left ``None``; on first
+          access :meth:`_build_pools` calls
+          :meth:`~tanat.sequence.base.pool.SequencePool.from_parent` which
+          reads ``new_pool._id_mask`` and applies the same intersection
+          automatically.
+
+        Args:
+            id_mask: Trajectory IDs to expose in the new pool, or ``None``
+                for no restriction.
+        """
+        # pylint: disable=protected-access
+        copied_pools = None
+        if self._pools is not None:
+            copied_pools = {}
+            for alias, seqpool in self._pools.items():
+                p = seqpool.copy()
+                p._locked = True  # re-lock: copy() resets _locked to False
+                copied_pools[alias] = p
+
+        new_pool = TrajectoryPool._construct(
+            store=self._store,
+            settings=self.settings,
+            cast_recipe=self._casts,
+            virtual_id=self._store.fork_virtual_context(self._virtual_id),
+            id_mask=id_mask,
+            alias_mask=set(self._alias_mask) if self._alias_mask is not None else None,
+            has_soft_drops=self._has_soft_drops,
+            pools=copied_pools,
+            t0_setter=self._t0_setter,
+        )
+        if copied_pools is not None:
+            for p in copied_pools.values():
+                p._parent_pool = new_pool
+            new_pool._propagate_id_mask_to_pools(id_mask)
+        return new_pool
+
     def copy(self) -> TrajectoryPool:
         """Return a shallow copy sharing the same store, with all view state preserved.
 
         The new pool references the same :class:`TrajectoryStore` and the same
         virtual context (``_virtual_id``) so virtual features are immediately
-        visible.  Sequence pool objects are **not** copied - they will be
-        rebuilt on first access against the shared store.
+        visible.
 
         Returns:
             A new :class:`TrajectoryPool` with identical settings, casts,
@@ -1020,33 +1100,9 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         See Also:
             :meth:`save`
         """
-        # pylint: disable=protected-access
-        if self._pools is not None:
-            copied_pools = {}
-            for alias, seqpool in self._pools.items():
-                p = seqpool.copy()
-                p._locked = True  # re-lock: copy() resets _locked to False
-                copied_pools[alias] = p
-        else:
-            copied_pools = None
-
-        # pylint: disable=protected-access
-        new_pool = TrajectoryPool._construct(
-            store=self._store,
-            settings=self.settings,
-            cast_recipe=self._casts,
-            virtual_id=self._store.fork_virtual_context(self._virtual_id),
-            id_mask=set(self._id_mask) if self._id_mask is not None else None,
-            alias_mask=set(self._alias_mask) if self._alias_mask is not None else None,
-            has_soft_drops=self._has_soft_drops,
-            pools=copied_pools,
-            t0_setter=self._t0_setter,
+        return self._copy_with_mask(
+            set(self._id_mask) if self._id_mask is not None else None
         )
-        # Re-point sub-pools to the new TrajectoryPool.
-        if copied_pools is not None:
-            for p in copied_pools.values():
-                p._parent_pool = new_pool
-        return new_pool
 
     def subset(self, ids, *, inplace: bool = False) -> TrajectoryPool:
         """Return a view restricted to the given trajectory IDs.
@@ -1072,19 +1128,11 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
 
         if inplace:
             self._id_mask = effective
-            self._pools = (
-                None  # force rebuild - _id_mask will propagate in _build_pools
-            )
+            self._propagate_id_mask_to_pools(effective)
             self.clear_cache()
             return self
 
-        new_pool = self.copy()
-        new_pool._id_mask = effective
-        new_pool._pools = (
-            None  # force rebuild - _id_mask will propagate in _build_pools
-        )
-        new_pool.clear_cache()
-        return new_pool
+        return self._copy_with_mask(effective)
 
     def train_test_split(
         self,
