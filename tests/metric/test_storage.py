@@ -88,59 +88,63 @@ class TestOpenOrCreateMatrix:
     def test_creates_fresh_matrix(self, tmp_path) -> None:
         """New directory → NaN-filled memmap + metadata.json."""
         storage = StorageOptions(store_path=str(tmp_path), chunk_size=10)
-        mm, is_resuming, completed = open_or_create_matrix(
+        mm, is_resuming, completed, is_complete = open_or_create_matrix(
             storage, 3, self._IDS, self._CONFIG
         )
         assert mm.shape == (3, 3)
         assert not is_resuming
         assert completed == 0
+        assert not is_complete
         assert np.all(np.isnan(mm))
         assert (tmp_path / "metadata.json").exists()
 
     def test_reopens_existing(self, tmp_path) -> None:
         """Existing valid matrix with same config → reopen, is_resuming=True."""
         storage = StorageOptions(store_path=str(tmp_path))
-        mm1, _, _ = open_or_create_matrix(storage, 3, self._IDS, self._CONFIG)
+        mm1, _, _, _ = open_or_create_matrix(storage, 3, self._IDS, self._CONFIG)
         mm1[0, 1] = 0.42
         mm1.flush()
         save_progress(storage, completed_chunks=1, status="computing")
 
-        mm2, is_resuming, completed = open_or_create_matrix(
+        mm2, is_resuming, completed, is_complete = open_or_create_matrix(
             storage, 3, self._IDS, self._CONFIG
         )
         assert is_resuming
         assert completed == 1
+        assert not is_complete
         assert mm2[0, 1] == pytest.approx(0.42)  # preserved
 
     def test_config_mismatch_wipes(self, tmp_path) -> None:
         """Different metric_config → delete and recreate."""
         storage = StorageOptions(store_path=str(tmp_path))
-        mm1, _, _ = open_or_create_matrix(storage, 3, self._IDS, self._CONFIG)
+        mm1, _, _, _ = open_or_create_matrix(storage, 3, self._IDS, self._CONFIG)
         mm1[0, 1] = 0.42
         mm1.flush()
         save_progress(storage, completed_chunks=1)
 
         other_config = {**self._CONFIG, "settings": {"agg_fun": "sum"}}
-        mm2, is_resuming, completed = open_or_create_matrix(
+        mm2, is_resuming, completed, is_complete = open_or_create_matrix(
             storage, 3, self._IDS, other_config
         )
         assert not is_resuming
         assert completed == 0
+        assert not is_complete
         assert np.all(np.isnan(mm2))
 
     def test_resume_false_wipes(self, tmp_path) -> None:
         """resume=False → always delete and recreate."""
         storage = StorageOptions(store_path=str(tmp_path), resume=False)
-        mm1, _, _ = open_or_create_matrix(storage, 3, self._IDS, self._CONFIG)
+        mm1, _, _, _ = open_or_create_matrix(storage, 3, self._IDS, self._CONFIG)
         mm1[0, 1] = 0.42
         mm1.flush()
         save_progress(storage, completed_chunks=1)
 
-        mm2, is_resuming, completed = open_or_create_matrix(
+        mm2, is_resuming, completed, is_complete = open_or_create_matrix(
             storage, 3, self._IDS, self._CONFIG
         )
         assert not is_resuming
         assert completed == 0
+        assert not is_complete
         assert np.all(np.isnan(mm2))
 
     def test_ids_mismatch_wipes(self, tmp_path) -> None:
@@ -150,20 +154,22 @@ class TestOpenOrCreateMatrix:
         save_progress(storage, completed_chunks=1)
 
         new_ids = ["a", "b", "c"]
-        _, is_resuming, completed = open_or_create_matrix(
+        _, is_resuming, completed, is_complete = open_or_create_matrix(
             storage, 3, new_ids, self._CONFIG
         )
         assert not is_resuming
         assert completed == 0
+        assert not is_complete
 
     def test_accepts_path_object(self, tmp_path) -> None:
         """store_path as Path object works (resolve_path handles it)."""
         storage = StorageOptions(store_path=tmp_path / "sub")
-        mm, is_resuming, completed = open_or_create_matrix(
+        mm, is_resuming, completed, is_complete = open_or_create_matrix(
             storage, 3, self._IDS, self._CONFIG
         )
         assert mm.shape == (3, 3)
         assert not is_resuming
+        assert not is_complete
         assert (tmp_path / "sub" / "metadata.json").exists()
 
     def test_corrupted_metadata_creates_fresh(self, tmp_path) -> None:
@@ -171,12 +177,27 @@ class TestOpenOrCreateMatrix:
         storage = StorageOptions(store_path=str(tmp_path))
         (tmp_path / "metadata.json").write_text("{invalid json")
 
-        mm, is_resuming, completed = open_or_create_matrix(
+        mm, is_resuming, completed, is_complete = open_or_create_matrix(
             storage, 3, self._IDS, self._CONFIG
         )
         assert not is_resuming
         assert completed == 0
+        assert not is_complete
         assert np.all(np.isnan(mm))
+
+    def test_is_complete_when_status_complete(self, tmp_path) -> None:
+        """status='complete' in progress.json → is_complete=True."""
+        storage = StorageOptions(store_path=str(tmp_path))
+        mm1, _, _, _ = open_or_create_matrix(storage, 3, self._IDS, self._CONFIG)
+        mm1.flush()
+        save_progress(storage, completed_chunks=3, status="complete")
+
+        mm2, is_resuming, completed, is_complete = open_or_create_matrix(
+            storage, 3, self._IDS, self._CONFIG
+        )
+        assert is_resuming
+        assert completed == 3
+        assert is_complete
 
 
 # ---------------------------------------------------------------------------
