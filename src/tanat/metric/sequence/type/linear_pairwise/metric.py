@@ -15,11 +15,7 @@ from tanat_utils import settings_dataclass as dataclass
 from ...base import SequenceMetric
 from ....entity.base import EntityMetric
 from ....matrix import DistanceMatrix
-from ...._storage import (
-    compute_metric_config,
-    open_or_create_matrix,
-    save_progress,
-)
+from ...._storage import save_progress
 from .kernels import compute_pairwise_matrix, compute_pairwise_chunk, _AGG_NUMBA_KERNELS
 
 if TYPE_CHECKING:
@@ -182,7 +178,13 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
         return self._compute_pair(seq_a, seq_b, self.entity_metric, self._get_agg_fn())
 
     def _compute_matrix_impl(
-        self, pool: SequencePool, storage: StorageOptions | None = None
+        self,
+        pool: SequencePool,
+        *,
+        storage: StorageOptions | None = None,
+        result=None,
+        is_resuming: bool = False,
+        completed: int = 0,
     ) -> DistanceMatrix:
         """Dispatch to the Numba fast path or the Python fallback.
 
@@ -191,20 +193,32 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
         Falls back to the Python double-loop otherwise.
 
         Args:
-            pool:    Sequence pool.
-            storage: Optional :class:`~tanat.metric.StorageOptions` for
-                     disk-backed computation. ``None`` → in-memory.
+            pool:        Sequence pool.
+            storage:     Optional :class:`~tanat.metric.StorageOptions`.
+            result:      Pre-opened memmap injected by the base, or ``None``
+                         for the in-memory path.
+            is_resuming: Whether *result* already has partial data.
+            completed:   Number of chunks already flushed.
 
         Returns:
             Symmetric :class:`DistanceMatrix` (may contain ``nan``).
         """
         em = self.entity_metric
         if em.NUMBA_OPTIM:
-            return self._compute_matrix_numba(pool, storage)
-        return self._compute_matrix_python(pool, storage)
+            return self._compute_matrix_numba(
+                pool, storage, result, is_resuming, completed
+            )
+        return self._compute_matrix_python(
+            pool, storage, result, is_resuming, completed
+        )
 
     def _compute_matrix_python(
-        self, pool: SequencePool, storage: StorageOptions | None = None
+        self,
+        pool: SequencePool,
+        storage: StorageOptions | None = None,
+        result=None,
+        is_resuming: bool = False,
+        completed: int = 0,
     ) -> DistanceMatrix:
         """Python double-loop fallback.
 
@@ -212,8 +226,11 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
         Uses the memmap + chunks path when ``storage`` is set.
 
         Args:
-            pool:    Sequence pool.
-            storage: Optional :class:`~tanat.metric.StorageOptions`.
+            pool:        Sequence pool.
+            storage:     Optional :class:`~tanat.metric.StorageOptions`.
+            result:      Pre-opened memmap (disk path) or ``None`` (in-memory).
+            is_resuming: Whether partial chunks are already on disk.
+            completed:   Number of chunks already flushed.
 
         Returns:
             Symmetric :class:`DistanceMatrix` (may contain ``nan``).
@@ -224,15 +241,8 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
         n = len(ids)
         seqs = {sid: pool[sid] for sid in ids}
 
-        if storage is None:
+        if result is None:
             result = np.zeros((n, n), dtype=np.float32)
-            is_resuming = False
-            completed = 0
-        else:
-            metric_config = compute_metric_config(self)
-            result, is_resuming, completed = open_or_create_matrix(
-                storage, n, ids, metric_config
-            )
 
         chunk_size = storage.chunk_size if storage is not None else n
         chunks = list(range(0, n, chunk_size))
@@ -265,7 +275,12 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
         return DistanceMatrix(result, ids)
 
     def _compute_matrix_numba(
-        self, pool: SequencePool, storage: StorageOptions | None = None
+        self,
+        pool: SequencePool,
+        storage: StorageOptions | None = None,
+        result=None,
+        is_resuming: bool = False,
+        completed: int = 0,
     ) -> DistanceMatrix:
         """Numba fast path: batch-extract data then run the parallel kernel.
 
@@ -277,8 +292,11 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
         Undefined distances produce ``nan``.
 
         Args:
-            pool:    Sequence pool.
-            storage: Optional :class:`~tanat.metric.StorageOptions`.
+            pool:        Sequence pool.
+            storage:     Optional :class:`~tanat.metric.StorageOptions`.
+            result:      Pre-opened memmap (disk path) or ``None`` (in-memory).
+            is_resuming: Whether partial chunks are already on disk.
+            completed:   Number of chunks already flushed.
 
         Returns:
             Symmetric :class:`DistanceMatrix` (may contain ``nan``).
@@ -296,8 +314,8 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
 
         n = len(arrays)
 
-        if storage is None:
-            # --- In-memory path (unchanged) ---
+        if result is None:
+            # --- In-memory path ---
             result = np.zeros((n, n), dtype=np.float32)
             if n > 1:
                 compute_pairwise_matrix(
@@ -312,10 +330,6 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
             return DistanceMatrix(result, pool.unique_ids)
 
         # --- Memmap + chunks path ---
-        metric_config = compute_metric_config(self)
-        result, is_resuming, completed = open_or_create_matrix(
-            storage, n, pool.unique_ids, metric_config
-        )
         chunk_size = storage.chunk_size
         chunks = list(range(0, n, chunk_size))
         total_chunks = len(chunks)
