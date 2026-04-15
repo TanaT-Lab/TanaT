@@ -113,13 +113,62 @@ def _wipe_matrix(path: Path) -> None:
             f.unlink()
 
 
+def _parse_and_validate_metadata(
+    path: Path,
+    n: int,
+    ids: list,
+    metric_config: dict,
+) -> tuple[dict, dict] | tuple[None, None]:
+    """Read and cross-validate the three storage files.
+
+    Checks that all three files exist, that ``metadata.json`` matches the
+    expected ``n``, ``ids`` and ``metric_config``, and that both JSON files
+    are parseable.
+
+    Args:
+        path: Resolved storage directory.
+        n: Expected matrix dimension.
+        ids: Expected identifiers (order-sensitive).
+        metric_config: Current metric ``to_config()`` dict.
+
+    Returns:
+        ``(meta, progress)`` dicts when everything is consistent,
+        ``(None, None)`` on any mismatch or I/O error.
+    """
+    metadata_path = path / "metadata.json"
+    progress_path = path / "progress.json"
+    matrix_path = path / "matrix.dat"
+
+    if not (metadata_path.exists() and progress_path.exists() and matrix_path.exists()):
+        return None, None
+
+    try:
+        meta = json.loads(metadata_path.read_text())
+        progress = json.loads(progress_path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return None, None
+
+    if meta.get("ids") != list(ids):
+        return None, None
+    if meta.get("shape") != [n, n]:
+        return None, None
+    if meta.get("metric_config") != metric_config:
+        return None, None
+
+    return meta, progress
+
+
 def open_or_create_matrix(
     storage: StorageOptions,
     n: int,
     ids: list,
     metric_config: dict,
-) -> tuple[np.memmap, bool, int]:
+) -> tuple[np.memmap, bool, int, bool]:
     """Open an existing memmap or create a new one.
+
+    Single entry-point for all disk-backed matrix operations.  Returns
+    everything callers need to either short-circuit (already complete) or
+    continue the chunk loop (fresh or resuming).
 
     If a compatible matrix already exists on disk and ``resume=True``,
     it is reopened. Otherwise, a fresh NaN-filled memmap is created.
@@ -132,53 +181,22 @@ def open_or_create_matrix(
             parameter changes between runs.
 
     Returns:
-        ``(memmap, is_resuming, completed_chunks)``:
+        ``(memmap, is_resuming, completed_chunks, is_complete)``:
 
         - *memmap*: float32 (n x n) memory-mapped array.
-        - *is_resuming*: ``True`` if resuming from an existing matrix,
-          ``False`` if freshly created.
-        - *completed_chunks*: number of chunks already computed (0 if not
-          resuming).
-
-    Raises:
-        ValueError: If existing matrix has incompatible shape or ids.
+        - *is_resuming*: ``True`` if an existing matrix was reopened.
+        - *completed_chunks*: number of chunks already flushed (0 if fresh).
+        - *is_complete*: ``True`` when the matrix is fully computed and
+          callers should return it immediately without further work.
     """
     path = resolve_path(storage.store_path)
     path.mkdir(parents=True, exist_ok=True)
 
-    metadata_path = path / "metadata.json"
     matrix_path = path / "matrix.dat"
-    progress_path = path / "progress.json"
 
-    should_create_fresh = True
-    completed_chunks = 0
-
-    if metadata_path.exists():
-        try:
-            existing_meta = json.loads(metadata_path.read_text())
-            existing_ids = existing_meta.get("ids", [])
-            existing_shape = existing_meta.get("shape", [])
-            existing_config = existing_meta.get("metric_config", {})
-
-            ids_match = existing_ids == list(ids)
-            shape_match = existing_shape == [n, n]
-            config_match = existing_config == metric_config
-
-            if not storage.resume:
-                # resume=False → always wipe and recompute
-                should_create_fresh = True
-            elif not ids_match or not shape_match:
-                # Pool changed (different ids or different size) → wipe
-                should_create_fresh = True
-            elif not config_match:
-                # Metric configuration changed → wipe
-                should_create_fresh = True
-            else:
-                # All conditions satisfied → resume
-                should_create_fresh = False
-
-        except (json.JSONDecodeError, KeyError, OSError):
-            should_create_fresh = True
+    _, progress = _parse_and_validate_metadata(path, n, ids, metric_config)
+    # Wipe when: validation failed (progress is None), or resume explicitly disabled
+    should_create_fresh = progress is None or not storage.resume
 
     if should_create_fresh:
         _wipe_matrix(path)
@@ -187,14 +205,10 @@ def open_or_create_matrix(
         mm.flush()
         save_matrix_metadata(storage, ids, metric_config)
         save_progress(storage, completed_chunks=0, status="computing")
-        return mm, False, 0
+        return mm, False, 0, False
 
-    # --- Resume path: open existing memmap ---
+    # --- Existing matrix: resume or already complete ---
     mm = np.memmap(matrix_path, dtype=storage.dtype, mode="r+", shape=(n, n))
-    if progress_path.exists():
-        try:
-            progress = json.loads(progress_path.read_text())
-            completed_chunks = int(progress.get("completed_chunks", 0))
-        except (json.JSONDecodeError, KeyError, OSError):
-            completed_chunks = 0
-    return mm, True, completed_chunks
+    completed_chunks = int(progress.get("completed_chunks", 0))
+    is_complete = progress.get("status") == "complete"
+    return mm, True, completed_chunks, is_complete
