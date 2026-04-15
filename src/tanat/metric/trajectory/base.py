@@ -12,7 +12,7 @@ from tanat_utils import SettingsMixin, Registrable, DisplayMixin
 
 from ..matrix import DistanceMatrix
 from .._utils import resolve_storage, default_pairwise_matrix, validate_pair
-from .._storage import StorageOptions
+from .._storage import StorageOptions, open_or_create_matrix, compute_metric_config
 from ...trajectory.pool import TrajectoryPool
 from ...trajectory.trajectory import Trajectory
 
@@ -117,19 +117,53 @@ class TrajectoryMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
             dtype=dtype,
         )
         self._validate_pool(pool)
+
+        result, is_resuming, completed = None, False, 0
+        if storage is not None:
+            ids = pool.unique_ids
+            result, is_resuming, completed, is_complete = open_or_create_matrix(
+                storage, len(ids), ids, compute_metric_config(self)
+            )
+            if is_complete:
+                self._display_header()
+                self._display_message("Cache hit: returning precomputed matrix")
+                self._display_footer(f"{len(pool)} trajectories")
+                return DistanceMatrix(result, ids)
+
         self._display_header()
-        dm = self._compute_matrix_impl(pool, storage)
+        dm = self._compute_matrix_impl(
+            pool,
+            storage=storage,
+            result=result,
+            is_resuming=is_resuming,
+            completed=completed,
+        )
         self._display_footer(f"{len(pool)} trajectories")
         return dm
 
     def _compute_matrix_impl(
         self,
         pool: TrajectoryPool,
-        _storage=None,  # pylint: disable=unused-argument
+        *,
+        storage=None,  # pylint: disable=unused-argument
+        result=None,  # pylint: disable=unused-argument
+        is_resuming: bool = False,  # pylint: disable=unused-argument
+        completed: int = 0,  # pylint: disable=unused-argument
     ) -> DistanceMatrix:
-        """Default O(n^2) double-loop implementation.
+        """In-memory O(n²) double-loop fallback.
 
-        Subclasses may override for batch-optimised kernels.
+        This default implementation **ignores** ``storage``, ``result``,
+        ``is_resuming`` and ``completed``.  It always runs fully in memory
+        with no disk persistence and no resume capability.
+
+        Subclasses that need disk-backed computation (memmap, chunked writes,
+        resume) must override this method, set ``MEMMAP_SUPPORT = True``, and
+        consume the injected keyword arguments directly.
+
+        The keyword arguments are declared here so the override contract is
+        explicit: :meth:`compute_matrix` always calls ``_compute_matrix_impl``
+        with these four kwargs after opening (or deciding not to open) the
+        memmap.
         """
         items = {tid: pool[tid] for tid in pool.unique_ids}
         return default_pairwise_matrix(
