@@ -15,11 +15,7 @@ from tanat_utils import settings_dataclass as dataclass
 from ...base import TrajectoryMetric
 from ....sequence.base import SequenceMetric
 from ....matrix import DistanceMatrix
-from ...._storage import (
-    compute_metric_config,
-    open_or_create_matrix,
-    save_progress,
-)
+from ...._storage import save_progress
 
 if TYPE_CHECKING:
     from .....trajectory.trajectory import Trajectory
@@ -230,7 +226,13 @@ class AggregationTrajectoryMetric(TrajectoryMetric, register_name="aggregation")
         return self._get_agg_fn(matrix=True)(stack, weights)
 
     def _compute_matrix_impl(
-        self, pool: TrajectoryPool, storage: StorageOptions | None = None
+        self,
+        pool: TrajectoryPool,
+        *,
+        storage: StorageOptions | None = None,
+        result=None,
+        is_resuming: bool = False,
+        completed: int = 0,
     ) -> DistanceMatrix:
         """Two-step optimised matrix computation with optional memmap support.
 
@@ -246,32 +248,31 @@ class AggregationTrajectoryMetric(TrajectoryMetric, register_name="aggregation")
         to a memory-mapped file with chunk-level resume support.
 
         Args:
-            pool:    Trajectory pool.
-            storage: Optional :class:`~tanat.metric._storage.StorageOptions`
-                     for disk-backed computation.  ``None`` → in-memory.
+            pool:        Trajectory pool.
+            storage:     Optional :class:`~tanat.metric._storage.StorageOptions`.
+            result:      Pre-opened memmap injected by the base, or ``None``
+                         for the in-memory path.
+            is_resuming: Whether *result* already has partial chunks.
+            completed:   Number of chunks already flushed.
 
         Returns:
             :class:`~tanat.metric.DistanceMatrix`.
         """
+        all_ids = pool.unique_ids
+        N = len(all_ids)
+
         # Step 1: per-alias matrices (sub-metrics handle their own optimisations)
         expanded_list, weight_list = self._compute_per_alias_matrices(pool)
 
-        all_ids = pool.unique_ids
-        N = len(all_ids)
         stack = np.stack(expanded_list)  # (K, N, N)
         w = np.array(weight_list, dtype=np.float64)  # (K,)
 
         # --- In-memory path ---
-        if storage is None:
-            result = self._aggregate_matrices(stack, w).astype(np.float32)
-            return DistanceMatrix(result, all_ids)
+        if result is None:
+            agg = self._aggregate_matrices(stack, w).astype(np.float32)
+            return DistanceMatrix(agg, all_ids)
 
         # --- Memmap + chunks path ---
-        metric_config = compute_metric_config(self)
-        result, is_resuming, completed = open_or_create_matrix(
-            storage, N, all_ids, metric_config
-        )
-
         chunk_size = storage.chunk_size
         chunks = list(range(0, N, chunk_size))
 
