@@ -8,6 +8,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from pathlib import Path
 
+import numpy as np
 from tanat_utils import SettingsMixin, Registrable, DisplayMixin
 
 from ..matrix import DistanceMatrix
@@ -144,6 +145,69 @@ class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
         )
         self._display_footer(f"{len(pool)} sequences")
         return dm
+
+    def compute_cross_matrix(
+        self,
+        pool_rows: SequencePool,
+        pool_cols: SequencePool,
+    ) -> np.ndarray:
+        """Compute an asymmetric (n × k) distance matrix between two pools.
+
+        Row ``i`` ↔ sequence ``i`` in *pool_rows*; column ``j`` ↔ sequence
+        ``j`` in *pool_cols*.  The result is **not** symmetric.
+
+        Validates both pools (type-check + composition probe), then delegates
+        to :meth:`_compute_cross_matrix_impl`.  Subclasses override
+        :meth:`_compute_cross_matrix_impl` to use Numba kernels when available.
+
+        Args:
+            pool_rows: Pool whose sequences form the rows   (n items).
+            pool_cols: Pool whose sequences form the columns (k items).
+
+        Returns:
+            float32 numpy array of shape ``(n, k)``.
+        """
+        self._validate_pool(pool_rows)
+        self._validate_pool(pool_cols)
+        for sid in pool_rows.unique_ids:
+            seq = pool_rows[sid]
+            if seq:
+                self.validate_composition(seq)
+                break
+        for sid in pool_cols.unique_ids:
+            seq = pool_cols[sid]
+            if seq:
+                self.validate_composition(seq)
+                break
+        return self._compute_cross_matrix_impl(pool_rows, pool_cols)
+
+    def _compute_cross_matrix_impl(
+        self,
+        pool_rows: SequencePool,
+        pool_cols: SequencePool,
+    ) -> np.ndarray:
+        """In-memory O(n×k) double-loop fallback for cross-pool distances.
+
+        Subclasses override this method to use Numba kernels when available.
+        Pools are already validated when this method is called.
+
+        Args:
+            pool_rows: Pool whose sequences form the rows   (n items).
+            pool_cols: Pool whose sequences form the columns (k items).
+
+        Returns:
+            float32 numpy array of shape ``(n, k)``.
+        """
+        ids_r = pool_rows.unique_ids
+        ids_c = pool_cols.unique_ids
+        seqs_r = {sid: pool_rows[sid] for sid in ids_r}
+        seqs_c = {sid: pool_cols[sid] for sid in ids_c}
+        n, k = len(ids_r), len(ids_c)
+        result = np.empty((n, k), dtype=np.float32)
+        for i, id_r in enumerate(ids_r):
+            for j, id_c in enumerate(ids_c):
+                result[i, j] = float(self._compute(seqs_r[id_r], seqs_c[id_c]))
+        return result
 
     def _compute_matrix_impl(
         self,
