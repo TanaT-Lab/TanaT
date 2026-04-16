@@ -217,6 +217,89 @@ class AggregationTrajectoryMetric(TrajectoryMetric, register_name="aggregation")
 
         return expanded_list, weight_list
 
+    def _compute_per_alias_cross_matrices(
+        self,
+        pool_rows: TrajectoryPool,
+        pool_cols: TrajectoryPool,
+    ) -> tuple[list[np.ndarray], list[float]]:
+        """Compute per-alias cross distance matrices expanded to the full ID spaces.
+
+        Mirror of :meth:`_compute_per_alias_matrices` for the asymmetric
+        (n × k) case.  For each alias shared by both pools, delegates to
+        :meth:`~tanat.metric.sequence.base.SequenceMetric.compute_cross_matrix`,
+        then expands the result to an ``(N, K)`` array (``nan`` for IDs absent
+        from the alias sub-pool).
+
+        Args:
+            pool_rows: Trajectory pool for rows   (n trajectories).
+            pool_cols: Trajectory pool for columns (k trajectories).
+
+        Returns:
+            ``(expanded_list, weight_list)``: one entry per alias present in
+            at least one of the two pools.
+        """
+        ids_r = pool_rows.unique_ids
+        ids_c = pool_cols.unique_ids
+        N, K = len(ids_r), len(ids_c)
+        id_to_row = {tid: i for i, tid in enumerate(ids_r)}
+        id_to_col = {tid: i for i, tid in enumerate(ids_c)}
+
+        all_aliases = sorted(
+            set(pool_rows.sequence_pools) | set(pool_cols.sequence_pools)
+        )
+
+        expanded_list: list[np.ndarray] = []
+        weight_list: list[float] = []
+
+        for alias in all_aliases:
+            sub_r = pool_rows.sequence_pools.get(alias)
+            sub_c = pool_cols.sequence_pools.get(alias)
+
+            expanded = np.full((N, K), np.nan, dtype=np.float32)
+
+            if sub_r is not None and sub_c is not None:
+                metric = self._metric_for(alias)
+                with self._nested_display():
+                    cross = metric.compute_cross_matrix(sub_r, sub_c)  # (nr, kc)
+
+                row_idx = np.array([id_to_row[sid] for sid in sub_r.unique_ids])
+                col_idx = np.array([id_to_col[sid] for sid in sub_c.unique_ids])
+                expanded[np.ix_(row_idx, col_idx)] = cross
+
+            expanded_list.append(expanded)
+            weight_list.append(self._get_weight_for(alias))
+
+        return expanded_list, weight_list
+
+    def _compute_cross_matrix_impl(
+        self,
+        pool_rows: TrajectoryPool,
+        pool_cols: TrajectoryPool,
+    ) -> np.ndarray:
+        """Two-step optimised cross (n × k) matrix computation.
+
+        **Step 1**: per-alias cross sub-matrices: for each alias, delegates
+        to the configured :class:`~tanat.metric.sequence.base.SequenceMetric`
+        via :meth:`compute_cross_matrix` (which uses Numba when available),
+        then expands to the full ``(N, K)`` trajectory ID space.
+
+        **Step 2**: weighted aggregation: stack the per-alias matrices and
+        apply :meth:`_aggregate_matrices` (numpy, vectorised).
+
+        Args:
+            pool_rows: Trajectory pool for rows   (n trajectories).
+            pool_cols: Trajectory pool for columns (k trajectories).
+
+        Returns:
+            float32 numpy array of shape ``(n, k)``.
+        """
+        expanded_list, weight_list = self._compute_per_alias_cross_matrices(
+            pool_rows, pool_cols
+        )
+        stack = np.stack(expanded_list)  # (K_aliases, N, K)
+        w = np.array(weight_list, dtype=np.float64)
+        return self._aggregate_matrices(stack, w).astype(np.float32)
+
     def _aggregate_matrices(self, stack: np.ndarray, weights: np.ndarray) -> np.ndarray:
         """Aggregate a ``(K, N, N)`` stack of per-alias matrices into ``(N, N)``.
 
