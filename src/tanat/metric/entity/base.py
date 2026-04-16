@@ -22,9 +22,14 @@ class EntityMetric(SettingsMixin, Registrable, ABC):
     _REGISTER: dict = {}
     _TYPE_SUBMODULE = "type"
 
-    #: Subclasses that provide ``prepare_batch_data`` / ``distance_kernel``
+    #: Subclasses that provide ``prepare_batch_data`` / ``distance_kernel`` / prepare_cross_batch_data
     #: set this to ``True`` to opt into the Numba fast path.
     NUMBA_OPTIM: bool = False
+
+    #: Set to ``True`` when ``dist(a, b) == dist(b, a)`` for all inputs.
+    #: Subclasses that implement a directional distance **must** set this to ``False`` so
+    #: that the full n² kernel is used instead.
+    IS_SYMMETRIC: bool = True
 
     # ------------------------------------------------------------------
     # Public interface
