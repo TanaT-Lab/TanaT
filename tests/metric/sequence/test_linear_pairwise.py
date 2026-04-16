@@ -19,8 +19,8 @@ from tanat.metric.sequence import (
 )
 from tanat.metric.matrix import DistanceMatrix
 from tanat.metric.sequence.type.linear_pairwise.kernels import (
-    compute_pairwise_chunk,
-    compute_pairwise_matrix,
+    compute_matrix_kernel,
+    compute_matrix_chunk,
     _AGG_NUMBA_KERNELS,
 )
 
@@ -423,7 +423,7 @@ class TestChunkedComputation:
 
 
 class TestChunkKernelConsistency:
-    """compute_pairwise_chunk over all rows == compute_pairwise_matrix."""
+    """compute_matrix_chunk over all rows == compute_matrix_kernel."""
 
     def test_chunk_vs_full_matrix(self, cat_pool_status_only) -> None:
         """Chunked iteration produces the same matrix as the full kernel."""
@@ -434,30 +434,36 @@ class TestChunkKernelConsistency:
         padding = np.float32(np.nan)
 
         full = np.zeros((n, n), dtype=np.float32)
-        compute_pairwise_matrix(
+        compute_matrix_kernel(
             full,
+            arrays,
+            lengths,
             arrays,
             lengths,
             em.distance_kernel,
             context,
             agg_kernel,
             padding,
+            True,  # symmetric: same pool, square matrix
         )
 
         chunked = np.full((n, n), np.nan, dtype=np.float32)
         chunk_size = 3
         for start in range(0, n, chunk_size):
             end = min(start + chunk_size, n)
-            compute_pairwise_chunk(
+            compute_matrix_chunk(
                 chunked,
                 start,
                 end,
+                arrays,
+                lengths,
                 arrays,
                 lengths,
                 em.distance_kernel,
                 context,
                 agg_kernel,
                 padding,
+                True,  # symmetric: same pool, square matrix
             )
             for i in range(start, end):
                 chunked[i, i] = 0.0
