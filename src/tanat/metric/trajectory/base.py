@@ -8,6 +8,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from pathlib import Path
 
+import numpy as np
 from tanat_utils import SettingsMixin, Registrable, DisplayMixin
 
 from ..matrix import DistanceMatrix
@@ -140,6 +141,57 @@ class TrajectoryMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
         )
         self._display_footer(f"{len(pool)} trajectories")
         return dm
+
+    def compute_cross_matrix(
+        self,
+        pool_rows: TrajectoryPool,
+        pool_cols: TrajectoryPool,
+    ) -> np.ndarray:
+        """Compute an asymmetric (n × k) distance matrix between two pools.
+
+        Row ``i`` ↔ trajectory ``i`` in *pool_rows*; column ``j`` ↔
+        trajectory ``j`` in *pool_cols*.
+
+        Validates both pools, then delegates to
+        :meth:`_compute_cross_matrix_impl`.  Subclasses override
+        :meth:`_compute_cross_matrix_impl` to use optimised kernels.
+
+        Args:
+            pool_rows: Pool whose trajectories form the rows   (n items).
+            pool_cols: Pool whose trajectories form the columns (k items).
+
+        Returns:
+            float32 numpy array of shape ``(n, k)``.
+        """
+        self._validate_pool(pool_rows)
+        self._validate_pool(pool_cols)
+        return self._compute_cross_matrix_impl(pool_rows, pool_cols)
+
+    def _compute_cross_matrix_impl(
+        self,
+        pool_rows: TrajectoryPool,
+        pool_cols: TrajectoryPool,
+    ) -> np.ndarray:
+        """In-memory O(n×k) double-loop fallback for cross-pool distances.
+
+        Subclasses override this method to use optimised kernels.
+        Pools are already validated when this method is called.
+
+        Args:
+            pool_rows: Pool whose trajectories form the rows   (n items).
+            pool_cols: Pool whose trajectories form the columns (k items).
+
+        Returns:
+            float32 numpy array of shape ``(n, k)``.
+        """
+        ids_r = pool_rows.unique_ids
+        ids_c = pool_cols.unique_ids
+        n, k = len(ids_r), len(ids_c)
+        result = np.empty((n, k), dtype=np.float32)
+        for i, id_r in enumerate(ids_r):
+            for j, id_c in enumerate(ids_c):
+                result[i, j] = float(self._compute(pool_rows[id_r], pool_cols[id_c]))
+        return result
 
     def _compute_matrix_impl(
         self,
