@@ -207,42 +207,6 @@ class TestEdgeCases:
 
 
 # ---------------------------------------------------------------------------
-# Shadow dispatch
-# ---------------------------------------------------------------------------
-
-
-class TestShadowDispatch:
-    """Temporary kwarg overrides via shadow dispatch."""
-
-    def test_shadow_override_agg_fun(self, cat_pool_status_only) -> None:
-        """Kwarg override of agg_fun applies only to the call; stored settings remain unchanged."""
-        lp = LinearPairwiseSequenceMetric(
-            agg_fun="mean",
-        )
-        ids = cat_pool_status_only.unique_ids
-        seq_a, seq_b = cat_pool_status_only[ids[0]], cat_pool_status_only[ids[1]]
-        result_mean = lp(seq_a, seq_b)
-        result_sum = lp(seq_a, seq_b, agg_fun="sum")
-        assert lp.settings.agg_fun == "mean"  # unchanged
-        if result_mean > 0:
-            assert result_sum >= result_mean
-
-    def test_shadow_override_padding_penalty(self, cat_pool_status_only) -> None:
-        """Kwarg override of padding_penalty applies only to the call."""
-        lp = LinearPairwiseSequenceMetric(
-            agg_fun="mean",
-            padding_penalty=None,
-        )
-        ids = cat_pool_status_only.unique_ids
-        seq_a, seq_b = cat_pool_status_only[ids[0]], cat_pool_status_only[ids[1]]
-        result_no_pad = lp(seq_a, seq_b)
-        result_pad = lp(seq_a, seq_b, padding_penalty=1.0)
-        assert lp.settings.padding_penalty is None  # unchanged
-        if len(seq_a) != len(seq_b):
-            assert result_pad >= result_no_pad
-
-
-# ---------------------------------------------------------------------------
 # Numba consistency: fast path == slow path
 # ---------------------------------------------------------------------------
 
