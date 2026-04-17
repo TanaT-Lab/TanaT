@@ -45,18 +45,12 @@ class TrajectoryMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
     # Public interface
     # ------------------------------------------------------------------
 
-    @SettingsMixin.shadow_dispatch
-    def __call__(  # pylint: disable=unused-argument
-        self, traj_a: Trajectory, traj_b: Trajectory, **kwargs
-    ) -> float:
+    def __call__(self, traj_a: Trajectory, traj_b: Trajectory) -> float:
         """Compute distance between two trajectories.
-
-        Settings-matching ``kwargs`` create a temporary shadow view.
 
         Args:
             traj_a: First trajectory.
             traj_b: Second trajectory.
-            **kwargs: Settings overrides.
 
         Returns:
             Scalar distance.
@@ -80,8 +74,7 @@ class TrajectoryMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
     # Matrix computation
     # ------------------------------------------------------------------
 
-    @SettingsMixin.shadow_dispatch
-    def compute_matrix(  # pylint: disable=unused-argument
+    def compute_matrix(
         self,
         pool: TrajectoryPool,
         *,
@@ -89,13 +82,11 @@ class TrajectoryMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
         chunk_size: int = 500,
         resume: bool = True,
         dtype: str = "float32",
-        **kwargs,
     ) -> DistanceMatrix:
         """Compute full pairwise trajectory distance matrix.
 
         Storage kwargs are forwarded to
-        :class:`~tanat.metric.StorageOptions`. Other ``kwargs`` create a
-        temporary settings override via shadow dispatch.
+        :class:`~tanat.metric.StorageOptions`.
 
         Args:
             pool:       A :class:`~tanat.trajectory.pool.TrajectoryPool`.
@@ -103,7 +94,6 @@ class TrajectoryMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
             chunk_size: Rows per flush chunk (default 500).
             resume:     Skip already-computed chunks (default ``True``).
             dtype:      Numpy dtype for the matrix (default ``"float32"``).
-            **kwargs:   Settings overrides.
 
         Returns:
             A :class:`~tanat.metric.DistanceMatrix`.
@@ -211,11 +201,6 @@ class TrajectoryMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
         Subclasses that need disk-backed computation (memmap, chunked writes,
         resume) must override this method, set ``MEMMAP_SUPPORT = True``, and
         consume the injected keyword arguments directly.
-
-        The keyword arguments are declared here so the override contract is
-        explicit: :meth:`compute_matrix` always calls ``_compute_matrix_impl``
-        with these four kwargs after opening (or deciding not to open) the
-        memmap.
         """
         items = {tid: pool[tid] for tid in pool.unique_ids}
         return default_pairwise_matrix(
