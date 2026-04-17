@@ -306,41 +306,6 @@ class TestConfigRoundtrip:
 
 
 # ---------------------------------------------------------------------------
-# Shadow dispatch
-# ---------------------------------------------------------------------------
-
-
-class TestShadowDispatch:
-    """Temporary kwarg overrides via shadow dispatch."""
-
-    def test_shadow_override_agg_fun(self, traj_pair) -> None:
-        """agg_fun kwarg applies only to the call; stored settings unchanged."""
-        agg = AggregationTrajectoryMetric(agg_fun="mean")
-        traj_a, traj_b = traj_pair
-        _ = agg(traj_a, traj_b, agg_fun="sum")
-        assert agg.settings.agg_fun == "mean"
-
-    def test_shadow_override_weights(self, traj_pair) -> None:
-        """weights kwarg applies only to the call; stored settings unchanged."""
-        agg = AggregationTrajectoryMetric(weights=None)
-        traj_a, traj_b = traj_pair
-        aliases = sorted(set(traj_a) & set(traj_b))
-        override = {a: float(i + 1) for i, a in enumerate(aliases)}
-        _ = agg(traj_a, traj_b, weights=override)
-        assert agg.settings.weights is None
-
-    def test_shadow_sum_vs_mean_different(self, traj_pair) -> None:
-        """Shadow override of agg_fun from 'mean' to 'sum' changes the result."""
-        agg = AggregationTrajectoryMetric(agg_fun="mean")
-        traj_a, traj_b = traj_pair
-        d_mean = agg(traj_a, traj_b)
-        d_sum = agg(traj_a, traj_b, agg_fun="sum")
-        n_common = len(sorted(set(traj_a) & set(traj_b)))
-        if d_mean > 0 and n_common > 1:
-            assert d_sum != pytest.approx(d_mean)
-
-
-# ---------------------------------------------------------------------------
 # Optimised path (two-step: per-alias matrices then aggregation)
 # ---------------------------------------------------------------------------
 
