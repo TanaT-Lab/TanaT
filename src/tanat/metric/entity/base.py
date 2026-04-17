@@ -35,19 +35,14 @@ class EntityMetric(SettingsMixin, Registrable, ABC):
     # Public interface
     # ------------------------------------------------------------------
 
-    @SettingsMixin.shadow_dispatch
-    def __call__(  # pylint: disable=unused-argument
-        self, ent_a: Entity, ent_b: Entity, **kwargs
-    ) -> float:
+    def __call__(self, ent_a: Entity, ent_b: Entity) -> float:
         """Compute distance between two entities.
 
         Validates both entities, then delegates to :meth:`_compute`.
-        Settings-matching ``kwargs`` create a temporary shadow view.
 
         Args:
             ent_a: First entity.
             ent_b: Second entity.
-            **kwargs: Settings overrides (e.g. ``mismatch_cost=0.5``).
 
         Returns:
             Scalar distance.
@@ -63,9 +58,8 @@ class EntityMetric(SettingsMixin, Registrable, ABC):
     def validate_entity(self, ent_a: Entity, ent_b: Entity | None = None) -> None:
         """Validate one or two entities against this metric's requirements.
 
-        Called from :meth:`__call__` (both entities) and from
-        :meth:`~tanat.metric.sequence.base.SequenceMetric.validate_composition`
-        (single sample entity for early schema check).
+        Called from :meth:`__call__` and from
+        :meth:`~tanat.metric.sequence.base.SequenceMetric.validate_composition`.
 
         Implementations should call :meth:`_validate_entity_instance` first
         for the type check, then add metric-specific checks.
