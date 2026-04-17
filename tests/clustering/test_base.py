@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests for Clusterer ABC: _validate_pool, _resolve_metric, ..
+Tests for Clusterer ABC: _validate_pool, _resolve_metric_for_pool, ..
 """
 
 from __future__ import annotations
@@ -46,19 +46,19 @@ class TestValidatePool:
 
 
 # ---------------------------------------------------------------------------
-# _resolve_metric
+# _resolve_metric_for_pool
 # ---------------------------------------------------------------------------
 
 
 class TestResolveMetric:
-    """_resolve_metric resolves strings and passes instances through."""
+    """_resolve_metric_for_pool resolves strings and passes instances through."""
 
     # pylint: disable=protected-access
 
     def test_str_with_seq_pool_returns_sequence_metric(self, cat_pool) -> None:
         """String name + SequencePool → SequenceMetric instance."""
         c = HierarchicalClusterer(metric="linearpairwise", n_clusters=2)
-        metric = c._resolve_metric(cat_pool)
+        metric = c._resolve_metric_for_pool(c.settings.metric, cat_pool)
         assert isinstance(metric, SequenceMetric)
 
     def test_str_with_traj_pool_returns_trajectory_metric(
@@ -66,27 +66,27 @@ class TestResolveMetric:
     ) -> None:
         """String name + TrajectoryPool → TrajectoryMetric instance."""
         c = HierarchicalClusterer(metric="aggregation", n_clusters=2)
-        metric = c._resolve_metric(small_traj_pool)
+        metric = c._resolve_metric_for_pool(c.settings.metric, small_traj_pool)
         assert isinstance(metric, TrajectoryMetric)
 
     def test_unknown_str_raises(self, cat_pool) -> None:
         """Unknown metric name raises UnregisteredTypeError."""
         c = HierarchicalClusterer(metric="__nonexistent__", n_clusters=2)
         with pytest.raises(UnregisteredTypeError):
-            c._resolve_metric(cat_pool)
+            c._resolve_metric_for_pool(c.settings.metric, cat_pool)
 
     def test_instance_returned_as_is(self, cat_pool) -> None:
         """SequenceMetric instance is returned by identity (no copy)."""
         lp = SequenceMetric.get_registered("linearpairwise")()
         c = HierarchicalClusterer(metric=lp, n_clusters=2)
-        resolved = c._resolve_metric(cat_pool)
+        resolved = c._resolve_metric_for_pool(c.settings.metric, cat_pool)
         assert resolved is lp
 
     def test_trajectory_metric_instance_returned_as_is(self, small_traj_pool) -> None:
         """TrajectoryMetric instance is returned by identity (no copy)."""
         agg = TrajectoryMetric.get_registered("aggregation")()
         c = HierarchicalClusterer(metric=agg, n_clusters=2)
-        resolved = c._resolve_metric(small_traj_pool)
+        resolved = c._resolve_metric_for_pool(c.settings.metric, small_traj_pool)
         assert resolved is agg
 
 
