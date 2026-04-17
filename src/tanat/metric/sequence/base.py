@@ -42,18 +42,12 @@ class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
             type(self).__name__, self.MEMMAP_SUPPORT, storage
         )
 
-    @SettingsMixin.shadow_dispatch
-    def __call__(  # pylint: disable=unused-argument
-        self, seq_a: Sequence, seq_b: Sequence, **kwargs
-    ) -> float:
+    def __call__(self, seq_a: Sequence, seq_b: Sequence) -> float:
         """Compute distance between two sequences.
-
-        Settings-matching ``kwargs`` create a temporary shadow view.
 
         Args:
             seq_a: First sequence.
             seq_b: Second sequence.
-            **kwargs: Settings overrides.
 
         Returns:
             Scalar distance.
@@ -78,8 +72,7 @@ class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
     # Matrix computation
     # ------------------------------------------------------------------
 
-    @SettingsMixin.shadow_dispatch
-    def compute_matrix(  # pylint: disable=unused-argument
+    def compute_matrix(
         self,
         pool: SequencePool,
         *,
@@ -87,13 +80,9 @@ class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
         chunk_size: int = 500,
         resume: bool = True,
         dtype: str = "float32",
-        **kwargs,
     ) -> DistanceMatrix:
         """Compute the full pairwise distance matrix for *pool*.
 
-        Storage kwargs are forwarded to
-        :class:`~tanat.metric.StorageOptions`.  Other ``kwargs``
-        (e.g. ``agg_fun``) create a temporary settings override.
 
         Args:
             pool:       A :class:`~tanat.sequence.base.pool.SequencePool`.
@@ -101,7 +90,6 @@ class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
             chunk_size: Rows per flush chunk (default 500).
             resume:     Skip already-computed chunks (default ``True``).
             dtype:      Numpy dtype for the matrix (default ``"float32"``).
-            **kwargs:   Settings overrides (e.g. ``agg_fun``, ``padding_penalty``).
 
         Returns:
             A :class:`~tanat.metric.DistanceMatrix`.
@@ -117,11 +105,7 @@ class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
         )
 
         self._validate_pool(pool)
-        for sid in pool.unique_ids:
-            seq = pool[sid]
-            if seq:
-                self.validate_composition(seq)
-                break
+        self._probe_composition(pool)
 
         result, is_resuming, completed = None, False, 0
         if storage is not None:
@@ -169,16 +153,8 @@ class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
         """
         self._validate_pool(pool_rows)
         self._validate_pool(pool_cols)
-        for sid in pool_rows.unique_ids:
-            seq = pool_rows[sid]
-            if seq:
-                self.validate_composition(seq)
-                break
-        for sid in pool_cols.unique_ids:
-            seq = pool_cols[sid]
-            if seq:
-                self.validate_composition(seq)
-                break
+        self._probe_composition(pool_rows)
+        self._probe_composition(pool_cols)
         return self._compute_cross_matrix_impl(pool_rows, pool_cols)
 
     def _compute_cross_matrix_impl(
@@ -227,11 +203,6 @@ class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
         Subclasses that need disk-backed computation (memmap, chunked writes,
         resume) must override this method, set ``MEMMAP_SUPPORT = True``, and
         consume the injected keyword arguments directly.
-
-        The keyword arguments are declared here so the override contract is
-        explicit: :meth:`compute_matrix` always calls ``_compute_matrix_impl``
-        with these four kwargs after opening (or deciding not to open) the
-        memmap.
         """
         items = {sid: pool[sid] for sid in pool.unique_ids}
         return default_pairwise_matrix(
@@ -282,6 +253,14 @@ class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
             TypeError: If the entity feature has an incompatible dtype.
             KeyError:  If a required feature is absent.
         """
+
+    def _probe_composition(self, pool: SequencePool) -> None:
+        """Validate composition on the first non-empty sequence in *pool*."""
+        for sid in pool.unique_ids:
+            seq = pool[sid]
+            if seq:
+                self.validate_composition(seq)
+                break
 
     def _validate_sequences(self, seq_a: Sequence, seq_b: Sequence) -> None:
         """Type-check both sequence arguments."""
