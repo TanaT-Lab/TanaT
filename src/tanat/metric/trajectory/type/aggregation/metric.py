@@ -168,12 +168,18 @@ class AggregationTrajectoryMetric(TrajectoryMetric, register_name="aggregation")
                 f"traj_a: {sorted(traj_a)}, traj_b: {sorted(traj_b)}"
             )
 
-        distances = []
-        for alias in common:
-            metric = self._metric_for(alias)
-            distances.append(metric(traj_a[alias], traj_b[alias]))
+        seq_metrics = self.settings.sequence_metrics or {}
+        weights_map = self.settings.weights or {}
+        agg_fn = self._get_agg_fn()
 
-        return self._aggregate(distances, common)
+        distances = []
+        weights = []
+        for alias in common:
+            metric = seq_metrics.get(alias, self.settings.default_metric)
+            distances.append(metric(traj_a[alias], traj_b[alias]))
+            weights.append(weights_map.get(alias, 1.0))
+
+        return float(agg_fn(distances, weights))
 
     # ------------------------------------------------------------------
     # Optimised matrix computation (two-step strategy)
@@ -399,7 +405,7 @@ class AggregationTrajectoryMetric(TrajectoryMetric, register_name="aggregation")
         return self.settings.weights.get(alias, 1.0)
 
     def _get_agg_fn(self, *, matrix: bool = False) -> Callable:
-        """Return the aggregation callable for the configured ``agg_fun``.
+        """Return the aggregation callable for ``self.settings.agg_fun``.
 
         Args:
             matrix: If ``True``, return the matrix variant operating on a
