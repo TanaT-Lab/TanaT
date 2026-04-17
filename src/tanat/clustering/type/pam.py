@@ -99,7 +99,7 @@ class PAMClusterer(MedoidMixin, Clusterer, register_name="pam"):
     # Algorithm
     # ------------------------------------------------------------------
 
-    def _fit_impl(self, pool, metric, settings) -> tuple[list, list]:
+    def _fit_impl(self, pool, metric) -> tuple[list, list]:
         """Compute distance matrix then run PAM.
 
         Sets :attr:`medoids` as a side-effect.
@@ -114,7 +114,7 @@ class PAMClusterer(MedoidMixin, Clusterer, register_name="pam"):
         self._display_step(2, 2, f"Clustering ({type(self).__name__})")
         np_matrix = dist_matrix.to_numpy().astype(np.float64)
         ids = dist_matrix.ids
-        n_clusters = settings.n_clusters
+        n_clusters = self.settings.n_clusters
 
         # --- BUILD phase ---
         selected, unselected = pam_build_optimized(np_matrix, n_clusters)
@@ -123,7 +123,7 @@ class PAMClusterer(MedoidMixin, Clusterer, register_name="pam"):
         n_iter = 0
         swap = pam_swap_optimized(selected, unselected, np_matrix)
 
-        while settings.max_iter and n_iter < settings.max_iter and swap:
+        while self.settings.max_iter and n_iter < self.settings.max_iter and swap:
             old_swap = swap
 
             selected.remove(swap[0])

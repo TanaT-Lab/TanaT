@@ -98,20 +98,20 @@ class CLARAClusterer(MedoidMixin, Clusterer, register_name="clara"):
     # Algorithm
     # ------------------------------------------------------------------
 
-    def _fit_impl(self, pool, metric, settings) -> tuple[list, list]:
+    def _fit_impl(self, pool, metric) -> tuple[list, list]:
         """Sample, run PAM per sample, keep best medoids.
 
         Returns:
             ``(labels, sorted_ids)``
         """
-        nb_instances = settings.nb_pam_instances
+        nb_instances = self.settings.nb_pam_instances
         sorted_ids = sorted(pool.unique_ids)
         sample_size = max(
-            settings.n_clusters,
-            int(settings.sampling_ratio * len(sorted_ids)),
+            self.settings.n_clusters,
+            int(self.settings.sampling_ratio * len(sorted_ids)),
         )
 
-        rng = np.random.default_rng(settings.random_state)
+        rng = np.random.default_rng(self.settings.random_state)
 
         optimal_medoids = None
         optimal_inertia = float("inf")
@@ -131,8 +131,8 @@ class CLARAClusterer(MedoidMixin, Clusterer, register_name="clara"):
             with self._nested_display():
                 pam = PAMClusterer(
                     metric=metric,
-                    n_clusters=settings.n_clusters,
-                    max_iter=settings.max_iter,
+                    n_clusters=self.settings.n_clusters,
+                    max_iter=self.settings.max_iter,
                 )
                 pam.fit(sub_pool)
 

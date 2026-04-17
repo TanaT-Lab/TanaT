@@ -81,7 +81,7 @@ class HierarchicalClusterer(Clusterer, register_name="hierarchical"):
     # Algorithm
     # ------------------------------------------------------------------
 
-    def _fit_impl(self, pool, metric, settings) -> tuple[list, list]:
+    def _fit_impl(self, pool, metric) -> tuple[list, list]:
         """Compute distance matrix then run AgglomerativeClustering.
 
         Returns:
@@ -93,14 +93,16 @@ class HierarchicalClusterer(Clusterer, register_name="hierarchical"):
 
         self._display_step(2, 2, f"Clustering ({type(self).__name__})")
         n_clusters = (
-            None if settings.distance_threshold is not None else settings.n_clusters
+            None
+            if self.settings.distance_threshold is not None
+            else self.settings.n_clusters
         )
 
         model = AgglomerativeClustering(
             metric="precomputed",
             n_clusters=n_clusters,
-            linkage=settings.linkage,
-            distance_threshold=settings.distance_threshold,
+            linkage=self.settings.linkage,
+            distance_threshold=self.settings.distance_threshold,
         )
         model.fit(dist_matrix.to_numpy())
         return model.labels_.tolist(), dist_matrix.ids
