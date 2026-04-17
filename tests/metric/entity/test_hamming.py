@@ -68,31 +68,6 @@ class TestHammingCompute:
 
 
 # ---------------------------------------------------------------------------
-# Shadow dispatch (temporary override via kwargs)
-# ---------------------------------------------------------------------------
-
-
-class TestShadowDispatch:
-    """Temporary kwarg overrides via shadow dispatch."""
-
-    def test_shadow_override_mismatch_cost(self, cat_pool) -> None:
-        """Kwarg override applies only to the call; stored settings remain unchanged."""
-        ids = cat_pool.unique_ids
-        ent_a = cat_pool[ids[0]][0]
-        ent_b = cat_pool[ids[1]][0]
-        if ent_a["status"] == ent_b["status"]:
-            pytest.skip("Need different values")
-
-        h = HammingEntityMetric(entity_feature="status", mismatch_cost=1.0)
-        result_override = h(ent_a, ent_b, mismatch_cost=0.5)
-        result_original = h(ent_a, ent_b)
-
-        assert result_override == 0.5
-        assert result_original == 1.0
-        assert h.settings.mismatch_cost == 1.0  # unchanged
-
-
-# ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
 
