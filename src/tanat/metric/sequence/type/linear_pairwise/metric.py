@@ -152,9 +152,6 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
     def _compute(self, seq_a: Sequence, seq_b: Sequence) -> float:
         """Compute distance for a single pair of sequences (already validated).
 
-        Delegates to :meth:`_compute_pair` after resolving the entity metric
-        and aggregation function.
-
         Args:
             seq_a: First sequence.
             seq_b: Second sequence.
@@ -178,7 +175,9 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
                 f"Set padding_penalty to a numeric value to handle "
                 f"length-mismatched sequences."
             )
-        return self._compute_pair(seq_a, seq_b, self.entity_metric, self._get_agg_fn())
+        em = self.entity_metric
+        agg_fn = self._get_agg_fn()
+        return self._compute_pair(seq_a, seq_b, em, agg_fn)
 
     def _compute_cross_matrix_impl(
         self,
@@ -507,10 +506,10 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
         padding).
 
         Args:
-            seq_a:  First sequence.
-            seq_b:  Second sequence.
-            em:     Resolved entity metric instance.
-            agg_fn: Resolved aggregation callable.
+            seq_a:    First sequence.
+            seq_b:    Second sequence.
+            em:       Resolved entity metric instance.
+            agg_fn:   Resolved aggregation callable.
 
         Returns:
             Aggregated scalar distance, or ``nan`` for undefined pairs.
@@ -542,7 +541,7 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
     # ------------------------------------------------------------------
 
     def _get_agg_fn(self, *, numba: bool = False) -> Callable:
-        """Return the aggregation callable for the configured ``agg_fun``.
+        """Return the aggregation callable for ``self.settings.agg_fun``.
 
         Args:
             numba: When ``True``, return the Numba JIT kernel from
