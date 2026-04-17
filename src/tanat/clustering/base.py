@@ -5,7 +5,6 @@ Clusterer ABC: base class for all clustering algorithms.
 
 from __future__ import annotations
 
-import dataclasses
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from typing import TYPE_CHECKING
@@ -40,7 +39,7 @@ class Clusterer(SettingsMixin, Registrable, DisplayMixin, ABC):
     _TYPE_SUBMODULE = "type"
 
     def __init__(self, settings=None) -> None:
-        """Initialise with settings built from kwargs."""
+        """Initialise with the given settings."""
         super().__init__(settings)
         self._clusters: list[Cluster] | None = None
 
@@ -60,17 +59,12 @@ class Clusterer(SettingsMixin, Registrable, DisplayMixin, ABC):
     def fit(
         self,
         pool: SequencePool | TrajectoryPool,
-        **kwargs,
     ) -> Self:
         """Fit the clustering model to *pool*.
-
-        Keyword arguments matching settings fields override them for this
-        call only (e.g. ``fit(pool, n_clusters=3)``).
 
         Returns:
             ``self`` for method chaining.
         """
-        settings = self._resolve_settings(kwargs)
 
         self._validate_pool(pool)
         if len(pool) < 2:
@@ -81,23 +75,14 @@ class Clusterer(SettingsMixin, Registrable, DisplayMixin, ABC):
 
         self._display_header()
 
-        metric = self._resolve_metric_for_pool(settings.metric, pool)
-        labels, item_ids = self._fit_impl(pool, metric, settings)
+        metric = self._resolve_metric_for_pool(self.settings.metric, pool)
+        labels, item_ids = self._fit_impl(pool, metric)
 
         self._clusters = self._build_clusters(labels, item_ids)
-        self._inject_labels(pool, item_ids, cluster_col=settings.cluster_column)
+        self._inject_labels(pool, item_ids, cluster_col=self.settings.cluster_column)
 
         self._display_footer(f"{len(item_ids)} items, {len(self._clusters)} clusters")
         return self
-
-    def _resolve_settings(self, overrides: dict):
-        """Return settings with *overrides* applied, without mutating *self*."""
-        # TODO : reflexion about migrate to SettingsMixin and remove shadow dispatch
-        if not overrides or self._settings is None:
-            return self._settings
-        settings_fields = set(self._settings.__dataclass_fields__.keys())
-        valid = {k: v for k, v in overrides.items() if k in settings_fields}
-        return dataclasses.replace(self._settings, **valid) if valid else self._settings
 
     # ------------------------------------------------------------------
     # Abstract
@@ -108,7 +93,6 @@ class Clusterer(SettingsMixin, Registrable, DisplayMixin, ABC):
         self,
         pool: SequencePool | TrajectoryPool,
         metric: SequenceMetric | TrajectoryMetric,
-        settings,
     ) -> tuple[list, list]:
         """Algorithm-specific clustering logic.
 
@@ -119,12 +103,6 @@ class Clusterer(SettingsMixin, Registrable, DisplayMixin, ABC):
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
-
-    def _resolve_metric(
-        self, pool: SequencePool | TrajectoryPool
-    ) -> SequenceMetric | TrajectoryMetric:
-        """Resolve ``settings.metric`` against *pool* type."""
-        return self._resolve_metric_for_pool(self.settings.metric, pool)
 
     @staticmethod
     def _resolve_metric_for_pool(
