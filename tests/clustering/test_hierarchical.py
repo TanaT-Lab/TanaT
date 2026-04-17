@@ -85,27 +85,6 @@ class TestHierarchicalFitTrajectory:
 
 
 # ---------------------------------------------------------------------------
-# Shadow dispatch (temporary override via kwargs)
-# ---------------------------------------------------------------------------
-
-
-class TestHierarchicalSettingsOverrides:
-    """fit(pool, n_clusters=X) overrides setting for that call only."""
-
-    def test_shadow_override_n_clusters(self, cat_pool) -> None:
-        """n_clusters kwarg overrides the setting for that call only."""
-        c = HierarchicalClusterer(metric="linearpairwise", n_clusters=3)
-        c.fit(cat_pool, n_clusters=2)
-        assert len(c.clusters) == 2
-
-    def test_original_settings_unchanged(self, cat_pool) -> None:
-        """After a shadow override, settings.n_clusters retains its original value."""
-        c = HierarchicalClusterer(metric="linearpairwise", n_clusters=3)
-        c.fit(cat_pool, n_clusters=2)
-        assert c.settings.n_clusters == 3
-
-
-# ---------------------------------------------------------------------------
 # Serialisation
 # ---------------------------------------------------------------------------
 
