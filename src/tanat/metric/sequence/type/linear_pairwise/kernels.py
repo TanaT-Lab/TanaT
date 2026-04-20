@@ -176,6 +176,17 @@ def compute_matrix_kernel(
     n = len(lengths_a)
     k = len(lengths_b)
     for i in prange(n):  # pylint: disable=not-an-iterable
+        # Diagonal computation
+        result[i, i] = compute_single_pair(
+            arrays_a[i],
+            arrays_b[i],
+            lengths_a[i],
+            lengths_b[i],
+            dist_kernel,
+            context,
+            aggregator,
+            padding_penalty,
+        )
         if symmetric:
             for j in range(i + 1, k):
                 d = compute_single_pair(
@@ -192,6 +203,8 @@ def compute_matrix_kernel(
                 result[j, i] = d
         else:
             for j in range(k):
+                if j == i:
+                    continue  # already computed above
                 result[i, j] = compute_single_pair(
                     arrays_a[i],
                     arrays_b[j],
@@ -226,7 +239,7 @@ def compute_matrix_chunk(
     the upper triangle of the chunk is computed and values are mirrored;
     when ``False``, every cell in the chunk rows is computed.
 
-    The diagonal is **not** set by this kernel (zeroed by the caller).
+    The diagonal is set by this kernel when ``symmetric`` is ``True``.
 
     Args:
         result:          The full (n × n) or (chunk × k) memmap/array.
@@ -247,6 +260,17 @@ def compute_matrix_chunk(
     """
     k = len(lengths_b)
     for i in prange(start, end):  # pylint: disable=not-an-iterable
+        # Diagonal computation
+        result[i, i] = compute_single_pair(
+            arrays_a[i],
+            arrays_b[i],
+            lengths_a[i],
+            lengths_b[i],
+            dist_kernel,
+            context,
+            aggregator,
+            padding_penalty,
+        )
         if symmetric:
             for j in range(i + 1, k):
                 d = compute_single_pair(
@@ -263,6 +287,8 @@ def compute_matrix_chunk(
                 result[j, i] = d
         else:
             for j in range(k):
+                if j == i:
+                    continue  # already computed above
                 result[i, j] = compute_single_pair(
                     arrays_a[i],
                     arrays_b[j],
