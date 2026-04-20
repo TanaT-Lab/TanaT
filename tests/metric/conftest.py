@@ -99,21 +99,24 @@ def cat_pool_status_only(cat_pool):
 
 
 # ---------------------------------------------------------------------------
-# empty_cat_pool: pool where every sequence has length 0 (static-only IDs)
+# mixed_cat_pool: pool with both empty and non-empty sequences
 # Parametrized: 3 pool types (event / interval / state)
 # ---------------------------------------------------------------------------
 
+_MIXED_EMPTY_IDS = ["empty_1", "empty_2", "empty_3"]
 
-def _build_empty_pool(pool_cls, name, *, entity_df, time_kwargs):
-    """Build a *pool_cls* where visible IDs have length-0 sequences.
 
-    The builder requires at least one entity source, so *entity_df* carries a
-    single dummy row.  Only the static IDs survive the final ``subset()``.
+def _build_mixed_pool(pool_cls, name, *, entity_df, time_kwargs):
+    """Build a pool containing both non-empty and empty sequences.
+
+    Non-empty IDs (``"seq_1"``, ``"seq_2"``) carry entity data from
+    *entity_df*.  Empty IDs (``"empty_1"`` ... ``"empty_3"``) appear
+    only in the static source and therefore have length-0 sequences.
     """
     static_df = pl.DataFrame(
         {
-            "id": ["empty_1", "empty_2", "empty_3"],
-            "status": ["A", "B", "C"],
+            "id": ["seq_1", "seq_2", "empty_1", "empty_2", "empty_3"],
+            "status": ["A", "B", "A", "B", "C"],
         }
     )
     store = (
@@ -133,8 +136,8 @@ def _build_empty_pool(pool_cls, name, *, entity_df, time_kwargs):
         .build(name, exist_ok=True)
     )
     pool = pool_cls(store=store)
-    pool = pool.subset(["empty_1", "empty_2", "empty_3"])
     pool.cast_features({"status": pl.Categorical})
+    pool.update_settings(entity_features=["status"])
     return pool
 
 
@@ -146,40 +149,74 @@ def _build_empty_pool(pool_cls, name, *, entity_df, time_kwargs):
         pytest.param("state", id="state"),
     ],
 )
-def empty_cat_pool(request):
-    """SequencePool where all visible sequences are empty (length 0).
+def mixed_cat_pool(request):
+    """Pool with both non-empty and empty sequences.
 
-    Built by injecting a single dummy entity row for a throwaway ID,
-    plus a static source with the real IDs.  The dummy ID is excluded
-    via ``subset()``, leaving only 0-length sequences with ``'status'``
-    cast to ``pl.Categorical``.
+    Contains 2 non-empty sequences (``"seq_1"`` with 2 entities,
+    ``"seq_2"`` with 3 entities) and 3 empty sequences
+    (``"empty_1"``, ``"empty_2"``, ``"empty_3"``).
+
+    ``'status'`` is cast to ``pl.Categorical`` and set as the sole
+    entity feature.
 
     Parametrized over the 3 pool types (event / interval / state).
     """
     pool_type = request.param
     if pool_type == "event":
-        return _build_empty_pool(
+        return _build_mixed_pool(
             EventSequencePool,
-            "empty_event",
-            entity_df=pl.DataFrame({"id": ["__dummy__"], "time": [0], "status": ["X"]}),
+            "mixed_event",
+            entity_df=pl.DataFrame(
+                {
+                    "id": ["seq_1", "seq_1", "seq_2", "seq_2", "seq_2"],
+                    "time": [0, 1, 0, 1, 2],
+                    "status": ["A", "B", "A", "C", "B"],
+                }
+            ),
             time_kwargs={"time_column": "time"},
         )
     if pool_type == "interval":
-        return _build_empty_pool(
+        return _build_mixed_pool(
             IntervalSequencePool,
-            "empty_interval",
+            "mixed_interval",
             entity_df=pl.DataFrame(
-                {"id": ["__dummy__"], "start": [0], "end": [1], "status": ["X"]}
+                {
+                    "id": ["seq_1", "seq_1", "seq_2", "seq_2", "seq_2"],
+                    "start": [0, 2, 0, 1, 3],
+                    "end": [2, 4, 1, 3, 5],
+                    "status": ["A", "B", "A", "C", "B"],
+                }
             ),
             time_kwargs={"start_column": "start", "end_column": "end"},
         )
     # state
-    return _build_empty_pool(
+    return _build_mixed_pool(
         StateSequencePool,
-        "empty_state",
-        entity_df=pl.DataFrame({"id": ["__dummy__"], "start": [0], "status": ["X"]}),
+        "mixed_state",
+        entity_df=pl.DataFrame(
+            {
+                "id": ["seq_1", "seq_1", "seq_2", "seq_2", "seq_2"],
+                "start": [0, 2, 0, 1, 3],
+                "status": ["A", "B", "A", "C", "B"],
+            }
+        ),
         time_kwargs={"start_column": "start"},
     )
+
+
+# ---------------------------------------------------------------------------
+# empty_cat_pool: subset of mixed_cat_pool with only empty sequences
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def empty_cat_pool(mixed_cat_pool):
+    """Pool where all visible sequences are empty (length 0).
+
+    Derived from :func:`mixed_cat_pool` by subsetting to the empty IDs.
+    Inherits the same 3× pool-type parametrization.
+    """
+    return mixed_cat_pool.subset(_MIXED_EMPTY_IDS)
 
 
 # ---------------------------------------------------------------------------
@@ -197,6 +234,18 @@ def entity_metric(request):
     Adding a new metric automatically includes it here.
     """
     return EntityMetric.get_registered(request.param)(entity_feature="status")
+
+
+@pytest.fixture(
+    params=[pytest.param(name, id=name) for name in SEQUENCE_METRIC_REGISTER_NAMES],
+)
+def sequence_metric(request):
+    """One SequenceMetric instance per registered type, with default constructor.
+
+    Parametrized over all registered sequence metrics.
+    Adding a new metric automatically includes it here.
+    """
+    return SequenceMetric.get_registered(request.param)()
 
 
 # ---------------------------------------------------------------------------
@@ -310,3 +359,70 @@ def disjoint_alias_traj_pool() -> TrajectoryPool:
     return build_trajectories(
         pools={"events": events, "states": states, "intervals": intervals}
     )
+
+
+# ---------------------------------------------------------------------------
+# mixed_traj_pool: TrajectoryPool with both empty and non-empty trajectories
+# empty_traj_pool: subset of mixed_traj_pool with only empty trajectories
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def mixed_traj_pool() -> TrajectoryPool:
+    """TrajectoryPool with both empty and non-empty trajectories.
+
+    Non-empty trajectory IDs: ``"seq_1"``, ``"seq_2"``
+    Empty trajectory IDs: ``"empty_1"``, ``"empty_2"``, ``"empty_3"``
+
+    Built from mixed event/interval/state pools following the same
+    pattern as :func:`_build_mixed_pool`.
+    """
+    events = _build_mixed_pool(
+        EventSequencePool,
+        "mixed_traj_events",
+        entity_df=pl.DataFrame(
+            {
+                "id": ["seq_1", "seq_1", "seq_2", "seq_2", "seq_2"],
+                "time": [0, 1, 0, 1, 2],
+                "status": ["A", "B", "A", "C", "B"],
+            }
+        ),
+        time_kwargs={"time_column": "time"},
+    )
+    intervals = _build_mixed_pool(
+        IntervalSequencePool,
+        "mixed_traj_intervals",
+        entity_df=pl.DataFrame(
+            {
+                "id": ["seq_1", "seq_1", "seq_2", "seq_2", "seq_2"],
+                "start": [0, 2, 0, 1, 3],
+                "end": [2, 4, 1, 3, 5],
+                "status": ["A", "B", "A", "C", "B"],
+            }
+        ),
+        time_kwargs={"start_column": "start", "end_column": "end"},
+    )
+    states = _build_mixed_pool(
+        StateSequencePool,
+        "mixed_traj_states",
+        entity_df=pl.DataFrame(
+            {
+                "id": ["seq_1", "seq_1", "seq_2", "seq_2", "seq_2"],
+                "start": [0, 2, 0, 1, 3],
+                "status": ["A", "B", "A", "C", "B"],
+            }
+        ),
+        time_kwargs={"start_column": "start"},
+    )
+    return build_trajectories(
+        pools={"events": events, "intervals": intervals, "states": states}
+    )
+
+
+@pytest.fixture(scope="session")
+def empty_traj_pool(mixed_traj_pool: TrajectoryPool) -> TrajectoryPool:
+    """TrajectoryPool where all trajectories are empty.
+
+    Derived from :func:`mixed_traj_pool` by subsetting to the empty IDs.
+    """
+    return mixed_traj_pool.subset(["empty_1", "empty_2", "empty_3"])
