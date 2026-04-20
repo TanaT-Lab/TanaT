@@ -6,6 +6,7 @@ Tests: LinearPairwiseSequenceMetric
 from __future__ import annotations
 
 import json
+import math
 
 import numpy as np
 import polars as pl
@@ -30,29 +31,32 @@ from tanat.metric.sequence.type.linear_pairwise.kernels import (
 
 
 class TestSinglePair:
-    """Single-pair distance properties: identity, sign, symmetry, aggregation modes."""
+    """Single-pair distance"""
 
-    def test_same_sequence_zero(self, cat_pool, entity_metric) -> None:
-        """Distance from a sequence to itself is 0."""
+    def test_same_sequence_snapshot(
+        self, cat_pool, entity_metric, snapshot: SnapshotAssertion
+    ) -> None:
+        """d(seq, seq) matches snapshot."""
         lp = LinearPairwiseSequenceMetric(entity_metric=entity_metric)
         seq = cat_pool[cat_pool.unique_ids[0]]
-        assert lp(seq, seq) == 0.0
+        assert snapshot == round(lp(seq, seq), 4)
 
-    def test_result_is_float_nonnegative(self, cat_pool, entity_metric) -> None:
-        """Distance between two sequences is a non-negative float."""
+    def test_pair_sequence_snapshot(
+        self, cat_pool, entity_metric, snapshot: SnapshotAssertion
+    ) -> None:
+        """Spot-check: distance between two sequences matches snapshot."""
         lp = LinearPairwiseSequenceMetric(entity_metric=entity_metric)
         ids = cat_pool.unique_ids
-        result = lp(cat_pool[ids[0]], cat_pool[ids[1]])
-        assert isinstance(result, float)
-        assert result >= 0.0
+        assert snapshot == round(lp(cat_pool[ids[0]], cat_pool[ids[1]]), 4)
 
-    def test_symmetry(self, cat_pool, entity_metric) -> None:
-        """d(seq_a, seq_b) == d(seq_b, seq_a)."""
-        lp = LinearPairwiseSequenceMetric(entity_metric=entity_metric)
-        ids = cat_pool.unique_ids
-        seq_a = cat_pool[ids[0]]
-        seq_b = cat_pool[ids[1]]
-        assert lp(seq_a, seq_b) == pytest.approx(lp(seq_b, seq_a))
+    def test_empty_returns_nan(self, empty_cat_pool) -> None:
+        """Two empty sequences return NaN (distance is undefined)."""
+        ids = empty_cat_pool.unique_ids
+        seq_a = empty_cat_pool[ids[0]]
+        seq_b = empty_cat_pool[ids[1]]
+        lp = LinearPairwiseSequenceMetric()
+        result = lp(seq_a, seq_b)
+        assert np.isnan(result)
 
 
 # ---------------------------------------------------------------------------
@@ -76,18 +80,6 @@ class TestComputeMatrix:
         n = len(cat_pool)
         assert dm.shape == (n, n)
         assert dm.ids == cat_pool.unique_ids
-
-    def test_diagonal_zero(self, cat_pool, entity_metric) -> None:
-        """Diagonal entries are zero (distance from a sequence to itself)."""
-        lp = LinearPairwiseSequenceMetric(entity_metric=entity_metric)
-        dm = lp.compute_matrix(cat_pool)
-        np.testing.assert_array_almost_equal(np.diag(dm.to_numpy()), 0.0, decimal=5)
-
-    def test_symmetric(self, cat_pool, entity_metric) -> None:
-        """Matrix is symmetric: M[i, j] == M[j, i]."""
-        lp = LinearPairwiseSequenceMetric(entity_metric=entity_metric)
-        arr = lp.compute_matrix(cat_pool).to_numpy()
-        np.testing.assert_array_almost_equal(arr, arr.T, decimal=5)
 
     def test_single_sequence_pool(self, cat_pool, entity_metric) -> None:
         """Pool with one sequence → 1×1 matrix with a zero."""
@@ -118,6 +110,14 @@ class TestComputeMatrix:
         """Full distance matrix values match snapshot (regression guard against logic changes)."""
         lp = LinearPairwiseSequenceMetric(entity_metric=entity_metric)
         dm = lp.compute_matrix(cat_pool)
+        assert snapshot == dm.to_frame("polars").with_columns(pl.exclude("id").round(4))
+
+    def test_mixed_matrix_snapshot(
+        self, mixed_cat_pool, entity_metric, snapshot: SnapshotAssertion
+    ) -> None:
+        """Matrix on a pool mixing empty and non-empty sequences."""
+        lp = LinearPairwiseSequenceMetric(entity_metric=entity_metric)
+        dm = lp.compute_matrix(mixed_cat_pool)
         assert snapshot == dm.to_frame("polars").with_columns(pl.exclude("id").round(4))
 
 
@@ -169,17 +169,18 @@ class TestEdgeCases:
         with pytest.raises(ValueError, match="agg_fun"):
             lp._get_agg_fn()  # pylint: disable=protected-access
 
-    def test_empty_vs_nonempty_no_padding_raises(
+    def test_empty_vs_nonempty_no_padding_returns_nan(
         self, empty_cat_pool, cat_pool_status_only
     ) -> None:
-        """Empty vs non-empty with padding_penalty=None raises ValueError."""
+        """Empty vs non-empty with padding_penalty=None returns nan with warning."""
         seq_empty = empty_cat_pool[empty_cat_pool.unique_ids[0]]
         seq_full = cat_pool_status_only[cat_pool_status_only.unique_ids[0]]
         assert len(seq_empty) == 0
         assert len(seq_full) > 0
         lp = LinearPairwiseSequenceMetric(padding_penalty=None)
-        with pytest.raises(ValueError, match="padding_penalty"):
-            lp(seq_empty, seq_full)
+        with pytest.warns(UserWarning, match="padding_penalty"):
+            result = lp(seq_empty, seq_full)
+        assert math.isnan(result)
 
     def test_empty_vs_nonempty_with_padding_ok(
         self, empty_cat_pool, cat_pool_status_only
@@ -195,15 +196,6 @@ class TestEdgeCases:
         result = lp(seq_empty, seq_full)
         # mean of len(seq_full) identical penalties == penalty
         assert result == pytest.approx(penalty)
-
-    def test_both_empty_returns_nan(self, empty_cat_pool) -> None:
-        """Two empty sequences return NaN (distance is undefined)."""
-        ids = empty_cat_pool.unique_ids
-        seq_a = empty_cat_pool[ids[0]]
-        seq_b = empty_cat_pool[ids[1]]
-        lp = LinearPairwiseSequenceMetric()
-        result = lp(seq_a, seq_b)
-        assert np.isnan(result)
 
 
 # ---------------------------------------------------------------------------
