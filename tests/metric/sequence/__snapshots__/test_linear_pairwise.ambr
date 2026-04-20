@@ -113,6 +113,48 @@
   │ 10  ┆ 0.7143 ┆ 0.6667 ┆ 1.0    ┆ … ┆ 1.0    ┆ 1.0    ┆ 0.75   ┆ 0.0    │
   └─────┴────────┴────────┴────────┴───┴────────┴────────┴────────┴────────┘
 # ---
+# name: TestComputeMatrix.test_mixed_matrix_snapshot[event-hamming]
+  shape: (5, 6)
+  ┌─────────┬─────────┬─────────┬─────────┬───────┬───────┐
+  │ id      ┆ empty_1 ┆ empty_2 ┆ empty_3 ┆ seq_1 ┆ seq_2 │
+  │ ---     ┆ ---     ┆ ---     ┆ ---     ┆ ---   ┆ ---   │
+  │ str     ┆ f32     ┆ f32     ┆ f32     ┆ f32   ┆ f32   │
+  ╞═════════╪═════════╪═════════╪═════════╪═══════╪═══════╡
+  │ empty_1 ┆ NaN     ┆ NaN     ┆ NaN     ┆ NaN   ┆ NaN   │
+  │ empty_2 ┆ NaN     ┆ NaN     ┆ NaN     ┆ NaN   ┆ NaN   │
+  │ empty_3 ┆ NaN     ┆ NaN     ┆ NaN     ┆ NaN   ┆ NaN   │
+  │ seq_1   ┆ NaN     ┆ NaN     ┆ NaN     ┆ 0.0   ┆ 0.5   │
+  │ seq_2   ┆ NaN     ┆ NaN     ┆ NaN     ┆ 0.5   ┆ 0.0   │
+  └─────────┴─────────┴─────────┴─────────┴───────┴───────┘
+# ---
+# name: TestComputeMatrix.test_mixed_matrix_snapshot[interval-hamming]
+  shape: (5, 6)
+  ┌─────────┬─────────┬─────────┬─────────┬───────┬───────┐
+  │ id      ┆ empty_1 ┆ empty_2 ┆ empty_3 ┆ seq_1 ┆ seq_2 │
+  │ ---     ┆ ---     ┆ ---     ┆ ---     ┆ ---   ┆ ---   │
+  │ str     ┆ f32     ┆ f32     ┆ f32     ┆ f32   ┆ f32   │
+  ╞═════════╪═════════╪═════════╪═════════╪═══════╪═══════╡
+  │ empty_1 ┆ NaN     ┆ NaN     ┆ NaN     ┆ NaN   ┆ NaN   │
+  │ empty_2 ┆ NaN     ┆ NaN     ┆ NaN     ┆ NaN   ┆ NaN   │
+  │ empty_3 ┆ NaN     ┆ NaN     ┆ NaN     ┆ NaN   ┆ NaN   │
+  │ seq_1   ┆ NaN     ┆ NaN     ┆ NaN     ┆ 0.0   ┆ 0.5   │
+  │ seq_2   ┆ NaN     ┆ NaN     ┆ NaN     ┆ 0.5   ┆ 0.0   │
+  └─────────┴─────────┴─────────┴─────────┴───────┴───────┘
+# ---
+# name: TestComputeMatrix.test_mixed_matrix_snapshot[state-hamming]
+  shape: (5, 6)
+  ┌─────────┬─────────┬─────────┬─────────┬───────┬───────┐
+  │ id      ┆ empty_1 ┆ empty_2 ┆ empty_3 ┆ seq_1 ┆ seq_2 │
+  │ ---     ┆ ---     ┆ ---     ┆ ---     ┆ ---   ┆ ---   │
+  │ str     ┆ f32     ┆ f32     ┆ f32     ┆ f32   ┆ f32   │
+  ╞═════════╪═════════╪═════════╪═════════╪═══════╪═══════╡
+  │ empty_1 ┆ NaN     ┆ NaN     ┆ NaN     ┆ NaN   ┆ NaN   │
+  │ empty_2 ┆ NaN     ┆ NaN     ┆ NaN     ┆ NaN   ┆ NaN   │
+  │ empty_3 ┆ NaN     ┆ NaN     ┆ NaN     ┆ NaN   ┆ NaN   │
+  │ seq_1   ┆ NaN     ┆ NaN     ┆ NaN     ┆ 0.0   ┆ 0.5   │
+  │ seq_2   ┆ NaN     ┆ NaN     ┆ NaN     ┆ 0.5   ┆ 0.0   │
+  └─────────┴─────────┴─────────┴─────────┴───────┴───────┘
+# ---
 # name: TestConfigRoundtrip.test_to_config_snapshot
   dict({
     'settings': dict({
@@ -129,4 +171,40 @@
     }),
     'type': 'linearpairwise',
   })
+# ---
+# name: TestSinglePair.test_pair_sequence_snapshot[datetime-event-hamming]
+  0.6667
+# ---
+# name: TestSinglePair.test_pair_sequence_snapshot[datetime-interval-hamming]
+  0.6667
+# ---
+# name: TestSinglePair.test_pair_sequence_snapshot[datetime-state-hamming]
+  0.6667
+# ---
+# name: TestSinglePair.test_pair_sequence_snapshot[timestep-event-hamming]
+  0.8333
+# ---
+# name: TestSinglePair.test_pair_sequence_snapshot[timestep-interval-hamming]
+  0.8333
+# ---
+# name: TestSinglePair.test_pair_sequence_snapshot[timestep-state-hamming]
+  0.8333
+# ---
+# name: TestSinglePair.test_same_sequence_snapshot[datetime-event-hamming]
+  0.0
+# ---
+# name: TestSinglePair.test_same_sequence_snapshot[datetime-interval-hamming]
+  0.0
+# ---
+# name: TestSinglePair.test_same_sequence_snapshot[datetime-state-hamming]
+  0.0
+# ---
+# name: TestSinglePair.test_same_sequence_snapshot[timestep-event-hamming]
+  0.0
+# ---
+# name: TestSinglePair.test_same_sequence_snapshot[timestep-interval-hamming]
+  0.0
+# ---
+# name: TestSinglePair.test_same_sequence_snapshot[timestep-state-hamming]
+  0.0
 # ---
