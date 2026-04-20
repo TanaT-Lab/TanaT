@@ -92,7 +92,7 @@ class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
             dtype:      Numpy dtype for the matrix (default ``"float32"``).
 
         Returns:
-            A :class:`~tanat.metric.DistanceMatrix`.
+            A :class:`~tanat.metric.DistanceMatrix` of shape ``(n, n)``.
         """
         storage = resolve_storage(
             type(self).__name__,
