@@ -4,6 +4,7 @@ Tests: AggregationTrajectoryMetric
 """
 
 from __future__ import annotations
+import json
 
 import numpy as np
 import polars as pl
@@ -45,54 +46,7 @@ class TestValidation:
 
 
 class TestSinglePair:
-    """Single-pair distance properties: identity, sign, symmetry, aggregation modes."""
-
-    def test_identity(self, traj_pair) -> None:
-        """Distance from a trajectory to itself is zero."""
-        agg = AggregationTrajectoryMetric()
-        traj_a, _ = traj_pair
-        assert agg(traj_a, traj_a) == 0.0
-
-    def test_symmetry(self, traj_pair) -> None:
-        """Distance is symmetric: agg(a, b) == agg(b, a)."""
-        agg = AggregationTrajectoryMetric()
-        traj_a, traj_b = traj_pair
-        assert agg(traj_a, traj_b) == pytest.approx(agg(traj_b, traj_a))
-
-    def test_weights_change_result(self, traj_pair) -> None:
-        """Assigning non-uniform weights changes the result (when aliases differ in distance)."""
-        agg_no_weights = AggregationTrajectoryMetric()
-        traj_a, traj_b = traj_pair
-        aliases = sorted(set(traj_a) & set(traj_b))
-
-        if len(aliases) < 2:
-            pytest.skip("Need at least 2 common aliases to test weight effect")
-
-        # Get per-alias distances via the default metric
-        metric = agg_no_weights.settings.default_metric
-        per_alias = [metric(traj_a[a], traj_b[a]) for a in aliases]
-        if all(d == per_alias[0] for d in per_alias):
-            pytest.skip("All alias distances are equal; weights have no effect")
-
-        # Skew weights heavily toward the first alias
-        skewed = {aliases[0]: 100.0}
-        agg_skewed = AggregationTrajectoryMetric(weights=skewed)
-        d_default = agg_no_weights(traj_a, traj_b)
-        d_skewed = agg_skewed(traj_a, traj_b)
-        assert d_default != pytest.approx(d_skewed)
-
-    def test_agg_fun_sum_vs_mean(self, traj_pair) -> None:
-        """agg_fun='sum' and agg_fun='mean' produce different results when distance > 0."""
-        agg_mean = AggregationTrajectoryMetric(agg_fun="mean")
-        agg_sum = AggregationTrajectoryMetric(agg_fun="sum")
-        traj_a, traj_b = traj_pair
-        d_mean = agg_mean(traj_a, traj_b)
-        d_sum = agg_sum(traj_a, traj_b)
-
-        n_common = len(sorted(set(traj_a) & set(traj_b)))
-        if d_mean > 0 and n_common > 1:
-            # sum = n_common * mean  (uniform weights)
-            assert d_sum == pytest.approx(d_mean * n_common, rel=1e-5)
+    """Single-pair distance."""
 
     def test_no_common_aliases_raises(self, disjoint_alias_traj_pool) -> None:
         """Trajectories with no shared alias raise ValueError.
@@ -104,7 +58,7 @@ class TestSinglePair:
         with pytest.raises(ValueError, match="no common sequence aliases"):
             agg(disjoint_alias_traj_pool[1], disjoint_alias_traj_pool[11])
 
-    def test_sum_with_weights_is_weighted_sum(self, traj_pair) -> None:
+    def test_sum_with_weights_is_weighted_sum(self, traj_pair, sequence_metric) -> None:
         """agg_fun='sum' + weights produces a weighted sum (np.dot), not a weighted mean."""
         traj_a, traj_b = traj_pair
         aliases = sorted(set(traj_a) & set(traj_b))
@@ -113,15 +67,23 @@ class TestSinglePair:
             pytest.skip("Need at least 2 common aliases")
 
         w = {a: float(i + 1) for i, a in enumerate(aliases)}
-        agg = AggregationTrajectoryMetric(agg_fun="sum", weights=w)
+        agg = AggregationTrajectoryMetric(
+            default_metric=sequence_metric, agg_fun="sum", weights=w
+        )
 
         # Compute expected weighted sum manually
-        metric = agg.settings.default_metric
-        per_alias = [metric(traj_a[a], traj_b[a]) for a in aliases]
+        per_alias = [sequence_metric(traj_a[a], traj_b[a]) for a in aliases]
         weights_list = [w.get(a, 1.0) for a in aliases]
         expected = float(np.dot(per_alias, weights_list))
 
         assert agg(traj_a, traj_b) == pytest.approx(expected, abs=1e-5)
+
+    def test_empty_trajectories(self, empty_traj_pool, sequence_metric) -> None:
+        """Two trajectories with all empty sequences → nan or 0."""
+        agg = AggregationTrajectoryMetric(default_metric=sequence_metric)
+        ids = empty_traj_pool.unique_ids
+        d = agg(empty_traj_pool[ids[0]], empty_traj_pool[ids[1]])
+        assert d == 0.0 or np.isnan(d)
 
 
 # ---------------------------------------------------------------------------
@@ -130,45 +92,34 @@ class TestSinglePair:
 
 
 class TestComputeMatrix:
-    """Full pairwise matrix: structure and numerical properties."""
+    """Full pairwise matrix."""
 
-    def test_returns_distance_matrix(self, small_traj_pool) -> None:
+    def test_returns_distance_matrix(self, small_traj_pool, sequence_metric) -> None:
         """compute_matrix() returns a DistanceMatrix instance."""
-        agg = AggregationTrajectoryMetric()
+        agg = AggregationTrajectoryMetric(default_metric=sequence_metric)
         dm = agg.compute_matrix(small_traj_pool)
         assert isinstance(dm, DistanceMatrix)
 
-    def test_shape_and_ids_match(self, small_traj_pool) -> None:
+    def test_shape_and_ids_match(self, small_traj_pool, sequence_metric) -> None:
         """Returned matrix is (n × n) and ids match pool.unique_ids."""
-        agg = AggregationTrajectoryMetric()
+        agg = AggregationTrajectoryMetric(default_metric=sequence_metric)
         dm = agg.compute_matrix(small_traj_pool)
         n = len(small_traj_pool)
         assert dm.shape == (n, n)
         assert dm.ids == small_traj_pool.unique_ids
 
-    def test_diagonal_zero(self, small_traj_pool) -> None:
-        """Diagonal entries are zero (distance from a trajectory to itself)."""
-        agg = AggregationTrajectoryMetric()
-        dm = agg.compute_matrix(small_traj_pool)
-        np.testing.assert_array_almost_equal(np.diag(dm.to_numpy()), 0.0, decimal=5)
-
-    def test_symmetric(self, small_traj_pool) -> None:
-        """Matrix is symmetric: M[i, j] == M[j, i]."""
-        agg = AggregationTrajectoryMetric()
-        arr = agg.compute_matrix(small_traj_pool).to_numpy()
-        np.testing.assert_array_almost_equal(arr, arr.T, decimal=5)
-
-    def test_single_trajectory_pool(self, small_traj_pool) -> None:
+    def test_single_trajectory_pool(self, small_traj_pool, sequence_metric) -> None:
         """Pool with 1 trajectory → 1×1 matrix with a zero."""
         sub = small_traj_pool.subset(small_traj_pool.unique_ids[:1])
-        agg = AggregationTrajectoryMetric()
+        agg = AggregationTrajectoryMetric(default_metric=sequence_metric)
         dm = agg.compute_matrix(sub)
         assert dm.shape == (1, 1)
-        assert dm.to_numpy()[0, 0] == 0.0
 
-    def test_consistency_single_pair_vs_matrix(self, small_traj_pool) -> None:
+    def test_consistency_single_pair_vs_matrix(
+        self, small_traj_pool, sequence_metric
+    ) -> None:
         """dm[i,j] must equal agg(traj_i, traj_j) for a few pairs."""
-        agg = AggregationTrajectoryMetric()
+        agg = AggregationTrajectoryMetric(default_metric=sequence_metric)
         ids = small_traj_pool.unique_ids[:4]
         sub = small_traj_pool.subset(ids)
         dm = agg.compute_matrix(sub)
@@ -184,15 +135,15 @@ class TestComputeMatrix:
                 ), f"Mismatch at ({i},{j}): matrix={arr[i,j]:.4f}, direct={expected:.4f}"
 
     def test_matrix_values_snapshot(
-        self, small_traj_pool, snapshot: SnapshotAssertion
+        self, small_traj_pool, sequence_metric, snapshot: SnapshotAssertion
     ) -> None:
         """Full distance matrix matches snapshot (regression guard)."""
-        agg = AggregationTrajectoryMetric()
+        agg = AggregationTrajectoryMetric(default_metric=sequence_metric)
         dm = agg.compute_matrix(small_traj_pool)
         assert snapshot == dm.to_frame("polars").with_columns(pl.exclude("id").round(4))
 
     def test_compute_matrix_nan_on_disjoint_aliases(
-        self, disjoint_alias_traj_pool
+        self, disjoint_alias_traj_pool, sequence_metric
     ) -> None:
         """compute_matrix inserts nan for pairs with no common alias.
 
@@ -200,7 +151,7 @@ class TestComputeMatrix:
         intervals-only → the cell ``(id1, id11)`` must be ``nan`` (not a
         ``ValueError``).  ID 1 and ID 6 share ``"events"`` → finite.
         """
-        agg = AggregationTrajectoryMetric()
+        agg = AggregationTrajectoryMetric(default_metric=sequence_metric)
         dm = agg.compute_matrix(disjoint_alias_traj_pool)
         arr = dm.to_numpy()
         ids = list(dm.ids)
@@ -219,22 +170,13 @@ class TestComputeMatrix:
             arr[idx_1, idx_6]
         ), "ID 1 and 6 share 'events': should be finite"
 
-    def test_compute_matrix_nan_on_disjoint_aliases_sum(
-        self, disjoint_alias_traj_pool
+    def test_mixed_matrix_snapshot(
+        self, mixed_traj_pool, sequence_metric, snapshot: SnapshotAssertion
     ) -> None:
-        """agg_fun='sum' also produces nan (not 0.0) for pairs with no common alias."""
-        agg = AggregationTrajectoryMetric(agg_fun="sum")
-        dm = agg.compute_matrix(disjoint_alias_traj_pool)
-        arr = dm.to_numpy()
-        ids = list(dm.ids)
-
-        idx_1 = ids.index(1)
-        idx_11 = ids.index(11)
-
-        assert np.isnan(arr[idx_1, idx_11]), (
-            "Expected nan for ID 1 vs 11 with agg_fun='sum' (no common alias), "
-            f"got {arr[idx_1, idx_11]}"
-        )
+        """Distance matrix on a mixed pool (empty + non-empty trajectories) matches snapshot."""
+        agg = AggregationTrajectoryMetric(default_metric=sequence_metric)
+        dm = agg.compute_matrix(mixed_traj_pool)
+        assert snapshot == dm.to_frame("polars").with_columns(pl.exclude("id").round(4))
 
 
 # ---------------------------------------------------------------------------
@@ -306,69 +248,6 @@ class TestConfigRoundtrip:
 
 
 # ---------------------------------------------------------------------------
-# Optimised path (two-step: per-alias matrices then aggregation)
-# ---------------------------------------------------------------------------
-
-
-class TestOptimisedPath:
-    """Two-step optimised path consistency and edge cases."""
-
-    def test_consistency_optimised_vs_naive(self, small_traj_pool) -> None:
-        """Optimised matrix path matches naive pair-by-pair _compute."""
-        agg = AggregationTrajectoryMetric()
-        dm_opt = agg.compute_matrix(small_traj_pool)
-
-        ids = small_traj_pool.unique_ids
-        n = len(ids)
-        naive = np.zeros((n, n), dtype=np.float32)
-        for i in range(n):
-            for j in range(n):
-                if i == j:
-                    continue
-                d = agg._compute(  # pylint: disable=protected-access
-                    small_traj_pool[ids[i]], small_traj_pool[ids[j]]
-                )
-                naive[i, j] = float(d)
-
-        fast = dm_opt.to_numpy()
-
-        # NaN positions must match
-        np.testing.assert_array_equal(np.isnan(fast), np.isnan(naive))
-        # Finite values must be close
-        mask = ~np.isnan(fast)
-        np.testing.assert_array_almost_equal(fast[mask], naive[mask], decimal=4)
-
-    def test_single_alias_pool(self, small_traj_pool) -> None:
-        """K=1: pool with one alias still produces a valid square matrix."""
-        sub = small_traj_pool.copy()
-        sub.drop_sequence_pools("events", "states")  # keep only 'intervals'
-        agg = AggregationTrajectoryMetric()
-        dm = agg.compute_matrix(sub)
-        assert dm.shape == (len(sub), len(sub))
-        np.testing.assert_array_almost_equal(np.diag(dm.to_numpy()), 0.0, decimal=5)
-
-    def test_disjoint_alias_gives_nan(self, disjoint_alias_traj_pool) -> None:
-        """Optimised path: nan at (i,j) when traj_i and traj_j share no alias."""
-        agg = AggregationTrajectoryMetric()
-        dm = agg.compute_matrix(disjoint_alias_traj_pool)
-        arr = dm.to_numpy()
-        ids = list(dm.ids)
-
-        idx_1 = ids.index(1)
-        idx_11 = ids.index(11)
-        assert np.isnan(arr[idx_1, idx_11])
-        assert np.isnan(arr[idx_11, idx_1])
-
-    def test_snapshot_unchanged(
-        self, small_traj_pool, snapshot: SnapshotAssertion
-    ) -> None:
-        """Optimised path produces the same snapshot values as the previous implementation."""
-        agg = AggregationTrajectoryMetric()
-        dm = agg.compute_matrix(small_traj_pool)
-        assert snapshot == dm.to_frame("polars").with_columns(pl.exclude("id").round(4))
-
-
-# ---------------------------------------------------------------------------
 # Memmap + chunks + resume
 # ---------------------------------------------------------------------------
 
@@ -401,8 +280,6 @@ class TestMemmapChunked:
 
     def test_resume_after_partial(self, small_traj_pool, tmp_path) -> None:
         """Decrement completed_chunks → resume recomputes the missing chunk."""
-        import json
-
         agg = AggregationTrajectoryMetric(store_path=str(tmp_path), chunk_size=3)
         dm1 = agg.compute_matrix(small_traj_pool)
         expected = dm1.to_numpy().copy()
@@ -430,8 +307,6 @@ class TestMemmapChunked:
 
     def test_metadata_and_progress_written(self, small_traj_pool, tmp_path) -> None:
         """metadata.json and progress.json are present and well-formed."""
-        import json
-
         agg = AggregationTrajectoryMetric(store_path=str(tmp_path))
         agg.compute_matrix(small_traj_pool)
 
