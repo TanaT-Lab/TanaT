@@ -5,6 +5,7 @@ LinearPairwiseSequenceMetric: align sequences position-by-position and aggregate
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
@@ -86,8 +87,8 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
 
     * **Both empty** → ``nan`` (distance is undefined).
     * **One empty, padding_penalty is set** → all positions are padded.
-    * **One empty, padding_penalty is None** → direct call raises
-      :class:`ValueError`; matrix computation inserts ``nan``.
+    * **One empty, padding_penalty is None** → ``nan`` with a warning
+      suggesting to set ``padding_penalty``.
 
     Example::
 
@@ -157,11 +158,8 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
             seq_b: Second sequence.
 
         Returns:
-            Aggregated scalar distance.
-
-        Raises:
-            ValueError: If one sequence is empty and the other is not,
-                with ``padding_penalty`` set to ``None``.
+            Aggregated scalar distance, or ``nan`` when the distance is
+            undefined (empty sequence with no padding).
         """
         n_a, n_b = len(seq_a), len(seq_b)
         if (
@@ -169,12 +167,14 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
             and max(n_a, n_b) > 0
             and self.settings.padding_penalty is None
         ):
-            raise ValueError(
-                f"Cannot compute distance: one sequence is empty "
-                f"(lengths {n_a} vs {n_b}) and padding_penalty is None. "
-                f"Set padding_penalty to a numeric value to handle "
-                f"length-mismatched sequences."
+            warnings.warn(
+                f"One sequence is empty (lengths {n_a} vs {n_b}) and padding_penalty is None. "
+                f"Returning nan. Set padding_penalty to a numeric value "
+                f"to handle length-mismatched sequences.",
+                UserWarning,
+                stacklevel=2,
             )
+            return float("nan")
         em = self.entity_metric
         agg_fn = self._get_agg_fn()
         return self._compute_pair(seq_a, seq_b, em, agg_fn)
@@ -307,7 +307,7 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
             completed:   Number of chunks already flushed.
 
         Returns:
-            Symmetric :class:`DistanceMatrix` (may contain ``nan``).
+            A  :class:`DistanceMatrix` of shape ``(n, n)``.
         """
         em = self.entity_metric
         if em.NUMBA_OPTIM:
@@ -339,7 +339,7 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
             completed:   Number of chunks already flushed.
 
         Returns:
-            Symmetric :class:`DistanceMatrix` (may contain ``nan``).
+            A  :class:`DistanceMatrix` of shape ``(n, n)``.
         """
         em = self.entity_metric
         agg_fn = self._get_agg_fn()
@@ -348,7 +348,7 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
         seqs = {sid: pool[sid] for sid in ids}
 
         if result is None:
-            result = np.zeros((n, n), dtype=np.float32)
+            result = np.full((n, n), np.nan, dtype=np.float32)
 
         chunk_size = storage.chunk_size if storage is not None else n
         chunks = list(range(0, n, chunk_size))
@@ -363,6 +363,9 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
                     continue
 
                 for i in range(chunk_start, chunk_end):
+                    result[i, i] = float(
+                        self._compute_pair(seqs[ids[i]], seqs[ids[i]], em, agg_fn)
+                    )
                     for j in range(i + 1, n):
                         d = self._compute_pair(seqs[ids[i]], seqs[ids[j]], em, agg_fn)
                         result[i, j] = result[j, i] = float(d)
@@ -374,7 +377,6 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
                     save_progress(storage, completed, status="computing")
 
         if storage is not None:
-            np.fill_diagonal(result, 0.0)
             result.flush()
             save_progress(storage, completed, status="complete")
 
@@ -405,7 +407,7 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
             completed:   Number of chunks already flushed.
 
         Returns:
-            Symmetric :class:`DistanceMatrix` (may contain ``nan``).
+            A  :class:`DistanceMatrix` of shape ``(n, n)``.
         """
         em = self.entity_metric
         arrays, lengths, context = em.prepare_batch_data(pool)
@@ -422,20 +424,19 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
 
         if result is None:
             # --- In-memory path ---
-            result = np.zeros((n, n), dtype=np.float32)
-            if n > 1:
-                compute_matrix_kernel(
-                    result,
-                    arrays,
-                    lengths,
-                    arrays,
-                    lengths,
-                    em.distance_kernel,
-                    context,
-                    agg_kernel,
-                    padding,
-                    em.IS_SYMMETRIC,
-                )
+            result = np.full((n, n), np.nan, dtype=np.float32)
+            compute_matrix_kernel(
+                result,
+                arrays,
+                lengths,
+                arrays,
+                lengths,
+                em.distance_kernel,
+                context,
+                agg_kernel,
+                padding,
+                em.IS_SYMMETRIC,
+            )
             return DistanceMatrix(result, pool.unique_ids)
 
         # --- Memmap + chunks path ---
@@ -487,7 +488,6 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
                 save_progress(storage, completed, status="computing")
                 pbar.update(1)
 
-        np.fill_diagonal(result, 0.0)
         result.flush()
         save_progress(storage, completed, status="complete")
         return DistanceMatrix(result, pool.unique_ids)
