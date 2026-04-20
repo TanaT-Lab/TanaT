@@ -86,13 +86,11 @@ def default_pairwise_matrix(
         In-memory DistanceMatrix.
     """
     n = len(ids)
-    result = np.zeros((n, n), dtype=np.float32)
+    result = np.full((n, n), np.nan, dtype=np.float32)
 
-    with progress_bar_fn(total=n * (n - 1), desc="Pairs") as pbar:
+    with progress_bar_fn(total=n * n, desc="Pairs") as pbar:
         for i in range(n):
             for j in range(n):
-                if i == j:
-                    continue
                 result[i, j] = float(compute_fn(items[ids[i]], items[ids[j]]))
                 pbar.update(1)
 
