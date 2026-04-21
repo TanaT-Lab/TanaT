@@ -16,7 +16,12 @@ from ..entity.base import EntityMetric
 from .._utils import resolve_storage, default_pairwise_matrix, validate_pair
 from ...sequence.base.pool import SequencePool
 from ...sequence.base.sequence import Sequence
-from .._storage import StorageOptions, open_or_create_matrix, compute_metric_config
+from .._storage import (
+    StorageOptions,
+    open_or_create_matrix,
+    compute_metric_config,
+    save_progress,
+)
 
 
 class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
@@ -265,3 +270,208 @@ class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
     def _validate_sequences(self, seq_a: Sequence, seq_b: Sequence) -> None:
         """Type-check both sequence arguments."""
         validate_pair(seq_a, seq_b, Sequence, "seq_a", "seq_b")
+
+    # ------------------------------------------------------------------
+    # Shared Numba / Python boilerplate (used by entity-metric subtypes)
+    # ------------------------------------------------------------------
+
+    def _run_numba_matrix(
+        self,
+        pool: SequencePool,
+        kernel,
+        kernel_args: tuple,
+        *,
+        storage=None,
+        result=None,
+        is_resuming: bool = False,
+        completed: int = 0,
+        symmetric: bool,
+    ) -> DistanceMatrix:
+        """Execute a Numba kernel over chunks with progress bar and optional storage.
+
+        Handles the entire chunk loop, resume logic, progress bar, and
+        storage flushing.  Subclasses call this from ``_compute_matrix_numba``
+        and only provide the metric-specific *kernel* and *kernel_args*.
+
+        Args:
+            pool:        Sequence pool.
+            kernel:      Numba matrix kernel callable.
+            kernel_args: Tuple of metric-specific positional args appended
+                         after ``context`` (and before ``symmetric``).
+            storage:     Optional storage options.
+            result:      Pre-opened memmap or ``None`` for in-memory.
+            is_resuming: Whether partial chunks are already on disk.
+            completed:   Number of chunks already flushed.
+            symmetric:   Whether the kernel should exploit symmetry.
+
+        Returns:
+            A :class:`~tanat.metric.DistanceMatrix` of shape ``(n, n)``.
+        """
+        em = self.entity_metric
+        arrays, lengths, context = em.prepare_batch_data(pool)
+        n = len(arrays)
+
+        if result is None:
+            result = np.full((n, n), np.nan, dtype=np.float32)
+
+        chunk_size = storage.chunk_size if storage is not None else n
+        chunks = list(range(0, n, chunk_size))
+
+        with self._create_progress_bar(total=len(chunks), desc="Chunks") as pbar:
+            for chunk_idx, chunk_start in enumerate(chunks):
+                chunk_end = min(chunk_start + chunk_size, n)
+                if is_resuming and chunk_idx < completed:
+                    pbar.update(1)
+                    continue
+                kernel(
+                    result,
+                    chunk_start,
+                    chunk_end,
+                    arrays,
+                    lengths,
+                    arrays,
+                    lengths,
+                    em.distance_kernel,
+                    context,
+                    *kernel_args,
+                    symmetric,
+                )
+                if storage is not None:
+                    result.flush()
+                    completed += 1
+                    save_progress(storage, completed, status="computing")
+                pbar.update(1)
+
+        if storage is not None:
+            result.flush()
+            save_progress(storage, completed, status="complete")
+
+        return DistanceMatrix(result, pool.unique_ids)
+
+    def _run_numba_cross_matrix(
+        self,
+        pool_rows: SequencePool,
+        pool_cols: SequencePool,
+        kernel,
+        kernel_args: tuple,
+    ) -> np.ndarray:
+        """Execute a Numba kernel for cross (n × k) distance matrices.
+
+        Args:
+            pool_rows:   Pool whose sequences form the rows.
+            pool_cols:   Pool whose sequences form the columns.
+            kernel:      Numba matrix kernel callable.
+            kernel_args: Tuple of metric-specific positional args appended
+                         after ``context`` (and before ``symmetric=False``).
+
+        Returns:
+            float32 numpy array of shape ``(n, k)``.
+        """
+        em = self.entity_metric
+        arrays_r, lengths_r, arrays_c, lengths_c, context = em.prepare_cross_batch_data(
+            pool_rows, pool_cols
+        )
+        n, k = len(lengths_r), len(lengths_c)
+        result = np.empty((n, k), dtype=np.float32)
+        if n > 0 and k > 0:
+            kernel(
+                result,
+                0,
+                n,
+                arrays_r,
+                lengths_r,
+                arrays_c,
+                lengths_c,
+                em.distance_kernel,
+                context,
+                *kernel_args,
+                False,
+            )
+        return result
+
+    def _compute_matrix_python(
+        self,
+        pool: SequencePool,
+        storage=None,
+        result=None,
+        is_resuming: bool = False,
+        completed: int = 0,
+    ) -> DistanceMatrix:
+        """Python double-loop fallback with optional memmap storage.
+
+        Iterates all O(n²) unique pairs and fills a symmetric matrix.
+        Uses chunked writes when *storage* is set.
+
+        Subclasses with non-standard pair computation (e.g.
+        :class:`~tanat.metric.sequence.type.linear_pairwise.metric.LinearPairwiseSequenceMetric`)
+        may override this method.
+
+        Args:
+            pool:        Sequence pool.
+            storage:     Optional storage options.
+            result:      Pre-opened memmap or ``None`` for in-memory.
+            is_resuming: Whether partial chunks are already on disk.
+            completed:   Number of chunks already flushed.
+
+        Returns:
+            A :class:`~tanat.metric.DistanceMatrix` of shape ``(n, n)``.
+        """
+        ids = pool.unique_ids
+        n = len(ids)
+        seqs = {sid: pool[sid] for sid in ids}
+
+        if result is None:
+            result = np.full((n, n), np.nan, dtype=np.float32)
+
+        chunk_size = storage.chunk_size if storage is not None else n
+        chunks = list(range(0, n, chunk_size))
+
+        with self._create_progress_bar(total=n * (n - 1) // 2, desc="Pairs") as pbar:
+            for chunk_idx, chunk_start in enumerate(chunks):
+                chunk_end = min(chunk_start + chunk_size, n)
+                if is_resuming and chunk_idx < completed:
+                    for i in range(chunk_start, chunk_end):
+                        pbar.update(n - i - 1)
+                    continue
+                for i in range(chunk_start, chunk_end):
+                    result[i, i] = float(self._compute(seqs[ids[i]], seqs[ids[i]]))
+                    for j in range(i + 1, n):
+                        d = float(self._compute(seqs[ids[i]], seqs[ids[j]]))
+                        result[i, j] = result[j, i] = d
+                        pbar.update(1)
+                if storage is not None:
+                    result.flush()
+                    completed += 1
+                    save_progress(storage, completed, status="computing")
+
+        if storage is not None:
+            result.flush()
+            save_progress(storage, completed, status="complete")
+        return DistanceMatrix(result, ids)
+
+    def _compute_cross_matrix_python(
+        self,
+        pool_rows: SequencePool,
+        pool_cols: SequencePool,
+    ) -> np.ndarray:
+        """Python double-loop fallback for cross (n × k) distance matrices.
+
+        Subclasses with non-standard pair computation may override this method.
+
+        Args:
+            pool_rows: Pool whose sequences form the rows.
+            pool_cols: Pool whose sequences form the columns.
+
+        Returns:
+            float32 numpy array of shape ``(n, k)``.
+        """
+        ids_r = pool_rows.unique_ids
+        ids_c = pool_cols.unique_ids
+        seqs_r = {sid: pool_rows[sid] for sid in ids_r}
+        seqs_c = {sid: pool_cols[sid] for sid in ids_c}
+        n, k = len(ids_r), len(ids_c)
+        result = np.empty((n, k), dtype=np.float32)
+        for i, id_r in enumerate(ids_r):
+            for j, id_c in enumerate(ids_c):
+                result[i, j] = float(self._compute(seqs_r[id_r], seqs_c[id_c]))
+        return result
