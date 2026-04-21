@@ -5,7 +5,6 @@ Chi2SequenceMetric: Chi-squared distance between state-time distributions.
 
 from __future__ import annotations
 
-import math
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -17,7 +16,7 @@ from .....metadata.feature import CategoricalInfo
 from ...base import SequenceMetric
 from ....matrix import DistanceMatrix
 from ...._storage import save_progress
-from .kernels import compute_chi2_matrix
+from .kernels import compute_chi2_cross_matrix, compute_chi2_matrix, compute_chi2_pair
 
 if TYPE_CHECKING:
     from .....sequence.base.sequence import Sequence
@@ -30,9 +29,86 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
+def _histogram_weight_expr(sequence: Sequence | SequencePool) -> pl.Expr:
+    """Build the per-entity weight expression for a sequence view."""
+    time_cols = sequence.settings.get_time_columns()
+    if len(time_cols) == 2:
+        start_col, end_col = time_cols
+        weight_expr = pl.col(end_col) - pl.col(start_col)
+        if sequence.metadata.time_index.is_datetime:
+            weight_expr = weight_expr.dt.total_seconds()
+        return weight_expr.cast(pl.Float64)
+    return pl.lit(1.0)
+
+
+def _histogram_agg_lf(
+    sequence: Sequence | SequencePool,
+    feature: str,
+) -> pl.LazyFrame:
+    """Build the lazy long-form histogram aggregation for *feature*."""
+    id_col = sequence.settings.id_column
+    # pylint: disable=protected-access
+    return (
+        sequence._temporal_data_lf(features=[feature])
+        .with_columns(
+            pl.col(feature).cast(pl.Utf8).alias(feature),
+            _histogram_weight_expr(sequence).alias("__weight__"),
+        )
+        .group_by([id_col, feature])
+        .agg(pl.col("__weight__").sum().alias("__total_weight__"))
+    )
+
+
+def _histogram_vocab(agg_df: pl.DataFrame, feature: str) -> list[str]:
+    """Extract the sorted vocabulary from an aggregated histogram frame."""
+    if agg_df.is_empty():
+        return []
+    return sorted(
+        agg_df.get_column(feature).drop_nulls().unique().to_list(),
+        key=str,
+    )
+
+
+def _materialize_histogram_matrix(
+    sequence: Sequence | SequencePool,
+    agg_df: pl.DataFrame,
+    feature: str,
+    vocab: list[str] | None = None,
+) -> tuple[np.ndarray, list[str]]:
+    """Materialize a dense histogram matrix from aggregated histogram rows."""
+    # pylint: disable=protected-access
+    ids_df = sequence._id_lf.collect()
+    resolved_vocab = _histogram_vocab(agg_df, feature) if vocab is None else vocab
+
+    if not resolved_vocab:
+        return np.zeros((ids_df.height, 0), dtype=np.float32), resolved_vocab
+
+    if agg_df.is_empty():
+        return (
+            np.zeros((ids_df.height, len(resolved_vocab)), dtype=np.float32),
+            resolved_vocab,
+        )
+
+    id_col = sequence.settings.id_column
+    pivot_df = agg_df.pivot(on=feature, index=id_col, values="__total_weight__")
+    result_df = ids_df.join(pivot_df, on=id_col, how="left")
+
+    existing_columns = set(result_df.columns)
+    exprs = [
+        (
+            pl.col(category).fill_null(0.0)
+            if category in existing_columns
+            else pl.lit(0.0)
+        ).alias(category)
+        for category in resolved_vocab
+    ]
+    return result_df.select(exprs).to_numpy().astype(np.float32), resolved_vocab
+
+
 def _build_histogram(
     sequence: Sequence | SequencePool,
     feature: str,
+    vocab: list[str] | None = None,
 ) -> tuple[np.ndarray, list[str]]:
     """Build a (n_sequences × n_categories) weight matrix for *feature*.
 
@@ -44,87 +120,41 @@ def _build_histogram(
         ``(hists, vocab)``: float32 array of shape ``(n, n_cats)`` and the
         sorted list of category strings.
     """
-    id_col = sequence.settings.id_column
-    time_cols = sequence.settings.get_time_columns()
+    agg_df = _histogram_agg_lf(sequence, feature).collect()
+    return _materialize_histogram_matrix(sequence, agg_df, feature, vocab=vocab)
 
-    # 1. ID + Temporal index + feature
-    # pylint: disable=protected-access
-    lf = sequence._temporal_data_lf(features=[feature])
 
-    # 2. Weight per entity
-    if len(time_cols) == 2:
-        start_col, end_col = time_cols
-        weight_expr = pl.col(end_col) - pl.col(start_col)
-        if sequence.metadata.time_index.is_datetime:
-            weight_expr = weight_expr.dt.total_seconds()
-        lf = lf.with_columns(weight_expr.cast(pl.Float64).alias("__weight__"))
-    else:
-        lf = lf.with_columns(pl.lit(1.0).alias("__weight__"))
-
-    # 3. Aggregate: sum weight by (id, category)
-    agg_df = (
-        lf.group_by([id_col, feature])
-        .agg(pl.col("__weight__").sum().alias("__total_weight__"))
-        .collect()
+def _build_cross_histograms(
+    pool_rows: Sequence | SequencePool,
+    pool_cols: Sequence | SequencePool,
+    feature: str,
+) -> tuple[np.ndarray, np.ndarray, list[str]]:
+    """Build aligned histogram matrices for two sequence views."""
+    agg_df = pl.concat(
+        [
+            _histogram_agg_lf(pool_rows, feature).with_columns(
+                pl.lit("rows").alias("__side__")
+            ),
+            _histogram_agg_lf(pool_cols, feature).with_columns(
+                pl.lit("cols").alias("__side__")
+            ),
+        ]
     )
-
-    # 4. Pivot (n_ids × n_cats); sorted vocab for deterministic column order
-    if agg_df.is_empty():
-        # pylint: disable=protected-access
-        n = sequence._id_lf.collect().height
-        return np.zeros((n, 0), dtype=np.float32), []
-
-    pivot_df = agg_df.pivot(on=feature, index=id_col, values="__total_weight__")
-    vocab = sorted([c for c in pivot_df.columns if c != id_col], key=str)
-
-    # 5. Left-join on _id_lf: correct dtype, canonical order, fills missing → 0
-    result_df = (
-        sequence._id_lf.collect()
-        .join(pivot_df, on=id_col, how="left")
-        .with_columns([pl.col(c).fill_null(0.0) for c in vocab])
+    combined_df = agg_df.collect()
+    vocab = _histogram_vocab(combined_df, feature)
+    hists_rows, _ = _materialize_histogram_matrix(
+        pool_rows,
+        combined_df.filter(pl.col("__side__") == "rows").drop("__side__"),
+        feature,
+        vocab=vocab,
     )
-
-    return result_df.select(vocab).to_numpy().astype(np.float32), vocab
-
-
-def _chi2_distance(hist_a: dict, hist_b: dict) -> float:
-    """Chi-squared distance between two histograms.
-
-    .. math::
-
-        d(a, b) = \\sqrt{\\sum_j \\frac{(p_{aj} - p_{bj})^2}{p_{aj} + p_{bj}}}
-
-    where ``p`` values are proportions (sum-normalised weights).  Categories
-    present in one histogram but not the other contribute normally (the
-    missing proportion is 0).
-
-    Returns 0.0 when both histograms are empty.
-
-    Args:
-        hist_a: Category → weight histogram for sequence *a*.
-        hist_b: Category → weight histogram for sequence *b*.
-
-    Returns:
-        Chi-squared distance (float ≥ 0).
-    """
-    total_a = sum(hist_a.values())
-    total_b = sum(hist_b.values())
-
-    if total_a == 0.0 and total_b == 0.0:
-        return 0.0
-    if total_a == 0.0 or total_b == 0.0:
-        return 1.0
-
-    categories = set(hist_a) | set(hist_b)
-    result = 0.0
-    for cat in categories:
-        pa = hist_a.get(cat, 0.0) / total_a
-        pb = hist_b.get(cat, 0.0) / total_b
-        denom = pa + pb
-        if denom > 0.0:
-            result += (pa - pb) ** 2 / denom
-
-    return math.sqrt(result)
+    hists_cols, _ = _materialize_histogram_matrix(
+        pool_cols,
+        combined_df.filter(pl.col("__side__") == "cols").drop("__side__"),
+        feature,
+        vocab=vocab,
+    )
+    return hists_rows, hists_cols, vocab
 
 
 # ---------------------------------------------------------------------------
@@ -270,20 +300,8 @@ class Chi2SequenceMetric(SequenceMetric, register_name="chi2"):
             Chi-squared distance >= 0.
         """
         feature = self._resolve_feature(seq_a)
-        arr_a, vocab_a = _build_histogram(seq_a, feature)
-        arr_b, vocab_b = _build_histogram(seq_b, feature)
-
-        hist_a = (
-            {cat: float(arr_a[0, i]) for i, cat in enumerate(vocab_a)}
-            if vocab_a and arr_a.shape[0] > 0
-            else {}
-        )
-        hist_b = (
-            {cat: float(arr_b[0, i]) for i, cat in enumerate(vocab_b)}
-            if vocab_b and arr_b.shape[0] > 0
-            else {}
-        )
-        return _chi2_distance(hist_a, hist_b)
+        hists_a, hists_b, vocab = _build_cross_histograms(seq_a, seq_b, feature)
+        return float(compute_chi2_pair(hists_a[0], hists_b[0], len(vocab)))
 
     # ------------------------------------------------------------------
     # Numba batch protocol
@@ -346,3 +364,22 @@ class Chi2SequenceMetric(SequenceMetric, register_name="chi2"):
             save_progress(storage, completed, status="complete")
 
         return DistanceMatrix(result, pool.unique_ids)
+
+    def _compute_cross_matrix_impl(
+        self,
+        pool_rows: SequencePool,
+        pool_cols: SequencePool,
+    ) -> np.ndarray:
+        """Compute the asymmetric Chi2 matrix between two pools."""
+        feature = (
+            self.settings.entity_feature or pool_rows.metadata.entity_features[0].name
+        )
+        hists_rows, hists_cols, vocab = _build_cross_histograms(
+            pool_rows, pool_cols, feature
+        )
+        result = np.empty((len(hists_rows), len(hists_cols)), dtype=np.float32)
+        if result.size == 0:
+            return result
+
+        compute_chi2_cross_matrix(result, hists_rows, hists_cols, len(vocab))
+        return result
