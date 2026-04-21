@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
 import polars as pl
 import pytest
 from syrupy.assertion import SnapshotAssertion
@@ -129,3 +130,35 @@ class TestSettings:
         cfg = sdtw.to_config()
         sdtw2 = SoftDTWSequenceMetric.from_config(cfg)
         assert sdtw2.settings.gamma == pytest.approx(0.5)
+
+
+# ---------------------------------------------------------------------------
+# Numba consistency: fast path == slow path
+# ---------------------------------------------------------------------------
+
+
+class TestNumbaConsistency:
+    """Numba fast path produces the same result as the Python fallback."""
+
+    def test_matrix_numba_vs_python(self, cat_pool, entity_metric) -> None:
+        """Numba and Python paths produce identical matrices (NaN-aware)."""
+        sdtw = SoftDTWSequenceMetric(entity_metric=entity_metric)
+        fast = sdtw.compute_matrix(cat_pool).to_numpy()
+        # pylint: disable=protected-access
+        slow = sdtw._compute_matrix_python(cat_pool).to_numpy()
+        np.testing.assert_array_equal(np.isnan(fast), np.isnan(slow))
+        mask = ~np.isnan(fast)
+        np.testing.assert_array_almost_equal(fast[mask], slow[mask], decimal=5)
+
+    def test_cross_matrix_numba_vs_python(self, cat_pool, entity_metric) -> None:
+        """Numba and Python cross-matrix paths agree."""
+        ids = cat_pool.unique_ids
+        pool_rows = cat_pool.subset(ids[:4])
+        pool_cols = cat_pool.subset(ids[4:8])
+        sdtw = SoftDTWSequenceMetric(entity_metric=entity_metric)
+        fast = np.asarray(sdtw.compute_cross_matrix(pool_rows, pool_cols))
+        # pylint: disable=protected-access
+        slow = np.asarray(sdtw._compute_cross_matrix_python(pool_rows, pool_cols))
+        np.testing.assert_array_equal(np.isnan(fast), np.isnan(slow))
+        mask = ~np.isnan(fast)
+        np.testing.assert_array_almost_equal(fast[mask], slow[mask], decimal=5)
