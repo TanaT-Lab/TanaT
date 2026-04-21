@@ -23,50 +23,61 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-def _build_histogram(seq: Sequence, feature: str) -> dict:
-    """Build a category → total-weight histogram from a sequence.
+def _build_histogram(
+    sequence: Sequence | SequencePool,
+    feature: str,
+) -> tuple[np.ndarray, list[str]]:
+    """Build a (n_sequences × n_categories) weight matrix for *feature*.
 
-    Weight per entity:
-
-    * Interval / state sequences: ``temporal_extent`` returns ``[start, end]``;
-      ``weight = end − start``.
-    * Event sequences: ``temporal_extent`` returns a scalar; ``weight = 1.0``.
-
-    Args:
-        seq:     Sequence to extract the histogram from.
-        feature: Feature name to use as category key.
+    Each sequence's weight per category is the total time spent in that state
+    (``end - start`` in seconds for datetime, 1.0 per event otherwise).
+    Rows are ordered and typed according to ``sequence._id_lf``.
 
     Returns:
-        Dict mapping category value → cumulative weight.
+        ``(hists, vocab)``: float32 array of shape ``(n, n_cats)`` and the
+        sorted list of category strings.
     """
-    hist: dict = {}
-    for entity in seq:
-        extent = entity.temporal_extent
-        if isinstance(extent, (list, tuple)) and len(extent) == 2:
-            start, end = extent
-            if start is None or end is None:
-                warnings.warn(
-                    f"Chi2SequenceMetric: an entity in sequence '{seq.id_value}' has an "
-                    f"undefined temporal bound (extent={extent!r}). "
-                    "It will be ignored in the histogram.",
-                    UserWarning,
-                    stacklevel=2,
-                )
-                continue
-            else:
-                diff = end - start
-                # timedelta (datetime sequences) → total seconds
-                if hasattr(diff, "total_seconds"):
-                    weight = diff.total_seconds()
-                else:
-                    weight = float(diff)
-        else:
-            weight = 1.0
+    id_col = sequence.settings.id_column
+    time_cols = sequence.settings.get_time_columns()
 
-        key = entity.data(features=[feature])[feature]
-        hist[key] = hist.get(key, 0.0) + weight
+    # 1. ID + Temporal index + feature
+    # pylint: disable=protected-access
+    lf = sequence._temporal_data_lf(features=[feature])
 
-    return hist
+    # 2. Weight per entity
+    if len(time_cols) == 2:
+        start_col, end_col = time_cols
+        weight_expr = pl.col(end_col) - pl.col(start_col)
+        if sequence.metadata.time_index.is_datetime:
+            weight_expr = weight_expr.dt.total_seconds()
+        lf = lf.with_columns(weight_expr.cast(pl.Float64).alias("__weight__"))
+    else:
+        lf = lf.with_columns(pl.lit(1.0).alias("__weight__"))
+
+    # 3. Aggregate: sum weight by (id, category)
+    agg_df = (
+        lf.group_by([id_col, feature])
+        .agg(pl.col("__weight__").sum().alias("__total_weight__"))
+        .collect()
+    )
+
+    # 4. Pivot (n_ids × n_cats); sorted vocab for deterministic column order
+    if agg_df.is_empty():
+        # pylint: disable=protected-access
+        n = sequence._id_lf.collect().height
+        return np.zeros((n, 0), dtype=np.float32), []
+
+    pivot_df = agg_df.pivot(on=feature, index=id_col, values="__total_weight__")
+    vocab = sorted([c for c in pivot_df.columns if c != id_col], key=str)
+
+    # 5. Left-join on _id_lf: correct dtype, canonical order, fills missing → 0
+    result_df = (
+        sequence._id_lf.collect()
+        .join(pivot_df, on=id_col, how="left")
+        .with_columns([pl.col(c).fill_null(0.0) for c in vocab])
+    )
+
+    return result_df.select(vocab).to_numpy().astype(np.float32), vocab
 
 
 def _chi2_distance(hist_a: dict, hist_b: dict) -> float:
