@@ -73,3 +73,16 @@ def compute_chi2_matrix(result, start, end, hists, n_cats, symmetric):
                 d = compute_chi2_pair(hists[i], hists[j], n_cats)
                 result[i, j] = d
                 result[j, i] = d
+
+
+@njit(parallel=True)
+def compute_chi2_cross_matrix(result, hists_rows, hists_cols, n_cats):
+    """Parallel Chi2 cross-matrix kernel.
+
+    Computes the full asymmetric matrix between two histogram sets.
+    """
+    n_rows = result.shape[0]
+    n_cols = result.shape[1]
+    for i in prange(n_rows):  # pylint: disable=not-an-iterable
+        for j in range(n_cols):
+            result[i, j] = compute_chi2_pair(hists_rows[i], hists_cols[j], n_cats)
