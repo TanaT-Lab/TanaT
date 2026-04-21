@@ -5,6 +5,7 @@ Tests: EditSequenceMetric
 
 from __future__ import annotations
 
+import numpy as np
 import polars as pl
 import pytest
 from syrupy.assertion import SnapshotAssertion
@@ -131,3 +132,35 @@ class TestSettings:
         edit2 = EditSequenceMetric.from_config(cfg)
         assert edit2.settings.indel_cost == pytest.approx(0.5)
         assert edit2.settings.normalize is True
+
+
+# ---------------------------------------------------------------------------
+# Numba consistency: fast path == slow path
+# ---------------------------------------------------------------------------
+
+
+class TestNumbaConsistency:
+    """Numba fast path produces the same result as the Python fallback."""
+
+    def test_matrix_numba_vs_python(self, cat_pool, entity_metric) -> None:
+        """Numba and Python paths produce identical matrices (NaN-aware)."""
+        edit = EditSequenceMetric(entity_metric=entity_metric)
+        fast = edit.compute_matrix(cat_pool).to_numpy()
+        # pylint: disable=protected-access
+        slow = edit._compute_matrix_python(cat_pool).to_numpy()
+        np.testing.assert_array_equal(np.isnan(fast), np.isnan(slow))
+        mask = ~np.isnan(fast)
+        np.testing.assert_array_almost_equal(fast[mask], slow[mask], decimal=5)
+
+    def test_cross_matrix_numba_vs_python(self, cat_pool, entity_metric) -> None:
+        """Numba and Python cross-matrix paths agree."""
+        ids = cat_pool.unique_ids
+        pool_rows = cat_pool.subset(ids[:4])
+        pool_cols = cat_pool.subset(ids[4:8])
+        edit = EditSequenceMetric(entity_metric=entity_metric)
+        fast = np.asarray(edit.compute_cross_matrix(pool_rows, pool_cols))
+        # pylint: disable=protected-access
+        slow = np.asarray(edit._compute_cross_matrix_python(pool_rows, pool_cols))
+        np.testing.assert_array_equal(np.isnan(fast), np.isnan(slow))
+        mask = ~np.isnan(fast)
+        np.testing.assert_array_almost_equal(fast[mask], slow[mask], decimal=5)
