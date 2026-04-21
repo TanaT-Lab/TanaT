@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import polars as pl
+from tanat_utils.pretty_format import format_feature_section
 
 from .feature import (
     FeatureInfo,
@@ -17,7 +18,6 @@ from .feature import (
     TemporalInfo,
     build_feature_metadata,
 )
-from tanat_utils.pretty_format import format_feature_section
 
 
 @dataclass(frozen=True)
