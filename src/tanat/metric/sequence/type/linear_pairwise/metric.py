@@ -15,10 +15,8 @@ from tanat_utils import settings_dataclass as dataclass
 from ...base import SequenceMetric
 from ....entity.base import EntityMetric
 from ....matrix import DistanceMatrix
-from ...._storage import save_progress
 from .kernels import (
-    compute_matrix_kernel,
-    compute_matrix_chunk,
+    compute_pairwise_matrix,
     _AGG_NUMBA_KERNELS,
 )
 
@@ -205,8 +203,8 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
 
         Pools are already validated by :meth:`compute_cross_matrix`.
         Uses the Numba path when the entity metric declares
-        ``NUMBA_OPTIM = True``, otherwise falls back to
-        :meth:`_compute_cross_matrix_python`.
+        ``NUMBA_OPTIM = True``, otherwise falls back to the base
+        :meth:`~tanat.metric.sequence.base.SequenceMetric._compute_cross_matrix_python`.
 
         Args:
             pool_rows: Pool whose sequences form the rows   (n items).
@@ -219,40 +217,6 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
         if em.NUMBA_OPTIM:
             return self._compute_cross_matrix_numba(pool_rows, pool_cols)
         return self._compute_cross_matrix_python(pool_rows, pool_cols)
-
-    def _compute_cross_matrix_python(
-        self,
-        pool_rows: SequencePool,
-        pool_cols: SequencePool,
-    ) -> np.ndarray:
-        """Python double-loop fallback for the cross (n × k) distance matrix.
-
-        Uses :meth:`_compute_pair` rather than :meth:`_compute` so that
-        undefined distances (empty sequence with no padding) produce ``nan``
-        instead of raising :class:`ValueError`: consistent with
-        :meth:`_compute_matrix_python`.
-
-        Args:
-            pool_rows: Pool whose sequences form the rows   (n items).
-            pool_cols: Pool whose sequences form the columns (k items).
-
-        Returns:
-            float32 numpy array of shape ``(n, k)``.
-        """
-        em = self.entity_metric
-        agg_fn = self._get_agg_fn()
-        ids_r = pool_rows.unique_ids
-        ids_c = pool_cols.unique_ids
-        seqs_r = {sid: pool_rows[sid] for sid in ids_r}
-        seqs_c = {sid: pool_cols[sid] for sid in ids_c}
-        n, k = len(ids_r), len(ids_c)
-        result = np.empty((n, k), dtype=np.float32)
-        for i, id_r in enumerate(ids_r):
-            for j, id_c in enumerate(ids_c):
-                result[i, j] = self._compute_pair(
-                    seqs_r[id_r], seqs_c[id_c], em, agg_fn
-                )
-        return result
 
     def _compute_cross_matrix_numba(
         self,
@@ -273,32 +237,15 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
         Returns:
             float32 numpy array of shape ``(n, k)``.
         """
-        em = self.entity_metric
-        arrays_r, lengths_r, arrays_c, lengths_c, context = em.prepare_cross_batch_data(
-            pool_rows, pool_cols
-        )
         agg_kernel = self._get_agg_fn(numba=True)
         padding = (
             np.float32(self.settings.padding_penalty)
             if self.settings.padding_penalty is not None
             else np.float32(np.nan)
         )
-        n, k = len(lengths_r), len(lengths_c)
-        result = np.empty((n, k), dtype=np.float32)
-        if n > 0 and k > 0:
-            compute_matrix_kernel(
-                result,
-                arrays_r,
-                lengths_r,
-                arrays_c,
-                lengths_c,
-                em.distance_kernel,
-                context,
-                agg_kernel,
-                padding,
-                False,  # rectangular (n×k): triangle optimisation requires a square same-pool matrix
-            )
-        return result
+        return self._run_numba_cross_matrix(
+            pool_rows, pool_cols, compute_pairwise_matrix, (agg_kernel, padding)
+        )
 
     def _compute_matrix_impl(
         self,
@@ -335,70 +282,6 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
             pool, storage, result, is_resuming, completed
         )
 
-    def _compute_matrix_python(
-        self,
-        pool: SequencePool,
-        storage: StorageOptions | None = None,
-        result=None,
-        is_resuming: bool = False,
-        completed: int = 0,
-    ) -> DistanceMatrix:
-        """Python double-loop fallback.
-
-        Iterates all O(n^2) pairs.  Undefined distances produce ``nan``.
-        Uses the memmap + chunks path when ``storage`` is set.
-
-        Args:
-            pool:        Sequence pool.
-            storage:     Optional :class:`~tanat.metric.StorageOptions`.
-            result:      Pre-opened memmap (disk path) or ``None`` (in-memory).
-            is_resuming: Whether partial chunks are already on disk.
-            completed:   Number of chunks already flushed.
-
-        Returns:
-            A  :class:`DistanceMatrix` of shape ``(n, n)``.
-        """
-        em = self.entity_metric
-        agg_fn = self._get_agg_fn()
-        ids = pool.unique_ids
-        n = len(ids)
-        seqs = {sid: pool[sid] for sid in ids}
-
-        if result is None:
-            result = np.full((n, n), np.nan, dtype=np.float32)
-
-        chunk_size = storage.chunk_size if storage is not None else n
-        chunks = list(range(0, n, chunk_size))
-
-        with self._create_progress_bar(total=n * (n - 1) // 2, desc="Pairs") as pbar:
-            for chunk_idx, chunk_start in enumerate(chunks):
-                chunk_end = min(chunk_start + chunk_size, n)
-
-                if is_resuming and chunk_idx < completed:
-                    for i in range(chunk_start, chunk_end):
-                        pbar.update(n - i - 1)
-                    continue
-
-                for i in range(chunk_start, chunk_end):
-                    result[i, i] = float(
-                        self._compute_pair(seqs[ids[i]], seqs[ids[i]], em, agg_fn)
-                    )
-                    for j in range(i + 1, n):
-                        d = self._compute_pair(seqs[ids[i]], seqs[ids[j]], em, agg_fn)
-                        result[i, j] = result[j, i] = float(d)
-                        pbar.update(1)
-
-                if storage is not None:
-                    result.flush()
-                    completed += 1
-                    save_progress(storage, completed, status="computing")
-
-        if storage is not None:
-            result.flush()
-            save_progress(storage, completed, status="complete")
-
-        return DistanceMatrix(result, ids)
-
     def _compute_matrix_numba(
         self,
         pool: SequencePool,
@@ -409,13 +292,6 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
     ) -> DistanceMatrix:
         """Numba fast path: batch-extract data then run the parallel kernel.
 
-        Delegates feature extraction to the entity metric's
-        :meth:`prepare_batch_data`, then calls the Numba kernel.
-        The first call triggers JIT compilation; subsequent calls
-        reuse the compiled binary.
-
-        Undefined distances produce ``nan``.
-
         Args:
             pool:        Sequence pool.
             storage:     Optional :class:`~tanat.metric.StorageOptions`.
@@ -427,87 +303,22 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
             A  :class:`DistanceMatrix` of shape ``(n, n)``.
         """
         em = self.entity_metric
-        arrays, lengths, context = em.prepare_batch_data(pool)
-
         agg_kernel = self._get_agg_fn(numba=True)
-
         padding = (
             np.float32(self.settings.padding_penalty)
             if self.settings.padding_penalty is not None
             else np.float32(np.nan)
         )
-
-        n = len(arrays)
-
-        if result is None:
-            # --- In-memory path ---
-            result = np.full((n, n), np.nan, dtype=np.float32)
-            compute_matrix_kernel(
-                result,
-                arrays,
-                lengths,
-                arrays,
-                lengths,
-                em.distance_kernel,
-                context,
-                agg_kernel,
-                padding,
-                em.IS_SYMMETRIC,
-            )
-            return DistanceMatrix(result, pool.unique_ids)
-
-        # --- Memmap + chunks path ---
-        chunk_size = storage.chunk_size
-        chunks = list(range(0, n, chunk_size))
-        total_chunks = len(chunks)
-
-        with self._create_progress_bar(total=total_chunks, desc="Chunks") as pbar:
-            for chunk_idx, chunk_start in enumerate(chunks):
-                chunk_end = min(chunk_start + chunk_size, n)
-
-                if is_resuming and chunk_idx < completed:
-                    pbar.update(1)
-                    continue
-
-                if em.IS_SYMMETRIC:
-                    compute_matrix_chunk(
-                        result,
-                        chunk_start,
-                        chunk_end,
-                        arrays,
-                        lengths,
-                        arrays,
-                        lengths,
-                        em.distance_kernel,
-                        context,
-                        agg_kernel,
-                        padding,
-                        True,
-                    )
-                else:
-                    compute_matrix_chunk(
-                        result,
-                        chunk_start,
-                        chunk_end,
-                        arrays,
-                        lengths,
-                        arrays,
-                        lengths,
-                        em.distance_kernel,
-                        context,
-                        agg_kernel,
-                        padding,
-                        False,
-                    )
-
-                result.flush()
-                completed += 1
-                save_progress(storage, completed, status="computing")
-                pbar.update(1)
-
-        result.flush()
-        save_progress(storage, completed, status="complete")
-        return DistanceMatrix(result, pool.unique_ids)
+        return self._run_numba_matrix(
+            pool,
+            compute_pairwise_matrix,
+            (agg_kernel, padding),
+            storage=storage,
+            result=result,
+            is_resuming=is_resuming,
+            completed=completed,
+            symmetric=em.IS_SYMMETRIC,
+        )
 
     def _compute_pair(
         self,
