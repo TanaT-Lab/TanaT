@@ -101,6 +101,69 @@ class TestComputeMatrix:
         assert snapshot == dm.to_frame("polars").with_columns(pl.exclude("id").round(4))
 
 
+class TestComputeCrossMatrix:
+    def test_cross_matrix_shape_and_dtype(self, cat_pool) -> None:
+        chi2 = Chi2SequenceMetric(entity_feature="status")
+        rows = cat_pool.subset(cat_pool.unique_ids[:4])
+        cols = cat_pool.subset(cat_pool.unique_ids[4:7])
+
+        result = chi2.compute_cross_matrix(rows, cols)
+
+        assert result.shape == (len(rows), len(cols))
+        assert result.dtype == np.float32
+
+    def test_consistency_single_pair_vs_cross_matrix(self, cat_pool) -> None:
+        chi2 = Chi2SequenceMetric(entity_feature="status")
+        rows = cat_pool.subset(cat_pool.unique_ids[:3])
+        cols = cat_pool.subset(cat_pool.unique_ids[3:5])
+        result = chi2.compute_cross_matrix(rows, cols)
+
+        for i, id_r in enumerate(rows.unique_ids):
+            for j, id_c in enumerate(cols.unique_ids):
+                expected = chi2(rows[id_r], cols[id_c])
+                assert result[i, j] == pytest.approx(expected, abs=1e-5)
+
+    def test_same_pool_matches_compute_matrix(self, cat_pool) -> None:
+        chi2 = Chi2SequenceMetric(entity_feature="status")
+        sub = cat_pool.subset(cat_pool.unique_ids[:4])
+
+        cross = chi2.compute_cross_matrix(sub, sub)
+        matrix = chi2.compute_matrix(sub).to_numpy()
+
+        np.testing.assert_allclose(cross, matrix, atol=1e-5)
+
+    def test_cross_matrix_with_pool_specific_categories(self, mixed_cat_pool) -> None:
+        chi2 = Chi2SequenceMetric(entity_feature="status")
+        rows = mixed_cat_pool.subset(["seq_1"])
+        cols = mixed_cat_pool.subset(["seq_2"])
+
+        result = chi2.compute_cross_matrix(rows, cols)
+
+        assert result.shape == (1, 1)
+        assert result[0, 0] == pytest.approx(
+            chi2(rows["seq_1"], cols["seq_2"]), abs=1e-5
+        )
+
+    def test_cross_matrix_mixed_empty_sequences(self, mixed_cat_pool) -> None:
+        chi2 = Chi2SequenceMetric(entity_feature="status")
+        rows = mixed_cat_pool.subset(["empty_1", "seq_1"])
+        cols = mixed_cat_pool.subset(["empty_2", "seq_2"])
+        result = chi2.compute_cross_matrix(rows, cols)
+
+        row_empty = rows.unique_ids.index("empty_1")
+        row_non_empty = rows.unique_ids.index("seq_1")
+        col_empty = cols.unique_ids.index("empty_2")
+        col_non_empty = cols.unique_ids.index("seq_2")
+
+        assert result[row_empty, col_empty] == pytest.approx(0.0)
+        assert result[row_empty, col_non_empty] == pytest.approx(1.0)
+        assert result[row_non_empty, col_empty] == pytest.approx(1.0)
+        assert result[row_non_empty, col_non_empty] == pytest.approx(
+            chi2(rows["seq_1"], cols["seq_2"]),
+            abs=1e-5,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Settings
 # ---------------------------------------------------------------------------
