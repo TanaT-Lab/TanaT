@@ -13,6 +13,8 @@ information about classes, methods, parameters, and return types.
    manipulation
    zeroing
    metadata
+   metrics
+   clustering
    api/index
 
 What's in this section?
@@ -40,6 +42,16 @@ What's in this section?
    time index inspection, and all ``cast_*`` methods available on sequence and
    trajectory pools.
 
+:doc:`metrics`
+   Hierarchical composition model (EntityMetric → SequenceMetric → TrajectoryMetric),
+   all available metrics by category.
+
+:doc:`clustering`
+   Available clustering algorithms (Hierarchical, PAM, CLARA), complexity classes,
+   characteristics, and practical usage notes.
+
 :doc:`api/index`
    Complete API reference automatically generated from source code.
    Browse by module to find all available classes, functions, and their signatures.
+
+
