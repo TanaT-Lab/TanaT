@@ -21,6 +21,7 @@ from tanat_utils.pretty_format import (
 from ..sequence.base.sequence import Sequence
 from ..store.trajectory.store import TrajectoryStore
 from ..core import registry as _registry
+from ..core.format import resolve_fmt, to_pandas
 from ..zeroing import T0Setter, T0Value, _T0, _T0_NEAREST_RANK
 from .cast import TrajectoryCastRecipe
 from .settings import TrajectorySettings
@@ -395,20 +396,28 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
     def static_data(
         self,
         features: list[str] | str | None = None,
-        output_format: Literal["pandas", "polars"] = "pandas",
+        fmt: Literal["pandas", "polars"] = "pandas",
+        use_arrow: bool = True,
     ) -> pl.DataFrame | pd.DataFrame | None:
-        """Returns trajectory-level static data for this trajectory only."""
+        """Return trajectory-level static data for this trajectory only.
+
+        Args:
+            features: Static feature name(s) to include.
+                ``None`` -> all visible static features.
+            fmt: ``"pandas"`` *(default)* or ``"polars"``.
+            use_arrow: Use Arrow extension arrays for polars -> pandas conversion.
+
+        Returns:
+            One-row DataFrame with ``[id, feature...]`` or ``None`` when no
+            static features are available in the current view.
+        """
+        fmt = resolve_fmt(fmt, allowed=("pandas", "polars"), default="pandas")
         df = self._static_data_raw(features)
         if df is None:
             return None
-        if output_format == "polars":
+        if fmt == "polars":
             return df
-        if output_format == "pandas":
-            return df.to_pandas()
-        raise ValueError(
-            f"Invalid output_format {output_format!r}. "
-            "Expected one of: 'pandas', 'polars'."
-        )
+        return to_pandas(df, use_arrow=use_arrow)
 
     # ------------------------------------------------------------------
     # Describe
@@ -431,7 +440,7 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
         """
         frames: list[pl.DataFrame] = []
         for alias, seq in self.items():
-            per_seq: pl.DataFrame = seq.describe(output_format="polars")
+            per_seq: pl.DataFrame = seq.describe(fmt="polars")
             renamed = {c: f"{alias}{separator}{c}" for c in per_seq.columns}
             frames.append(per_seq.rename(renamed))
 
@@ -446,7 +455,8 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
     def describe(
         self,
         separator: str = "_",
-        output_format: Literal["pandas", "polars"] = "pandas",
+        fmt: Literal["pandas", "polars"] = "pandas",
+        use_arrow: bool = True,
     ) -> pd.DataFrame | pl.DataFrame:
         """Compute summary statistics for this single trajectory.
 
@@ -456,7 +466,8 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
 
         Args:
             separator: Separator between alias and metric name (default ``_``).
-            output_format: ``"pandas"`` *(default)* or ``"polars"``.
+            fmt: ``"pandas"`` *(default)* or ``"polars"``.
+            use_arrow: Use Arrow extension arrays for polars -> pandas conversion.
 
         Returns:
             Single-row DataFrame with columns
@@ -466,14 +477,10 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
 
             traj = traj_pool[42]
             traj.describe()
-            traj.describe(separator=".", output_format="polars")
+            traj.describe(separator=".", fmt="polars")
         """
+        fmt = resolve_fmt(fmt, allowed=("pandas", "polars"), default="pandas")
         result = self._describe_result(separator)
-        if output_format == "polars":
+        if fmt == "polars":
             return result
-        if output_format == "pandas":
-            return result.to_pandas()
-        raise ValueError(
-            f"Invalid output_format {output_format!r}. "
-            "Expected one of: 'pandas', 'polars'."
-        )
+        return to_pandas(result, use_arrow=use_arrow)

@@ -22,6 +22,7 @@ from tanat_utils.pretty_format import (
 from .entity import Entity
 from .cast import SequenceCastRecipe
 from .view_mixin import SequenceViewMixin
+from ...core.format import resolve_fmt, to_pandas
 from ...zeroing import T0Setter, _T0, _T0_NEAREST_RANK, T0Value
 
 if TYPE_CHECKING:
@@ -400,7 +401,8 @@ class Sequence(
     def temporal_data(
         self,
         features: list[str] | str | None = None,
-        output_format: Literal["pandas", "polars"] = "pandas",
+        fmt: Literal["pandas", "polars"] = "pandas",
+        use_arrow: bool = True,
     ) -> pd.DataFrame | pl.DataFrame:
         """Return temporal data for this sequence.
 
@@ -413,7 +415,8 @@ class Sequence(
         Args:
             features: Entity feature name(s) to include.
                 ``None`` → all entity features.
-            output_format: ``"pandas"`` (default) or ``"polars"``.
+            fmt: ``"pandas"`` (default) or ``"polars"``.
+            use_arrow: Use Arrow extension arrays for polars -> pandas conversion.
 
         Returns:
             DataFrame with columns ``[id, temporal…, feature…]`` scoped to
@@ -424,29 +427,27 @@ class Sequence(
             seq = pool[42]
             df = seq.temporal_data()                    # pandas, all features
             df = seq.temporal_data("heart_rate")        # single feature
-            df = seq.temporal_data(output_format="polars")
+            df = seq.temporal_data(fmt="polars")
         """
+        fmt = resolve_fmt(fmt, allowed=("pandas", "polars"), default="pandas")
         df = self._temporal_data_df(features)
-        if output_format == "polars":
+        if fmt == "polars":
             return df
-        if output_format == "pandas":
-            return df.to_pandas()
-        raise ValueError(
-            f"Invalid output_format {output_format!r}. "
-            "Expected one of: 'pandas', 'polars'."
-        )
+        return to_pandas(df, use_arrow=use_arrow)
 
     def static_data(
         self,
         features: list[str] | str | None = None,
-        output_format: Literal["pandas", "polars"] = "pandas",
+        fmt: Literal["pandas", "polars"] = "pandas",
+        use_arrow: bool = True,
     ) -> pl.DataFrame | pd.DataFrame | None:
         """
         Return static (non-temporal) data for this sequence.
 
         Args:
             features: Feature name(s) to include (``None`` -> all).
-            output_format: ``"pandas"`` (default) or ``"polars"``.
+            fmt: ``"pandas"`` (default) or ``"polars"``.
+            use_arrow: Use Arrow extension arrays for polars -> pandas conversion.
 
         Returns:
             Single-row DataFrame with columns ``[id, feature…]``.
@@ -458,24 +459,21 @@ class Sequence(
             row = seq.static_data()               # pandas, all static features
             row = seq.static_data("age", "sex")   # subset
         """
+        fmt = resolve_fmt(fmt, allowed=("pandas", "polars"), default="pandas")
         df = self._static_data_df(features)
         if df is None:
             return None
-        if output_format == "polars":
+        if fmt == "polars":
             return df
-        if output_format == "pandas":
-            return df.to_pandas()
-        raise ValueError(
-            f"Invalid output_format {output_format!r}. "
-            "Expected one of: 'pandas', 'polars'."
-        )
+        return to_pandas(df, use_arrow=use_arrow)
 
     def apply(
         self,
         exprs: pl.Expr | list[pl.Expr],
         is_static: bool = False,
         *,
-        output_format: Literal["pandas", "polars"] = "pandas",
+        fmt: Literal["pandas", "polars"] = "pandas",
+        use_arrow: bool = True,
     ) -> pd.DataFrame | pl.DataFrame:
         """
         Evaluates Polars expressions against this sequence's features.
@@ -492,7 +490,8 @@ class Sequence(
             exprs: One or more Polars expressions producing new columns.
                 Each must use ``.alias()`` to name the output.
             is_static: Whether to read static or entity features.
-
+            fmt: ``"pandas"`` *(default)* or ``"polars"``.
+            use_arrow: Use Arrow extension arrays for polars -> pandas conversion.
 
         Returns:
             The computed columns for this sequence only.
@@ -517,6 +516,7 @@ class Sequence(
             ``Pool.add_entity_features``: Persist entity features.
             ``Pool.add_static_features``: Persist static features.
         """
+        fmt = resolve_fmt(fmt, allowed=("pandas", "polars"), default="pandas")
         if isinstance(exprs, pl.Expr):
             exprs = [exprs]
 
@@ -530,16 +530,9 @@ class Sequence(
         lf = self._rename_columns(lf, is_static=is_static)
         lf = lf.select(exprs)
 
-        if output_format == "polars":
+        if fmt == "polars":
             return lf.collect()
-
-        if output_format == "pandas":
-            return lf.collect().to_pandas()
-
-        raise ValueError(
-            f"Invalid output_format {output_format!r}. "
-            "Expected one of: 'pandas', 'polars'."
-        )
+        return to_pandas(lf.collect(), use_arrow=use_arrow)
 
     # ------------------------------------------------------------------
     # Describe
@@ -559,16 +552,18 @@ class Sequence(
     @Cachable.cached_method()
     def _describe_result(self) -> pl.DataFrame:
         """Compute the describe result as a Polars DataFrame (cached)."""
-        return self.apply(self._describe_exprs(), output_format="polars")
+        return self.apply(self._describe_exprs(), fmt="polars")
 
     def describe(
         self,
-        output_format: Literal["pandas", "polars"] = "pandas",
+        fmt: Literal["pandas", "polars"] = "pandas",
+        use_arrow: bool = True,
     ) -> pl.DataFrame | pd.DataFrame:
         """Compute summary statistics for this single sequence.
 
         Args:
-            output_format: ``"pandas"`` *(default)* or ``"polars"``.
+            fmt: ``"pandas"`` *(default)* or ``"polars"``.
+            use_arrow: Use Arrow extension arrays for polars -> pandas conversion.
 
         Returns:
             Single-row DataFrame with columns
@@ -578,14 +573,10 @@ class Sequence(
 
             seq = pool[42]
             seq.describe()
-            seq.describe(output_format="polars")
+            seq.describe(fmt="polars")
         """
+        fmt = resolve_fmt(fmt, allowed=("pandas", "polars"), default="pandas")
         result = self._describe_result()
-        if output_format == "polars":
+        if fmt == "polars":
             return result
-        if output_format == "pandas":
-            return result.to_pandas()
-        raise ValueError(
-            f"Invalid output_format {output_format!r}. "
-            "Expected one of: 'pandas', 'polars'."
-        )
+        return to_pandas(result, use_arrow=use_arrow)

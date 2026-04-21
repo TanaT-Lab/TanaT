@@ -55,7 +55,7 @@ def build_trajectories(
         tpool = build_trajectories(
             pools={"admissions": adm_pool, "procedures": proc_pool},
         )
-        tpool[tpool.unique_ids[0]]["admissions"].temporal_data(output_format="polars")
+        tpool[tpool.unique_ids[0]]["admissions"].temporal_data(fmt="polars")
     """
     if static_data is not None and id_column is None:
         raise ValueError(

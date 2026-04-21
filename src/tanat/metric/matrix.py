@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import polars as pl
 
+from ..core.format import resolve_fmt
 from ..core.path import resolve_path
 
 
@@ -76,12 +77,12 @@ class DistanceMatrix:
     # ------------------------------------------------------------------
 
     def to_frame(
-        self, output_format: Literal["pandas", "polars"] = "pandas"
+        self, fmt: Literal["pandas", "polars"] = "pandas"
     ) -> pd.DataFrame | pl.DataFrame:
         """Return a labelled dataframe with IDs as index/columns.
 
         Args:
-            output_format: ``"pandas"`` (default) returns a
+            fmt: ``"pandas"`` (default) returns a
                 :class:`pandas.DataFrame`; ``"polars"`` returns a
                 :class:`polars.DataFrame` with an extra ``"id"`` column
                 (Polars has no row index).
@@ -90,17 +91,14 @@ class DistanceMatrix:
             Square dataframe of shape ``(n, n)``.
 
         Raises:
-            ValueError: If *output_format* is not ``"pandas"`` or ``"polars"``.
+            ValueError: If *fmt* is not ``"pandas"`` or ``"polars"``.
         """
-        if output_format == "pandas":
-            return pd.DataFrame(self._data, index=self._ids, columns=self._ids)
-        if output_format == "polars":
+        fmt = resolve_fmt(fmt, allowed=("pandas", "polars"), default="pandas")
+        if fmt == "polars":
             return pl.DataFrame(
                 self._data, schema=[str(i) for i in self._ids]
             ).insert_column(0, pl.Series("id", self._ids))
-        raise ValueError(
-            f"Unknown output_format '{output_format}'. Expected 'pandas' or 'polars'."
-        )
+        return pd.DataFrame(self._data, index=self._ids, columns=self._ids)
 
     def to_numpy(self) -> np.ndarray:
         """Return the underlying numpy array.

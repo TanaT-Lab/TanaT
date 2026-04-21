@@ -105,6 +105,6 @@ class FeatureT0Setter(T0Setter, register_name="feature"):
                 "to align the feature dtype before calling set_t0()."
             )
 
-        static_df = target.static_data(features=[feature], output_format="polars")
+        static_df = target.static_data(features=[feature], fmt="polars")
         partial_lf = static_df.lazy().select(id_col, pl.col(feature).alias(_T0))
         return self._finalize(partial_lf, target._id_lf, id_col)

@@ -78,7 +78,7 @@ def build_events(
     Examples::
 
         pool = build_events(df, id_column="patient", time_column="date")
-        pool.temporal_data(output_format="polars").head()
+        pool.temporal_data(fmt="polars").head()
     """
     structural = {id_column, time_column}
     validate_required_columns(temporal_data, required=structural)
@@ -135,7 +135,7 @@ def build_intervals(
         pool = build_intervals(
             df, id_column="id", start_column="start", end_column="end",
         )
-        pool.temporal_data(output_format="polars").head()
+        pool.temporal_data(fmt="polars").head()
     """
     structural = {id_column, start_column, end_column}
     validate_required_columns(temporal_data, required=structural)
@@ -198,7 +198,7 @@ def build_states(
     Examples::
 
         pool = build_states(df, id_column="id", start_column="start")
-        pool.temporal_data(output_format="polars").head()
+        pool.temporal_data(fmt="polars").head()
     """
     required = {id_column, start_column}
     if end_column is not None:

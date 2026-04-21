@@ -28,6 +28,7 @@ from tanat_utils.pretty_format import (
 )
 
 from ...core.path import resolve_path
+from ...core.format import resolve_fmt, to_pandas
 from ...core import registry as _registry
 from ...store.base.utils import normalise_to_lazyframe, check_no_reserved_names
 from ...store.sequence.builder.base import SequenceStoreBuilder
@@ -413,7 +414,8 @@ class SequencePool(
 
     def t0_data(
         self,
-        output_format: Literal["pandas", "polars"] = "pandas",
+        fmt: Literal["pandas", "polars"] = "pandas",
+        use_arrow: bool = True,
     ) -> pd.DataFrame | pl.DataFrame:
         """Return the T0 table for the sequences visible in this pool view.
 
@@ -421,7 +423,8 @@ class SequencePool(
         conversion.
 
         Args:
-            output_format: ``"pandas"`` (default) or ``"polars"``.
+            fmt: ``"pandas"`` (default) or ``"polars"``.
+            use_arrow: Use Arrow extension arrays for polars -> pandas conversion.
 
         Returns:
             DataFrame with columns ``[id_col, _T0_, _T0_NEAREST_RANK_]``,
@@ -431,17 +434,13 @@ class SequencePool(
 
             pool.set_t0(position=0, anchor="start")
             df = pool.t0_data()
-            df_pl = pool.t0_data(output_format="polars")
+            df_pl = pool.t0_data(fmt="polars")
         """
+        fmt = resolve_fmt(fmt, allowed=("pandas", "polars"), default="pandas")
         df = self._get_t0_df()
-        if output_format == "polars":
+        if fmt == "polars":
             return df
-        if output_format == "pandas":
-            return df.to_pandas()
-        raise ValueError(
-            f"Invalid output_format {output_format!r}. "
-            "Expected one of: 'pandas', 'polars'."
-        )
+        return to_pandas(df, use_arrow=use_arrow)
 
     def set_t0(
         self,
@@ -686,7 +685,8 @@ class SequencePool(
     def temporal_data(
         self,
         features: list[str] | str | None = None,
-        output_format: Literal["pandas", "polars"] = "pandas",
+        fmt: Literal["pandas", "polars"] = "pandas",
+        use_arrow: bool = True,
     ) -> pd.DataFrame | pl.DataFrame:
         """Return temporal data for all sequences visible in this pool.
 
@@ -699,7 +699,8 @@ class SequencePool(
         Args:
             features: Entity feature name(s) to include.
                 ``None`` → all entity features.
-            output_format: ``"pandas"`` (default) or ``"polars"``.
+            fmt: ``"pandas"`` (default) or ``"polars"``.
+            use_arrow: Use Arrow extension arrays for polars -> pandas conversion.
 
         Returns:
             Long-format DataFrame with columns ``[id, temporal…, feature…]``
@@ -709,24 +710,21 @@ class SequencePool(
 
             df = pool.temporal_data()                    # pandas, all features
             df = pool.temporal_data("heart_rate")        # single feature
-            df = pool.temporal_data(["a", "b"], output_format="polars")
+            df = pool.temporal_data(["a", "b"], fmt="polars")
             # Restrict to a subset of IDs:
             df = pool.subset([1, 2, 3]).temporal_data()
         """
+        fmt = resolve_fmt(fmt, allowed=("pandas", "polars"), default="pandas")
         df = self._temporal_data_df(features)
-        if output_format == "polars":
+        if fmt == "polars":
             return df
-        if output_format == "pandas":
-            return df.to_pandas()
-        raise ValueError(
-            f"Invalid output_format {output_format!r}. "
-            "Expected one of: 'pandas', 'polars'."
-        )
+        return to_pandas(df, use_arrow=use_arrow)
 
     def static_data(
         self,
         features: list[str] | str | None = None,
-        output_format: Literal["pandas", "polars"] = "pandas",
+        fmt: Literal["pandas", "polars"] = "pandas",
+        use_arrow: bool = True,
     ) -> pd.DataFrame | pl.DataFrame | None:
         """
         Return static (non-temporal) data for all sequences in this pool.
@@ -734,7 +732,8 @@ class SequencePool(
         Args:
             features: Feature name(s) to include (``None`` -> all static
                 features).
-            output_format: ``"pandas"`` (default) or ``"polars"``.
+            fmt: ``"pandas"`` (default) or ``"polars"``.
+            use_arrow: Use Arrow extension arrays for polars -> pandas conversion.
 
         Returns:
             One-row-per-sequence DataFrame with columns ``[id, feature...]``.
@@ -746,17 +745,13 @@ class SequencePool(
             df = pool.static_data(["age", "sex"]) # subset
             df = pool.subset([1, 2, 3]).static_data()
         """
+        fmt = resolve_fmt(fmt, allowed=("pandas", "polars"), default="pandas")
         df = self._static_data_df(features)
         if df is None:
             return None
-        if output_format == "polars":
+        if fmt == "polars":
             return df
-        if output_format == "pandas":
-            return df.to_pandas()
-        raise ValueError(
-            f"Invalid output_format {output_format!r}. "
-            "Expected one of: 'pandas', 'polars'."
-        )
+        return to_pandas(df, use_arrow=use_arrow)
 
     # ------------------------------------------------------------------
     # Feature engineering
@@ -907,7 +902,8 @@ class SequencePool(
         is_static: bool = False,
         *,
         by_id: bool = False,
-        output_format: Literal["pandas", "polars"] = "pandas",
+        fmt: Literal["pandas", "polars"] = "pandas",
+        use_arrow: bool = True,
     ) -> pd.DataFrame | pl.DataFrame:
         """Evaluate Polars expressions against the current features.
 
@@ -927,7 +923,7 @@ class SequencePool(
                 (``group_by`` on the sequence ID). Only valid for entity
                 features (``is_static=False``).  The ID column is included in
                 the result.
-            output_format: Format of the returned object. One of:
+            fmt: Format of the returned object. One of:
 
                 - ``"pandas"`` *(default)*: returns a :class:`pandas.DataFrame`.
                 - ``"polars"``: returns a :class:`polars.DataFrame`.
@@ -971,6 +967,7 @@ class SequencePool(
                 )
                 pool.add_entity_features(normed)
         """
+        fmt = resolve_fmt(fmt, allowed=("pandas", "polars"), default="pandas")
         if isinstance(exprs, pl.Expr):
             exprs = [exprs]
 
@@ -999,16 +996,9 @@ class SequencePool(
         else:
             result_lf = lf.select(exprs)
 
-        if output_format == "polars":
+        if fmt == "polars":
             return result_lf.collect()
-
-        if output_format == "pandas":
-            return result_lf.collect().to_pandas()
-
-        raise ValueError(
-            f"Invalid output_format {output_format!r}. "
-            "Expected one of: 'pandas', 'polars'."
-        )
+        return to_pandas(result_lf.collect(), use_arrow=use_arrow)
 
     def to_dummies(
         self,
@@ -1016,7 +1006,8 @@ class SequencePool(
         is_static: bool = False,
         *,
         drop_first: bool = False,
-        output_format: Literal["pandas", "polars"] = "pandas",
+        fmt: Literal["pandas", "polars"] = "pandas",
+        use_arrow: bool = True,
     ) -> pd.DataFrame | pl.DataFrame:
         """
         One-hot encode categorical features.
@@ -1033,7 +1024,7 @@ class SequencePool(
             is_static: Whether these are static or entity features.
             drop_first: Drop the first category column to avoid
                 multicollinearity (useful for linear models).
-            output_format: Format of the returned object. One of:
+            fmt: Format of the returned object. One of:
                 - ``"pandas"`` *(default)*: returns a :class:`pandas.DataFrame`.
                 - ``"polars"``: returns a :class:`polars.DataFrame`.
 
@@ -1054,6 +1045,7 @@ class SequencePool(
 
                 X = pool.to_dummies("group", is_static=True, drop_first=True)
         """
+        fmt = resolve_fmt(fmt, allowed=("pandas", "polars"), default="pandas")
         if isinstance(features, str):
             features = [features]
 
@@ -1073,22 +1065,15 @@ class SequencePool(
             )
 
         if is_static:
-            df = self.static_data(features=valid, output_format="polars")
+            df = self.static_data(features=valid, fmt="polars")
         else:
-            df = self.temporal_data(features=valid, output_format="polars")
+            df = self.temporal_data(features=valid, fmt="polars")
 
         result = df.to_dummies(columns=valid, drop_first=drop_first)
 
-        if output_format == "polars":
+        if fmt == "polars":
             return result
-
-        if output_format == "pandas":
-            return result.to_pandas()
-
-        raise ValueError(
-            f"Invalid output_format {output_format!r}. "
-            "Expected one of: 'pandas', 'polars'."
-        )
+        return to_pandas(result, use_arrow=use_arrow)
 
     # ------------------------------------------------------------------
     # Describe
@@ -1102,7 +1087,7 @@ class SequencePool(
     def _describe_result(self) -> pl.DataFrame:
         """Compute the per-ID describe result as a Polars DataFrame (cached)."""
         result: pl.DataFrame = self.apply(
-            self._describe_exprs(), by_id=True, output_format="polars"
+            self._describe_exprs(), by_id=True, fmt="polars"
         )
 
         # IDs that appear in the pool index but have no data rows are absent
@@ -1119,7 +1104,8 @@ class SequencePool(
         self,
         by_id: bool = True,
         add_to_static: bool = False,
-        output_format: Literal["pandas", "polars"] = "pandas",
+        fmt: Literal["pandas", "polars"] = "pandas",
+        use_arrow: bool = True,
     ) -> pd.DataFrame | pl.DataFrame:
         """Compute summary statistics for every sequence in the pool.
 
@@ -1131,8 +1117,9 @@ class SequencePool(
             add_to_static: If ``True``, write the per-ID result to the
                 static-feature store via :meth:`add_static_features`.
                 Ignored (with a warning) when ``by_id=False``.
-            output_format: ``"pandas"`` *(default)* or ``"polars"``.
+            fmt: ``"pandas"`` *(default)* or ``"polars"``.
                 Ignored when ``by_id=False`` (always pandas).
+            use_arrow: Use Arrow extension arrays for polars -> pandas conversion.
 
         Returns:
             - ``by_id=True``: DataFrame with one row per sequence ID.
@@ -1142,10 +1129,11 @@ class SequencePool(
         Examples::
 
             pool.describe()                          # one row per ID, pandas
-            pool.describe(output_format="polars")    # same, polars
+            pool.describe(fmt="polars")    # same, polars
             pool.describe(by_id=False)               # cross-ID stats
             pool.describe(add_to_static=True)        # persist as static cols
         """
+        fmt = resolve_fmt(fmt, allowed=("pandas", "polars"), default="pandas")
         result = self._describe_result()
 
         if add_to_static:
@@ -1160,16 +1148,13 @@ class SequencePool(
                 self.add_static_features(result)
 
         if not by_id:
-            return result.drop(self.settings.id_column).to_pandas().describe()
+            return to_pandas(
+                result.drop(self.settings.id_column), use_arrow=use_arrow
+            ).describe()
 
-        if output_format == "polars":
+        if fmt == "polars":
             return result
-        if output_format == "pandas":
-            return result.to_pandas()
-        raise ValueError(
-            f"Invalid output_format {output_format!r}. "
-            "Expected one of: 'pandas', 'polars'."
-        )
+        return to_pandas(result, use_arrow=use_arrow)
 
     # ------------------------------------------------------------------
     # Mutations
@@ -1536,7 +1521,7 @@ class SequencePool(
             feature columns to project onto the grid.
         """
         if ohe:
-            frame = self.to_dummies(features, output_format="polars")
+            frame = self.to_dummies(features, fmt="polars")
             temporal_set = set(time_cols)
             feat_cols = [
                 c for c in frame.columns if c != id_col and c not in temporal_set
@@ -1741,7 +1726,8 @@ class SequencePool(
         fill_value: Any = None,
         overlap_rule: str = "first",
         ohe: bool = False,
-        output_format: Literal["pandas", "polars", "numpy"] = "pandas",
+        fmt: Literal["pandas", "polars", "numpy"] = "pandas",
+        use_arrow: bool = True,
         bin_col: str = "__bin__",
     ) -> pd.DataFrame | np.ndarray | pl.DataFrame:
         """
@@ -1784,7 +1770,7 @@ class SequencePool(
                 Binary (0/1) indicator columns are then aggregated per bin via
                 *overlap_rule* (e.g. ``"max"`` = presence, ``"sum"`` = count).
             fill_value: Value to fill empty bins (default ``None`` keeps nulls).
-            output_format: Format of the returned object:
+            fmt: Format of the returned object:
 
                 - ``"pandas"`` *(default)*: :class:`pandas.DataFrame` in
                   **long** format - ``(N × M)`` rows with columns
@@ -1802,6 +1788,7 @@ class SequencePool(
         Returns:
             Grid-aligned data in the requested format.
         """
+        fmt = resolve_fmt(fmt, allowed=("pandas", "polars", "numpy"), default="pandas")
         valid_features, time_cols, id_col = self._validate_discretize_inputs(
             features, overlap_rule
         )
@@ -1832,21 +1819,14 @@ class SequencePool(
             bin_col=bin_col,
         )
 
-        if output_format == "numpy":
+        if fmt == "numpy":
             feat_cols_out = [c for c in df.columns if c not in {id_col, bin_col}]
             arr = df.select(feat_cols_out).to_numpy()  # (N*M, K)
             return arr.reshape(len(self.unique_ids), n_bins, len(feat_cols_out))
 
-        if output_format == "polars":
+        if fmt == "polars":
             return df
-
-        if output_format == "pandas":
-            return df.to_pandas()
-
-        raise ValueError(
-            f"Invalid output_format {output_format!r}. "
-            "Expected one of: 'pandas', 'polars', 'numpy'."
-        )
+        return to_pandas(df, use_arrow=use_arrow)
 
     # ------------------------------------------------------------------
     # Extend

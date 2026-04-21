@@ -29,6 +29,7 @@ from tanat_utils.pretty_format import (
 from ..store.trajectory.builder import TrajectoryStoreBuilder
 from ..store.trajectory.schema import TrajectorySchema as TSCH
 from ..core.path import resolve_path
+from ..core.format import resolve_fmt, to_pandas
 from ..sequence.base.pool import BinSize, SequencePool
 from ..sequence.base._utils import merge_optional_frames, resolve_ids_to_add
 from ..core import registry as _registry
@@ -585,29 +586,30 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
     def static_data(
         self,
         features: list[str] | str | None = None,
-        output_format: Literal["pandas", "polars"] = "pandas",
+        fmt: Literal["pandas", "polars"] = "pandas",
+        use_arrow: bool = True,
     ) -> pl.DataFrame | pd.DataFrame | None:
-        """
-        Returns trajectory-level static data.
+        """Return trajectory-level static data for visible trajectories.
 
-        Merges physical features (from ``static_features.arrow``)
-        and virtual features (from the virtual context) via
-        horizontal concatenation.  Only features listed in the
-        current settings are returned.
+        Args:
+            features: Static feature name(s) to include.
+                ``None`` -> all visible static features.
+            fmt: ``"pandas"`` *(default)* or ``"polars"``.
+            use_arrow: Use Arrow extension arrays for polars -> pandas conversion.
+
+        Returns:
+            One-row-per-trajectory DataFrame with columns ``[id, feature...]``.
+            ``None`` when no static features are exposed by this pool view.
 
         To restrict to a subset of IDs, use ``pool.subset(ids).static_data()``.
         """
+        fmt = resolve_fmt(fmt, allowed=("pandas", "polars"), default="pandas")
         df = self._static_data_raw(features)
         if df is None:
             return None
-        if output_format == "polars":
+        if fmt == "polars":
             return df
-        if output_format == "pandas":
-            return df.to_pandas()
-        raise ValueError(
-            f"Invalid output_format {output_format!r}. "
-            "Expected one of: 'pandas', 'polars'."
-        )
+        return to_pandas(df, use_arrow=use_arrow)
 
     # ------------------------------------------------------------------
     # Mutations
@@ -707,7 +709,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
 
         frames: list[pl.DataFrame] = []
         for alias, seq_pool in pools.items():
-            per_id: pl.DataFrame = seq_pool.describe(by_id=True, output_format="polars")
+            per_id: pl.DataFrame = seq_pool.describe(by_id=True, fmt="polars")
             # Rename metrics with alias prefix; keep the id column unchanged.
             metric_cols = [
                 c for c in per_id.columns if c != seq_pool.settings.id_column
@@ -738,7 +740,8 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         by_id: bool = True,
         add_to_static: bool = False,
         separator: str = "_",
-        output_format: Literal["pandas", "polars"] = "pandas",
+        fmt: Literal["pandas", "polars"] = "pandas",
+        use_arrow: bool = True,
     ) -> pd.DataFrame | pl.DataFrame:
         """Compute summary statistics across all sequences and all trajectories.
 
@@ -749,7 +752,8 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
                 :meth:`add_static_features`.  Ignored (with a warning) when
                 ``by_id=False``.
             separator: Separator between alias and metric name (default ``_``).
-            output_format: ``"pandas"`` *(default)* or ``"polars"``.
+            fmt: ``"pandas"`` *(default)* or ``"polars"``.
+            use_arrow: Use Arrow extension arrays for polars -> pandas conversion.
 
         Returns:
             DataFrame with columns
@@ -762,6 +766,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             traj_pool.describe(by_id=False)
             traj_pool.describe(add_to_static=True)
         """
+        fmt = resolve_fmt(fmt, allowed=("pandas", "polars"), default="pandas")
         result = self._describe_result(separator)
 
         if add_to_static:
@@ -777,16 +782,11 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
 
         if not by_id:
             numeric = result.drop(self.settings.id_column)
-            return numeric.to_pandas().describe()
+            return to_pandas(numeric, use_arrow=use_arrow).describe()
 
-        if output_format == "polars":
+        if fmt == "polars":
             return result
-        if output_format == "pandas":
-            return result.to_pandas()
-        raise ValueError(
-            f"Invalid output_format {output_format!r}. "
-            "Expected one of: 'pandas', 'polars'."
-        )
+        return to_pandas(result, use_arrow=use_arrow)
 
     # ------------------------------------------------------------------
     # T0 / Zeroing
@@ -974,7 +974,8 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
 
     def t0_data(
         self,
-        output_format: Literal["pandas", "polars"] = "pandas",
+        fmt: Literal["pandas", "polars"] = "pandas",
+        use_arrow: bool = True,
     ) -> pl.DataFrame | pd.DataFrame:
         """Return the T0 table for all visible trajectories.
 
@@ -983,20 +984,17 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         depends on the alias-specific temporal index.
 
         Args:
-            output_format: ``"pandas"`` (default) or ``"polars"``.
+            fmt: ``"pandas"`` (default) or ``"polars"``.
+            use_arrow: Use Arrow extension arrays for polars -> pandas conversion.
 
         Returns:
             One row per visible trajectory ID.
         """
+        fmt = resolve_fmt(fmt, allowed=("pandas", "polars"), default="pandas")
         df = self._get_traj_t0_df()
-        if output_format == "polars":
+        if fmt == "polars":
             return df
-        if output_format == "pandas":
-            return df.to_pandas()
-        raise ValueError(
-            f"Invalid output_format {output_format!r}. "
-            "Expected one of: 'pandas', 'polars'."
-        )
+        return to_pandas(df, use_arrow=use_arrow)
 
     # ------------------------------------------------------------------
     # Copy / Subset
@@ -1829,7 +1827,8 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         fill_value: Any = None,
         overlap_rule: str = "first",
         ohe: bool = False,
-        output_format: Literal["pandas", "polars", "numpy"] = "pandas",
+        fmt: Literal["pandas", "polars", "numpy"] = "pandas",
+        use_arrow: bool = True,
         bin_col: str = "__bin__",
     ) -> pd.DataFrame | pl.DataFrame | np.ndarray:
         """Project all trajectory stores onto a single shared temporal grid.
@@ -1884,7 +1883,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
                 conflict resolution (e.g. ``"first"``, ``"mean"``).
             ohe: If ``True``, one-hot encode the specified features before
                 binning.  All features must be ``Categorical`` or ``Enum``.
-            output_format: Format of the returned object:
+            fmt: Format of the returned object:
 
                 - ``"pandas"`` *(default)* / ``"polars"``: **long** format
                   with ``N × M`` rows.  Columns are
@@ -1911,6 +1910,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             ValueError: If *bin_size* would produce too many bins and
                 *max_bins* is not set.
         """
+        fmt = resolve_fmt(fmt, allowed=("pandas", "polars", "numpy"), default="pandas")
         # ------------------------------------------------------------------ #
         # Step 1 - Validate aliases
         # ------------------------------------------------------------------ #
@@ -1976,7 +1976,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         )
 
         # ------------------------------------------------------------------ #
-        # Step 10 - Dispatch output_format
+        # Step 10 - Dispatch fmt
         # ------------------------------------------------------------------ #
         traj_id_col = self.settings.id_column
         if alias_id_col != traj_id_col:
@@ -1986,20 +1986,13 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             c for c in result.columns if c not in {traj_id_col, bin_col}
         ]
 
-        if output_format == "numpy":
+        if fmt == "numpy":
             arr = result.select(feat_cols_result).to_numpy()  # (N*M, K)
             return arr.reshape(len(traj_ids), max_bins, len(feat_cols_result))
 
-        if output_format == "polars":
+        if fmt == "polars":
             return result
-
-        if output_format == "pandas":
-            return result.to_pandas()
-
-        raise ValueError(
-            f"Invalid output_format {output_format!r}. "
-            "Expected one of: 'pandas', 'polars', 'numpy'."
-        )
+        return to_pandas(result, use_arrow=use_arrow)
 
     # ------------------------------------------------------------------
     # Save
