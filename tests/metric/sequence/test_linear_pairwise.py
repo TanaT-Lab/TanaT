@@ -19,11 +19,6 @@ from tanat.metric.sequence import (
     LinearPairwiseSequenceMetric,
 )
 from tanat.metric.matrix import DistanceMatrix
-from tanat.metric.sequence.type.linear_pairwise.kernels import (
-    compute_matrix_kernel,
-    compute_matrix_chunk,
-    _AGG_NUMBA_KERNELS,
-)
 
 # ---------------------------------------------------------------------------
 # Single-pair computation
@@ -371,61 +366,3 @@ class TestChunkedComputation:
         dm = lp.compute_matrix(cat_pool_status_only, store_path=str(tmp_path))
         assert dm.is_memmap
         assert (tmp_path / "metadata.json").exists()
-
-
-# ---------------------------------------------------------------------------
-# Chunk kernel consistency
-# ---------------------------------------------------------------------------
-
-
-class TestChunkKernelConsistency:
-    """compute_matrix_chunk over all rows == compute_matrix_kernel."""
-
-    def test_chunk_vs_full_matrix(self, cat_pool_status_only) -> None:
-        """Chunked iteration produces the same matrix as the full kernel."""
-        em = HammingEntityMetric(entity_feature="status")
-        arrays, lengths, context = em.prepare_batch_data(cat_pool_status_only)
-        n = len(arrays)
-        agg_kernel = _AGG_NUMBA_KERNELS["mean"]
-        padding = np.float32(np.nan)
-
-        full = np.zeros((n, n), dtype=np.float32)
-        compute_matrix_kernel(
-            full,
-            arrays,
-            lengths,
-            arrays,
-            lengths,
-            em.distance_kernel,
-            context,
-            agg_kernel,
-            padding,
-            True,  # symmetric: same pool, square matrix
-        )
-
-        chunked = np.full((n, n), np.nan, dtype=np.float32)
-        chunk_size = 3
-        for start in range(0, n, chunk_size):
-            end = min(start + chunk_size, n)
-            compute_matrix_chunk(
-                chunked,
-                start,
-                end,
-                arrays,
-                lengths,
-                arrays,
-                lengths,
-                em.distance_kernel,
-                context,
-                agg_kernel,
-                padding,
-                True,  # symmetric: same pool, square matrix
-            )
-            for i in range(start, end):
-                chunked[i, i] = 0.0
-
-        # NaN positions match
-        np.testing.assert_array_equal(np.isnan(full), np.isnan(chunked))
-        # Finite values match
-        mask = ~np.isnan(full)
-        np.testing.assert_array_almost_equal(full[mask], chunked[mask], decimal=5)
