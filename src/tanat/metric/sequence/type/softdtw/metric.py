@@ -6,16 +6,22 @@ SoftDTWSequenceMetric: Soft Dynamic Time Warping between sequences.
 from __future__ import annotations
 
 import math
+from pathlib import Path
 from typing import TYPE_CHECKING
 
+import numpy as np
 from pydantic import Field
 from tanat_utils import settings_dataclass as dataclass
 
 from ...base import SequenceMetric
 from ....entity.base import EntityMetric
+from ....matrix import DistanceMatrix
+from .kernels import compute_softdtw_matrix
 
 if TYPE_CHECKING:
     from .....sequence.base.sequence import Sequence
+    from .....sequence.base.pool import SequencePool
+    from ...._storage import StorageOptions
 
 
 # ---------------------------------------------------------------------------
@@ -101,18 +107,34 @@ class SoftDTWSequenceMetric(SequenceMetric, register_name="softdtw"):
     """
 
     SETTINGS_CLASS = SoftDTWSettings
-    MEMMAP_SUPPORT = False
+    MEMMAP_SUPPORT = True
 
     def __init__(
         self,
         entity_metric: EntityMetric | str = "hamming",
         gamma: float = 1.0,
+        *,
+        store_path: str | Path | None = None,
+        chunk_size: int = 500,
+        resume: bool = True,
+        dtype: str = "float32",
     ) -> None:
+        if store_path is not None:
+            storage_options: dict | None = {
+                "store_path": store_path,
+                "chunk_size": chunk_size,
+                "resume": resume,
+                "dtype": dtype,
+            }
+        else:
+            storage_options = None
+
         super().__init__(
             settings=SoftDTWSettings(
                 entity_metric=entity_metric,
                 gamma=gamma,
-            )
+            ),
+            storage=storage_options,
         )
 
     # ------------------------------------------------------------------
@@ -163,3 +185,70 @@ class SoftDTWSequenceMetric(SequenceMetric, register_name="softdtw"):
                 )
 
         return R[n][m]
+
+    # ------------------------------------------------------------------
+    # Matrix computation: Numba optimisation
+    # ------------------------------------------------------------------
+
+    def _compute_matrix_impl(
+        self,
+        pool: SequencePool,
+        *,
+        storage: StorageOptions | None = None,
+        result=None,
+        is_resuming: bool = False,
+        completed: int = 0,
+    ) -> DistanceMatrix:
+        """Dispatch to Numba or Python path based on entity metric capability."""
+        em = self.entity_metric
+        if em.NUMBA_OPTIM:
+            return self._compute_matrix_numba(
+                pool, storage, result, is_resuming, completed
+            )
+        return self._compute_matrix_python(
+            pool, storage, result, is_resuming, completed
+        )
+
+    def _compute_cross_matrix_impl(
+        self,
+        pool_rows: SequencePool,
+        pool_cols: SequencePool,
+    ) -> np.ndarray:
+        """Dispatch to Numba or Python path for cross (n × k) matrices."""
+        em = self.entity_metric
+        if em.NUMBA_OPTIM:
+            return self._compute_cross_matrix_numba(pool_rows, pool_cols)
+        return self._compute_cross_matrix_python(pool_rows, pool_cols)
+
+    def _compute_matrix_numba(
+        self,
+        pool: SequencePool,
+        storage: StorageOptions | None = None,
+        result=None,
+        is_resuming: bool = False,
+        completed: int = 0,
+    ) -> DistanceMatrix:
+        """Numba fast path for the pairwise distance matrix."""
+        em = self.entity_metric
+        gamma = np.float32(self.settings.gamma)
+        return self._run_numba_matrix(
+            pool,
+            compute_softdtw_matrix,
+            (gamma,),
+            storage=storage,
+            result=result,
+            is_resuming=is_resuming,
+            completed=completed,
+            symmetric=em.IS_SYMMETRIC,
+        )
+
+    def _compute_cross_matrix_numba(
+        self,
+        pool_rows: SequencePool,
+        pool_cols: SequencePool,
+    ) -> np.ndarray:
+        """Numba fast path for cross (n × k) distance matrix."""
+        gamma = np.float32(self.settings.gamma)
+        return self._run_numba_cross_matrix(
+            pool_rows, pool_cols, compute_softdtw_matrix, (gamma,)
+        )
