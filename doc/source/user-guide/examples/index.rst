@@ -10,6 +10,10 @@ Each example is self-contained and can be adapted to your own data.
    container/index
    visualization/index
    zeroing/index
+   metric_entity/index
+   metric_sequence/index
+   metric_trajectory/index
+   clustering/index
 
 Data Containers
 ---------------
@@ -87,5 +91,107 @@ distances or visualising cross-individual comparisons.
         <a href="zeroing/trajectory_t0.html" class="tanat-gallery-card">
             <p><strong>Trajectory Zeroing</strong><br>
             Define a reference point (T0) for trajectories across multiple sub-pools.</p>
+        </a>
+    </div>
+
+Metrics
+-------
+
+.. raw:: html
+
+    <div style="border-left: 3px solid #e0e0e0; padding-left: 20px; margin: 20px 0;">
+
+Entity Metrics
+~~~~~~~~~~~~~~
+
+Distance metrics for individual entities.
+
+.. raw:: html
+
+    <div class="tanat-gallery">
+        <a href="metric_entity/hamming.html" class="tanat-gallery-card">
+            <p><strong>Hamming Distance</strong><br>
+            Calculate distance between categorical states.</p>
+        </a>
+    </div>
+
+Sequence Metrics
+~~~~~~~~~~~~~~~~
+
+Distance metrics for entire temporal sequences.
+
+.. raw:: html
+
+    <div class="tanat-gallery">
+        <a href="metric_sequence/linear_pairwise.html" class="tanat-gallery-card">
+            <p><strong>LinearPairwise</strong><br>
+            Position-wise alignment with aggregation.</p>
+        </a>
+
+        <a href="metric_sequence/edit.html" class="tanat-gallery-card">
+            <p><strong>Edit Distance</strong><br>
+            Needleman-Wunsch alignment with insertions/deletions.</p>
+        </a>
+
+        <a href="metric_sequence/lcs.html" class="tanat-gallery-card">
+            <p><strong>LCS</strong><br>
+            Longest Common Subsequence distance.</p>
+        </a>
+
+        <a href="metric_sequence/dtw.html" class="tanat-gallery-card">
+            <p><strong>DTW</strong><br>
+            Dynamic Time Warping with flexible alignment.</p>
+        </a>
+
+        <a href="metric_sequence/softdtw.html" class="tanat-gallery-card">
+            <p><strong>SoftDTW</strong><br>
+            Differentiable DTW variant.</p>
+        </a>
+
+        <a href="metric_sequence/chi2.html" class="tanat-gallery-card">
+            <p><strong>Chi²</strong><br>
+            Chi-squared distance between distributions.</p>
+        </a>
+    </div>
+
+Trajectory Metrics
+~~~~~~~~~~~~~~~~~~
+
+Distance metrics for multi-sequence trajectories.
+
+.. raw:: html
+
+    <div class="tanat-gallery">
+        <a href="metric_trajectory/aggregation.html" class="tanat-gallery-card">
+            <p><strong>Aggregation</strong><br>
+            Compare trajectories with flexible per-type metrics.</p>
+        </a>
+    </div>
+
+.. raw:: html
+
+    </div>
+
+Clustering
+----------
+
+Partition sequences or trajectories into groups using distance matrices.
+
+.. raw:: html
+
+    <div class="tanat-gallery">
+        <a href="clustering/hierarchical.html" class="tanat-gallery-card">
+            <p><strong>Hierarchical Clustering</strong><br>
+            Nested partitions with dendrograms and four linkage methods.</p>
+        </a>
+
+        <a href="clustering/pam.html" class="tanat-gallery-card">
+            <p><strong>PAM Clustering</strong><br>
+            Medoid-based clustering robust to outliers.</p>
+        </a>
+
+        <a href="clustering/clara.html" class="tanat-gallery-card">
+            <p><strong>CLARA Clustering</strong><br>
+            Scalable medoid-based clustering for large datasets.</p>
         </a>
     </div>
