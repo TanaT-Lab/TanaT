@@ -99,6 +99,19 @@ class _ExampleOrder:
         # zeroing: sequence-level → trajectory-level
         "sequence_t0.py": 0,
         "trajectory_t0.py": 1,
+        # metric: entity → sequence → trajectory
+        "hamming.py": 0,
+        "linear_pairwise.py": 0,
+        "edit.py": 1,
+        "lcs.py": 2,
+        "dtw.py": 3,
+        "softdtw.py": 4,
+        "chi2.py": 5,
+        "aggregation.py": 0,
+        # clustering: one per algorithm
+        "hierarchical.py": 0,
+        "pam.py": 1,
+        "clara.py": 2,
     }
 
     def __init__(self, src_dir):
