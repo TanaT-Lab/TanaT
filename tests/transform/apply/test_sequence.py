@@ -15,7 +15,7 @@ class TestSequencePoolApply:
         """apply() result contains the aliased output column."""
         result = pools_dict[pool_type].apply(
             (pl.col("value") * 2).alias("value_doubled"),
-            output_format="polars",
+            fmt="polars",
         )
         assert "value_doubled" in result.columns
 
@@ -23,7 +23,7 @@ class TestSequencePoolApply:
         """Result dtype of an arithmetic expression matches the source column."""
         result = pools_dict[pool_type].apply(
             (pl.col("value") * 2).alias("value_doubled"),
-            output_format="polars",
+            fmt="polars",
         )
         assert result["value_doubled"].dtype == pl.Float64
 
@@ -33,7 +33,7 @@ class TestSequencePoolApply:
         result = pool.apply(
             pl.col("value").mean().alias("value_mean"),
             by_id=True,
-            output_format="polars",
+            fmt="polars",
         )
         assert pool.settings.id_column in result.columns
 
@@ -43,7 +43,7 @@ class TestSequencePoolApply:
         result = pool.apply(
             pl.col("value").mean().alias("value_mean"),
             by_id=True,
-            output_format="polars",
+            fmt="polars",
         )
         id_col = pool.settings.id_column
         # One row per ID (sparse pools: not all IDs have entity data)
@@ -57,7 +57,7 @@ class TestSequencePoolApply:
         result = pool.apply(
             pl.col("value").mean().alias("value_mean"),
             by_id=True,
-            output_format="polars",
+            fmt="polars",
         )
         assert snapshot == dict(result.schema)
 
@@ -69,7 +69,7 @@ class TestSequencePoolApply:
                 pl.col("age").mean().alias("age_mean"),
                 is_static=True,
                 by_id=True,
-                output_format="polars",
+                fmt="polars",
             )
 
     def test_apply_is_read_only(self, pools_dict: dict, pool_type: str) -> None:
@@ -78,7 +78,7 @@ class TestSequencePoolApply:
         features_before = list(pool.settings.entity_features)
         pool.apply(
             (pl.col("value") * 2).alias("value_doubled"),
-            output_format="polars",
+            fmt="polars",
         )
         assert pool.settings.entity_features == features_before
 
@@ -87,6 +87,6 @@ class TestSequencePoolApply:
         result = pools_dict[pool_type].apply(
             pl.col("age").cast(pl.Float64).alias("age_f"),
             is_static=True,
-            output_format="polars",
+            fmt="polars",
         )
         assert "age_f" in result.columns

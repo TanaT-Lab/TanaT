@@ -27,7 +27,7 @@ class TestSequencePoolToGrid:
             "value",
             bin_size=_bin_size(pool),
             max_bins=_MAX_BINS,
-            output_format="polars",
+            fmt="polars",
         )
         assert snapshot == result.columns
 
@@ -38,7 +38,7 @@ class TestSequencePoolToGrid:
             "value",
             bin_size=_bin_size(pool),
             max_bins=_MAX_BINS,
-            output_format="polars",
+            fmt="polars",
         )
         assert pool.settings.id_column in result.columns
         assert "__bin__" in result.columns
@@ -51,7 +51,7 @@ class TestSequencePoolToGrid:
             bin_size=_bin_size(pool),
             max_bins=_MAX_BINS,
             fill_value=0.0,
-            output_format="polars",
+            fmt="polars",
         )
         assert result["value"].null_count() == 0
 
@@ -62,7 +62,7 @@ class TestSequencePoolToGrid:
             "value",
             bin_size=_bin_size(pool),
             max_bins=_MAX_BINS,
-            output_format="numpy",
+            fmt="numpy",
         )
         assert isinstance(arr, np.ndarray)
         assert arr.ndim == 3
@@ -78,7 +78,7 @@ class TestSequencePoolToGrid:
             bin_size=_bin_size(pool),
             max_bins=_MAX_BINS,
             bin_col="t",
-            output_format="polars",
+            fmt="polars",
         )
         assert "t" in result.columns
         assert "__bin__" not in result.columns

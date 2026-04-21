@@ -51,7 +51,7 @@ class TestBuildEvents:
         )
         assert isinstance(pool, EventSequencePool)
         assert len(pool) == snapshot
-        assert dict(pool.temporal_data(output_format="polars").schema) == snapshot
+        assert dict(pool.temporal_data(fmt="polars").schema) == snapshot
 
     def test_build_events_with_static(
         self, temporal_df_fixture, static_df_fixture, snapshot
@@ -64,7 +64,7 @@ class TestBuildEvents:
             static_data=static_df_fixture,
         )
         assert isinstance(pool, EventSequencePool)
-        sd = pool.static_data(output_format="polars")
+        sd = pool.static_data(fmt="polars")
         assert sd is not None
         assert dict(sd.schema) == snapshot
 
@@ -87,7 +87,7 @@ class TestBuildIntervals:
         )
         assert isinstance(pool, IntervalSequencePool)
         assert len(pool) == snapshot
-        assert dict(pool.temporal_data(output_format="polars").schema) == snapshot
+        assert dict(pool.temporal_data(fmt="polars").schema) == snapshot
 
     def test_build_intervals_with_static(
         self, temporal_df_fixture, static_df_fixture, snapshot
@@ -101,7 +101,7 @@ class TestBuildIntervals:
             static_data=static_df_fixture,
         )
         assert isinstance(pool, IntervalSequencePool)
-        sd = pool.static_data(output_format="polars")
+        sd = pool.static_data(fmt="polars")
         assert sd is not None
         assert dict(sd.schema) == snapshot
 
@@ -132,7 +132,7 @@ class TestBuildStates:
         )
         assert isinstance(pool, StateSequencePool)
         assert len(pool) == snapshot
-        assert dict(pool.temporal_data(output_format="polars").schema) == snapshot
+        assert dict(pool.temporal_data(fmt="polars").schema) == snapshot
 
     def test_build_states_with_end(self, snapshot) -> None:
         """Explicit end column respected; schema matches snapshot."""
@@ -155,7 +155,7 @@ class TestBuildStates:
         )
         assert isinstance(pool, StateSequencePool)
         assert len(pool) == snapshot
-        assert dict(pool.temporal_data(output_format="polars").schema) == snapshot
+        assert dict(pool.temporal_data(fmt="polars").schema) == snapshot
 
 
 # ---------------------------------------------------------------------------
@@ -206,7 +206,7 @@ class TestBuildTrajectories:
             id_column=_SEQ_ID,
         )
         assert isinstance(tpool, TrajectoryPool)
-        sd = tpool.static_data(output_format="polars")
+        sd = tpool.static_data(fmt="polars")
         assert sd is not None
         assert dict(sd.schema) == snapshot
 

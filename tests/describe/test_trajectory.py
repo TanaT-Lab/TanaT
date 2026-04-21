@@ -27,47 +27,47 @@ class TestTrajectoryPoolDescribe:
     """TrajectoryPool.describe(): both temporal variants."""
 
     def test_returns_pandas_by_default(self, traj_pool_copy):
-        """Default output_format is pandas."""
+        """Default fmt is pandas."""
         result = traj_pool_copy.describe()
         assert isinstance(result, pd.DataFrame)
 
     def test_returns_polars_when_requested(self, traj_pool_copy):
-        """output_format='polars' returns a pl.DataFrame."""
-        result = traj_pool_copy.describe(output_format="polars")
+        """fmt='polars' returns a pl.DataFrame."""
+        result = traj_pool_copy.describe(fmt="polars")
         assert isinstance(result, pl.DataFrame)
 
     def test_one_row_per_trajectory(self, traj_pool_copy):
         """by_id=True (default) produces exactly one row per trajectory ID."""
-        result = traj_pool_copy.describe(output_format="polars")
+        result = traj_pool_copy.describe(fmt="polars")
         assert result.height == len(traj_pool_copy.unique_ids)
 
     def test_id_column_present(self, traj_pool_copy):
         """Result always includes the trajectory ID column."""
-        result = traj_pool_copy.describe(output_format="polars")
+        result = traj_pool_copy.describe(fmt="polars")
         assert traj_pool_copy.settings.id_column in result.columns
 
     def test_n_sequences_column_present(self, traj_pool_copy):
         """A n_sequences column is always present."""
-        result = traj_pool_copy.describe(output_format="polars")
+        result = traj_pool_copy.describe(fmt="polars")
         assert "n_sequences" in result.columns
 
     def test_n_sequences_value(self, traj_pool_copy):
         """n_sequences equals the number of visible sequence pools (constant per row)."""
-        result = traj_pool_copy.describe(output_format="polars")
+        result = traj_pool_copy.describe(fmt="polars")
         n_aliases = len(list(traj_pool_copy.sequence_pools.keys()))
         assert result["n_sequences"].n_unique() == 1
         assert result["n_sequences"][0] == n_aliases
 
     def test_prefixed_columns_present(self, traj_pool_copy):
         """Each alias contributes a prefixed 'length' describe column."""
-        result = traj_pool_copy.describe(output_format="polars")
+        result = traj_pool_copy.describe(fmt="polars")
         cols = set(result.columns)
         for alias in traj_pool_copy.sequence_pools:
             assert f"{alias}_length" in cols
 
     def test_custom_separator(self, traj_pool_copy):
         """separator='.' changes the delimiter between alias and column name."""
-        result = traj_pool_copy.describe(separator=".", output_format="polars")
+        result = traj_pool_copy.describe(separator=".", fmt="polars")
         cols = set(result.columns)
         for alias in traj_pool_copy.sequence_pools:
             assert f"{alias}.length" in cols
@@ -82,7 +82,7 @@ class TestTrajectoryPoolDescribe:
     def test_add_to_static(self, traj_pool_copy):
         """add_to_static=True persists prefixed describe columns into trajectory static."""
         traj_pool_copy.describe(add_to_static=True)
-        static = traj_pool_copy.static_data(output_format="polars")
+        static = traj_pool_copy.static_data(fmt="polars")
         assert static is not None
         assert any("length" in c for c in static.columns)
 
@@ -96,14 +96,14 @@ class TestTrajectoryPoolDescribe:
 
     def test_caching_returns_same_object(self, traj_pool_copy):
         """Identical calls return the exact same cached object (no recomputation)."""
-        r1 = traj_pool_copy.describe(output_format="polars")
-        r2 = traj_pool_copy.describe(output_format="polars")
+        r1 = traj_pool_copy.describe(fmt="polars")
+        r2 = traj_pool_copy.describe(fmt="polars")
         assert r1 is r2
 
-    def test_invalid_output_format_raises(self, traj_pool_copy):
-        """An unsupported output_format raises ValueError."""
-        with pytest.raises(ValueError, match="output_format"):
-            traj_pool_copy.describe(output_format="csv")  # type: ignore[arg-type]
+    def test_invalid_fmt_raises(self, traj_pool_copy):
+        """An unsupported fmt raises ValueError."""
+        with pytest.raises(ValueError, match="fmt"):
+            traj_pool_copy.describe(fmt="csv")  # type: ignore[arg-type]
 
     def test_describe_output_snapshot(self, traj_pool_copy, snapshot):
         """Full describe() output is stable across runs."""
@@ -121,39 +121,39 @@ class TestTrajectoryDescribe:
 
     def test_returns_one_row(self, trajectory):
         """describe() on a single trajectory always returns exactly 1 row."""
-        result = trajectory.describe(output_format="polars")
+        result = trajectory.describe(fmt="polars")
         assert isinstance(result, pl.DataFrame)
         assert result.height == 1
 
     def test_returns_pandas_by_default(self, trajectory):
-        """Default output_format is pandas with 1 row."""
+        """Default fmt is pandas with 1 row."""
         result = trajectory.describe()
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 1
 
     def test_has_n_sequences(self, trajectory):
         """n_sequences column is present on the single-trajectory result."""
-        result = trajectory.describe(output_format="polars")
+        result = trajectory.describe(fmt="polars")
         assert "n_sequences" in result.columns
 
     def test_prefixed_columns_present(self, trajectory):
         """Each visible alias contributes a prefixed describe column."""
-        result = trajectory.describe(output_format="polars")
+        result = trajectory.describe(fmt="polars")
         cols = set(result.columns)
         for alias in trajectory:
             assert f"{alias}_length" in cols
 
     def test_custom_separator(self, trajectory):
         """separator='.' changes the delimiter on the single-trajectory result."""
-        result = trajectory.describe(separator=".", output_format="polars")
+        result = trajectory.describe(separator=".", fmt="polars")
         cols = set(result.columns)
         for alias in trajectory:
             assert f"{alias}.length" in cols
 
     def test_caching_returns_same_object(self, trajectory):
         """Repeated calls on the same Trajectory return the cached object."""
-        r1 = trajectory.describe(output_format="polars")
-        r2 = trajectory.describe(output_format="polars")
+        r1 = trajectory.describe(fmt="polars")
+        r2 = trajectory.describe(fmt="polars")
         assert r1 is r2
 
     def test_describe_output_snapshot(self, trajectory, snapshot):

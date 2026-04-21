@@ -30,12 +30,12 @@ class TestSequencePoolFromFixtures:
 
     def test_temporal_data_schema(self, pools_dict, pool_type, snapshot) -> None:
         """temporal_data() column schema matches snapshot."""
-        df = pools_dict[pool_type].temporal_data(output_format="polars")
+        df = pools_dict[pool_type].temporal_data(fmt="polars")
         assert dict(df.schema) == snapshot
 
     def test_static_data_schema(self, pools_dict, pool_type, snapshot) -> None:
         """static_data() column schema matches snapshot."""
-        sd = pools_dict[pool_type].static_data(output_format="polars")
+        sd = pools_dict[pool_type].static_data(fmt="polars")
         assert sd is not None
         assert dict(sd.schema) == snapshot
 
@@ -63,7 +63,7 @@ class TestBuildFromDataFrame:
         )
         pool = IntervalSequencePool(store=store)
         assert len(pool) == snapshot
-        assert dict(pool.temporal_data(output_format="polars").schema) == snapshot
+        assert dict(pool.temporal_data(fmt="polars").schema) == snapshot
 
     def test_event_pool(self, temporal_df_fixture, tmp_path: Path, snapshot) -> None:
         """EventSequencePool built from a DataFrame has the expected length and schema."""
@@ -79,7 +79,7 @@ class TestBuildFromDataFrame:
         )
         pool = EventSequencePool(store=store)
         assert len(pool) == snapshot
-        assert dict(pool.temporal_data(output_format="polars").schema) == snapshot
+        assert dict(pool.temporal_data(fmt="polars").schema) == snapshot
 
     def test_state_pool(self, temporal_df_fixture, tmp_path: Path, snapshot) -> None:
         """StateSequencePool built from a DataFrame has the expected length and schema."""
@@ -95,7 +95,7 @@ class TestBuildFromDataFrame:
         )
         pool = StateSequencePool(store=store)
         assert len(pool) == snapshot
-        assert dict(pool.temporal_data(output_format="polars").schema) == snapshot
+        assert dict(pool.temporal_data(fmt="polars").schema) == snapshot
 
     def test_with_static(
         self, static_df_fixture, temporal_data_pl, tmp_path: Path, snapshot
@@ -119,7 +119,7 @@ class TestBuildFromDataFrame:
             .build(tmp_path / "interval_with_static")
         )
         pool = IntervalSequencePool(store=store)
-        sd = pool.static_data(output_format="polars")
+        sd = pool.static_data(fmt="polars")
         assert sd is not None
         assert dict(sd.schema) == snapshot
 
@@ -152,7 +152,7 @@ class TestBuildFromSQL:
         )
         pool = IntervalSequencePool(store=store)
         assert len(pool) == snapshot
-        assert dict(pool.temporal_data(output_format="polars").schema) == snapshot
+        assert dict(pool.temporal_data(fmt="polars").schema) == snapshot
 
     def test_event_pool(self, sqlite_db: str, tmp_path: Path, snapshot) -> None:
         """EventSequencePool built from SQL has the expected length and schema."""
@@ -169,7 +169,7 @@ class TestBuildFromSQL:
         )
         pool = EventSequencePool(store=store)
         assert len(pool) == snapshot
-        assert dict(pool.temporal_data(output_format="polars").schema) == snapshot
+        assert dict(pool.temporal_data(fmt="polars").schema) == snapshot
 
     def test_state_pool(self, sqlite_db: str, tmp_path: Path, snapshot) -> None:
         """StateSequencePool built from SQL has the expected length and schema."""
@@ -186,7 +186,7 @@ class TestBuildFromSQL:
         )
         pool = StateSequencePool(store=store)
         assert len(pool) == snapshot
-        assert dict(pool.temporal_data(output_format="polars").schema) == snapshot
+        assert dict(pool.temporal_data(fmt="polars").schema) == snapshot
 
     def test_with_static(self, sqlite_db: str, tmp_path: Path, snapshot) -> None:
         """Static schema is exposed after registering static via add_sql()."""
@@ -210,7 +210,7 @@ class TestBuildFromSQL:
             .build(tmp_path / "sql_with_static")
         )
         pool = IntervalSequencePool(store=store)
-        sd = pool.static_data(output_format="polars")
+        sd = pool.static_data(fmt="polars")
         assert sd is not None
         assert dict(sd.schema) == snapshot
 
@@ -241,7 +241,7 @@ class TestBuilderOptions:
             )
             .build(tmp_path / f"interval_{anchor}")
         )
-        df = IntervalSequencePool(store=store).temporal_data(output_format="polars")
+        df = IntervalSequencePool(store=store).temporal_data(fmt="polars")
         assert snapshot == df
 
     def test_interval_sort_anchor_invalid(self) -> None:
@@ -266,7 +266,7 @@ class TestBuilderOptions:
             )
             .build(tmp_path / "state_no_end")
         )
-        data = StateSequencePool(store=store).temporal_data(output_format="polars")
+        data = StateSequencePool(store=store).temporal_data(fmt="polars")
         assert snapshot == data
 
     def test_state_end_value_fills_last_end(self, tmp_path: Path, snapshot) -> None:
@@ -284,7 +284,7 @@ class TestBuilderOptions:
             )
             .build(tmp_path / "state_end_value")
         )
-        data = StateSequencePool(store=store).temporal_data(output_format="polars")
+        data = StateSequencePool(store=store).temporal_data(fmt="polars")
         assert snapshot == data
 
     # --- StateSequencePool: validate_continuity ---
@@ -341,5 +341,5 @@ class TestBuilderOptions:
             )
             .build(tmp_path / "state_skip_continuity")
         )
-        data = StateSequencePool(store=store).temporal_data(output_format="polars")
+        data = StateSequencePool(store=store).temporal_data(fmt="polars")
         assert snapshot == data

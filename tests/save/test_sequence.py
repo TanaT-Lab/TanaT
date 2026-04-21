@@ -33,7 +33,7 @@ class TestSequencePoolSave:
     ) -> None:
         """is_dirty is False after a successful save."""
         pool = pools_dict[pool_type].copy()
-        n = pool.temporal_data(output_format="polars").height
+        n = pool.temporal_data(fmt="polars").height
         pool.add_entity_features(pl.DataFrame({"tmp": [0.0] * n}))
         assert pool.is_dirty
         pool.save(tmp_path.name, overwrite=True)
@@ -48,26 +48,26 @@ class TestSequencePoolSave:
     ) -> None:
         """Column added via add_entity_features is present in the reloaded pool."""
         pool = pools_dict[pool_type].copy()
-        n = pool.temporal_data(output_format="polars").height
+        n = pool.temporal_data(fmt="polars").height
         pool.add_entity_features(pl.DataFrame({"saved_feat": [1.0] * n}))
         store_name = tmp_path.name
         pool.save(store_name, overwrite=True)
 
         reloaded = get_workspace()[store_name]
-        assert "saved_feat" in reloaded.temporal_data(output_format="polars").columns
+        assert "saved_feat" in reloaded.temporal_data(fmt="polars").columns
 
     def test_save_persists_entity_feature_values(
         self, pools_dict: dict, pool_type: str, tmp_path: Path
     ) -> None:
         """Values of a persisted entity feature survive the save / reload cycle."""
         pool = pools_dict[pool_type].copy()
-        n = pool.temporal_data(output_format="polars").height
+        n = pool.temporal_data(fmt="polars").height
         pool.add_entity_features(pl.DataFrame({"constant": [42.0] * n}))
         store_name = tmp_path.name
         pool.save(store_name, overwrite=True)
 
         reloaded = get_workspace()[store_name]
-        col = reloaded.temporal_data(output_format="polars")["constant"]
+        col = reloaded.temporal_data(fmt="polars")["constant"]
         assert col.drop_nulls().min() == 42.0
         assert col.drop_nulls().max() == 42.0
 
@@ -83,14 +83,14 @@ class TestSequencePoolSave:
         summary = pool.apply(
             pl.col("value").mean().alias("v_mean"),
             by_id=True,
-            output_format="polars",
+            fmt="polars",
         )
         pool.add_static_features(summary)
         store_name = tmp_path.name
         pool.save(store_name, overwrite=True)
 
         reloaded = get_workspace()[store_name]
-        assert "v_mean" in reloaded.static_data(output_format="polars").columns
+        assert "v_mean" in reloaded.static_data(fmt="polars").columns
 
     # ------------------------------------------------------------------
     # Drop features
@@ -110,9 +110,7 @@ class TestSequencePoolSave:
         pool.save(store_name, overwrite=True)
 
         reloaded = get_workspace()[store_name]
-        assert (
-            "flag_valid" not in reloaded.temporal_data(output_format="polars").columns
-        )
+        assert "flag_valid" not in reloaded.temporal_data(fmt="polars").columns
 
     def test_save_materialises_static_drop(
         self, pools_dict: dict, pool_type: str, tmp_path: Path
@@ -128,7 +126,7 @@ class TestSequencePoolSave:
         pool.save(store_name, overwrite=True)
 
         reloaded = get_workspace()[store_name]
-        assert "age" not in reloaded.static_data(output_format="polars").columns
+        assert "age" not in reloaded.static_data(fmt="polars").columns
 
     # ------------------------------------------------------------------
     # Cast features
@@ -144,7 +142,4 @@ class TestSequencePoolSave:
         pool.save(store_name, overwrite=True)
 
         reloaded = get_workspace()[store_name]
-        assert (
-            reloaded.temporal_data(output_format="polars").schema["status"]
-            == pl.Categorical
-        )
+        assert reloaded.temporal_data(fmt="polars").schema["status"] == pl.Categorical

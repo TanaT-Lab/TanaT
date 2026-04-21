@@ -36,7 +36,7 @@ class TestSequencePoolCopy:
         """add_entity_features on copy does not expose the column on the original."""
         pool = pools_dict[pool_type]
         copy = pool.copy()
-        n = copy.temporal_data(output_format="polars").height
+        n = copy.temporal_data(fmt="polars").height
         copy.add_entity_features(pl.DataFrame({"copy_only": [1.0] * n}))
         assert "copy_only" not in pool.settings.entity_features
 
@@ -55,7 +55,7 @@ class TestSequencePoolCopy:
         pool = pools_dict[pool_type]
         copy = pool.copy()
         copy.cast_features({"status": pl.Categorical})
-        original_schema = pool.temporal_data(output_format="polars").schema
+        original_schema = pool.temporal_data(fmt="polars").schema
         assert original_schema["status"] != pl.Categorical
 
     def test_drop_on_copy_isolated(self, pools_dict: dict, pool_type: str) -> None:
@@ -90,7 +90,7 @@ class TestSequencePoolCopyAfterVirtualFeatures:
         df = pl.DataFrame({"id": pool.unique_ids, "virt_readable": [7.0] * len(pool)})
         pool.add_static_features(df)
         copy = pool.copy()
-        sd = copy.static_data(output_format="polars")
+        sd = copy.static_data(fmt="polars")
         assert sd is not None
         assert "virt_readable" in sd.columns
 
@@ -99,7 +99,7 @@ class TestSequencePoolCopyAfterVirtualFeatures:
     ) -> None:
         """copy() must not raise when the pool has virtual entity features."""
         pool = pools_dict[pool_type].copy()
-        n_rows = pool.temporal_data(output_format="polars").height
+        n_rows = pool.temporal_data(fmt="polars").height
         pool.add_entity_features(pl.DataFrame({"virt_copy_entity": [0.5] * n_rows}))
         copy = pool.copy()  # must not raise
         assert "virt_copy_entity" in copy.settings.entity_features

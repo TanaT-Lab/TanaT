@@ -30,7 +30,7 @@ class TestTrajectoryPoolFromFixtures:
 
     def test_static_data_is_none(self, traj_pool) -> None:
         """No trajectory-level static was registered in the fixture."""
-        assert traj_pool.static_data(output_format="polars") is None
+        assert traj_pool.static_data(fmt="polars") is None
 
 
 # ---------------------------------------------------------------------------
@@ -65,7 +65,7 @@ class TestTrajectoryStaticFromDataFrame:
             .build(tmp_path / "traj_with_static")
         )
         pool = TrajectoryPool(store=store)
-        sd = pool.static_data(output_format="polars")
+        sd = pool.static_data(fmt="polars")
         assert sd is not None
         assert dict(sd.schema) == snapshot
 
@@ -107,7 +107,7 @@ class TestTrajectoryStaticFromSQL:
             .build(tmp_path / "traj_sql_static")
         )
         pool = TrajectoryPool(store=store)
-        sd = pool.static_data(output_format="polars")
+        sd = pool.static_data(fmt="polars")
         assert sd is not None
         assert dict(sd.schema) == snapshot
 

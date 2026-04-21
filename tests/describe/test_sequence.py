@@ -40,28 +40,28 @@ class TestSequencePoolDescribe:
     """SequencePool.describe(): all sequence types, both temporal variants."""
 
     def test_returns_pandas_by_default(self, pool_copy):
-        """Default output_format is pandas."""
+        """Default fmt is pandas."""
         result = pool_copy.describe()
         assert isinstance(result, pd.DataFrame)
 
     def test_returns_polars_when_requested(self, pool_copy):
-        """output_format='polars' returns a pl.DataFrame."""
-        result = pool_copy.describe(output_format="polars")
+        """fmt='polars' returns a pl.DataFrame."""
+        result = pool_copy.describe(fmt="polars")
         assert isinstance(result, pl.DataFrame)
 
     def test_by_id_one_row_per_id(self, pool_copy):
         """by_id=True (default) produces exactly one row per sequence ID."""
-        result = pool_copy.describe(output_format="polars")
+        result = pool_copy.describe(fmt="polars")
         assert result.height == len(pool_copy.unique_ids)
 
     def test_by_id_contains_id_column(self, pool_copy):
         """Result always includes the sequence ID column."""
-        result = pool_copy.describe(output_format="polars")
+        result = pool_copy.describe(fmt="polars")
         assert pool_copy.settings.id_column in result.columns
 
     def test_shared_columns_present(self, pool_copy):
         """All types expose the three shared describe columns."""
-        result = pool_copy.describe(output_format="polars")
+        result = pool_copy.describe(fmt="polars")
         assert SHARED_COLS.issubset(set(result.columns))
 
     def test_aggregated_returns_pandas_describe(self, pool_copy):
@@ -78,20 +78,20 @@ class TestSequencePoolDescribe:
     def test_add_to_static(self, pool_copy):
         """add_to_static=True persists describe columns into the static store."""
         pool_copy.describe(add_to_static=True)
-        static = pool_copy.static_data(output_format="polars")
+        static = pool_copy.static_data(fmt="polars")
         assert static is not None
         assert "length" in static.columns
 
     def test_add_to_static_ignored_with_by_id_false(self, pool_copy):
         """add_to_static=True is silently ignored (with a warning) when by_id=False."""
-        initial_static = pool_copy.static_data(output_format="polars")
+        initial_static = pool_copy.static_data(fmt="polars")
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             pool_copy.describe(by_id=False, add_to_static=True)
         assert len(w) == 1
         assert "add_to_static=True is ignored" in str(w[0].message)
         # Static features must be unchanged
-        new_static = pool_copy.static_data(output_format="polars")
+        new_static = pool_copy.static_data(fmt="polars")
         if initial_static is None:
             assert new_static is None
         else:
@@ -99,22 +99,22 @@ class TestSequencePoolDescribe:
 
     def test_caching_returns_same_object(self, pool_copy):
         """Identical calls return the exact same cached object (no recomputation)."""
-        r1 = pool_copy.describe(output_format="polars")
-        r2 = pool_copy.describe(output_format="polars")
+        r1 = pool_copy.describe(fmt="polars")
+        r2 = pool_copy.describe(fmt="polars")
         assert r1 is r2
 
     def test_cache_invalidated_after_mutation(self, pool_copy):
         """Cache is cleared after a structural mutation (subset)."""
-        r1 = pool_copy.describe(output_format="polars")
+        r1 = pool_copy.describe(fmt="polars")
         pool_sub = pool_copy.subset(pool_copy.unique_ids[:5])
-        r2 = pool_sub.describe(output_format="polars")
+        r2 = pool_sub.describe(fmt="polars")
         assert r1 is not r2
         assert r2.height == 5
 
-    def test_invalid_output_format_raises(self, pool_copy):
-        """An unsupported output_format raises ValueError."""
-        with pytest.raises(ValueError, match="output_format"):
-            pool_copy.describe(output_format="csv")  # type: ignore[arg-type]
+    def test_invalid_fmt_raises(self, pool_copy):
+        """An unsupported fmt raises ValueError."""
+        with pytest.raises(ValueError, match="fmt"):
+            pool_copy.describe(fmt="csv")  # type: ignore[arg-type]
 
     def test_describe_output_snapshot(self, pool_copy, snapshot):
         """Full describe() output is stable across runs."""
@@ -133,17 +133,17 @@ class TestEventStats:
 
     def test_has_gap_columns(self, pool_copy):
         """Event pools expose median_gap and gap_std."""
-        result = pool_copy.describe(output_format="polars")
+        result = pool_copy.describe(fmt="polars")
         assert EVENT_COLS.issubset(set(result.columns))
 
     def test_no_duration_columns(self, pool_copy):
         """Event pools have no duration columns (events are point-in-time)."""
-        result = pool_copy.describe(output_format="polars")
+        result = pool_copy.describe(fmt="polars")
         assert "mean_duration" not in result.columns
 
     def test_no_transition_column(self, pool_copy):
         """Event pools have no n_transitions column."""
-        result = pool_copy.describe(output_format="polars")
+        result = pool_copy.describe(fmt="polars")
         assert "n_transitions" not in result.columns
 
 
@@ -153,12 +153,12 @@ class TestStateStats:
 
     def test_has_duration_and_transition_columns(self, pool_copy):
         """State pools expose all duration stats and n_transitions."""
-        result = pool_copy.describe(output_format="polars")
+        result = pool_copy.describe(fmt="polars")
         assert STATE_COLS.issubset(set(result.columns))
 
     def test_no_gap_columns(self, pool_copy):
         """State pools have no gap columns (states are contiguous, no gaps)."""
-        result = pool_copy.describe(output_format="polars")
+        result = pool_copy.describe(fmt="polars")
         assert "median_gap" not in result.columns
         assert "gap_std" not in result.columns
 
@@ -169,12 +169,12 @@ class TestIntervalStats:
 
     def test_has_duration_columns(self, pool_copy):
         """Interval pools expose all three duration stats."""
-        result = pool_copy.describe(output_format="polars")
+        result = pool_copy.describe(fmt="polars")
         assert INTERVAL_COLS.issubset(set(result.columns))
 
     def test_no_transition_or_gap_columns(self, pool_copy):
         """Interval pools have neither n_transitions nor gap columns."""
-        result = pool_copy.describe(output_format="polars")
+        result = pool_copy.describe(fmt="polars")
         assert "n_transitions" not in result.columns
         assert "median_gap" not in result.columns
 
@@ -190,25 +190,25 @@ class TestSequenceDescribe:
 
     def test_returns_one_row(self, sequence):
         """describe() on a single sequence always returns exactly 1 row."""
-        result = sequence.describe(output_format="polars")
+        result = sequence.describe(fmt="polars")
         assert isinstance(result, pl.DataFrame)
         assert result.height == 1
 
     def test_returns_pandas_by_default(self, sequence):
-        """Default output_format is pandas with 1 row."""
+        """Default fmt is pandas with 1 row."""
         result = sequence.describe()
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 1
 
     def test_shared_columns_present(self, sequence):
         """The three shared describe columns are always present (no ID column)."""
-        result = sequence.describe(output_format="polars")
+        result = sequence.describe(fmt="polars")
         assert SHARED_COLS.issubset(set(result.columns))
 
     def test_caching_returns_same_object(self, sequence):
         """Repeated calls on the same Sequence return the cached object."""
-        r1 = sequence.describe(output_format="polars")
-        r2 = sequence.describe(output_format="polars")
+        r1 = sequence.describe(fmt="polars")
+        r2 = sequence.describe(fmt="polars")
         assert r1 is r2
 
     def test_describe_output_snapshot(self, sequence, snapshot):

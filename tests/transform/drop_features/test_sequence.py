@@ -24,7 +24,7 @@ class TestSequencePoolDropFeatures:
         """Dropped entity feature is absent from temporal_data() output columns."""
         pool = pools_dict[pool_type].copy()
         pool.drop_features(["flag_valid"], is_static=False)
-        assert "flag_valid" not in pool.temporal_data(output_format="polars").columns
+        assert "flag_valid" not in pool.temporal_data(fmt="polars").columns
 
     def test_drop_static_absent_from_settings(
         self, pools_dict: dict, pool_type: str
@@ -130,7 +130,7 @@ class TestSequencePoolDropFeaturesPropagation:
         pool = pools_dict[pool_type].copy()
         pool.drop_features(["age"], is_static=True)
         seq = pool[pool.unique_ids[0]]
-        sd = seq.static_data(output_format="polars")
+        sd = seq.static_data(fmt="polars")
         if sd is not None:
             assert "age" not in sd.columns
 

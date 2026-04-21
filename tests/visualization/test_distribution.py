@@ -159,7 +159,7 @@ class TestDistributionNaLabel:
     @staticmethod
     def _pool_with_null_label(pool_copy):
         """Return *pool_copy* with a 'nullable_cat' feature containing some nulls."""
-        td = pool_copy.temporal_data(output_format="polars")
+        td = pool_copy.temporal_data(fmt="polars")
         n = len(td)
         series = pl.Series(
             "nullable_cat",

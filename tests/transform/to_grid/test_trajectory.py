@@ -25,7 +25,7 @@ class TestTrajectoryPoolToGrid:
             {"intervals": "value", "events": "value"},
             bin_size=_bin_size(traj_pool),
             max_bins=_MAX_BINS,
-            output_format="polars",
+            fmt="polars",
         )
         assert snapshot == result.columns
 
@@ -35,7 +35,7 @@ class TestTrajectoryPoolToGrid:
             {"intervals": "value"},
             bin_size=_bin_size(traj_pool),
             max_bins=_MAX_BINS,
-            output_format="numpy",
+            fmt="numpy",
         )
         assert isinstance(arr, np.ndarray)
         assert arr.ndim == 3
@@ -57,7 +57,7 @@ class TestTrajectoryPoolToGrid:
             {"intervals": "value"},
             bin_size=_bin_size(traj_pool),
             max_bins=_MAX_BINS,
-            output_format="polars",
+            fmt="polars",
         )
         assert result.height == len(traj_pool) * _MAX_BINS
 
@@ -67,7 +67,7 @@ class TestTrajectoryPoolToGrid:
             {"intervals": "value"},
             bin_size=_bin_size(traj_pool),
             max_bins=_MAX_BINS,
-            output_format="polars",
+            fmt="polars",
         )
         assert traj_pool.settings.id_column in result.columns
         assert "__bin__" in result.columns
@@ -79,7 +79,7 @@ class TestTrajectoryPoolToGrid:
             bin_size=_bin_size(traj_pool),
             max_bins=_MAX_BINS,
             fill_value=0.0,
-            output_format="polars",
+            fmt="polars",
         )
         assert result["intervals_value"].null_count() == 0
 
@@ -90,7 +90,7 @@ class TestTrajectoryPoolToGrid:
             bin_size=_bin_size(traj_pool),
             max_bins=_MAX_BINS,
             bin_col="t",
-            output_format="polars",
+            fmt="polars",
         )
         assert "t" in result.columns
         assert "__bin__" not in result.columns

@@ -82,6 +82,6 @@ class TestTrajectoryPoolCopyAfterVirtualFeatures:
         )
         pool.add_static_features(df)
         copy = pool.copy()
-        sd = copy.static_data(output_format="polars")
+        sd = copy.static_data(fmt="polars")
         assert sd is not None
         assert "virt_traj_readable" in sd.columns

@@ -40,7 +40,7 @@ class TestTrajectoryPoolAddFeatures:
             }
         )
         pool.add_static_features(partial)
-        sd = pool.static_data(output_format="polars")
+        sd = pool.static_data(fmt="polars")
         assert sd["partial_score"].null_count() > 0
 
     def test_add_static_collision_raises(self, traj_pool: TrajectoryPool) -> None:
@@ -85,7 +85,7 @@ class TestTrajectoryPoolAddFeaturesPropagation:
         df = pl.DataFrame({"id": pool.unique_ids, "propagated_s": [1.0] * len(pool)})
         pool.add_static_features(df)
         traj = pool[pool.unique_ids[0]]
-        sd = traj.static_data(output_format="polars")
+        sd = traj.static_data(fmt="polars")
         assert sd is not None
         assert "propagated_s" in sd.columns
 

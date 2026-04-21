@@ -54,7 +54,7 @@ class TestTrajectoryPoolSave:
         pool.save(store_name, overwrite=True)
 
         reloaded = get_workspace()[store_name]
-        assert "traj_score" in reloaded.static_data(output_format="polars").columns
+        assert "traj_score" in reloaded.static_data(fmt="polars").columns
 
     def test_save_persists_static_feature_values(
         self, traj_pool: TrajectoryPool, tmp_path: Path
@@ -67,7 +67,7 @@ class TestTrajectoryPoolSave:
         pool.save(store_name, overwrite=True)
 
         reloaded = get_workspace()[store_name]
-        col = reloaded.static_data(output_format="polars")["sentinel"]
+        col = reloaded.static_data(fmt="polars")["sentinel"]
         assert col.drop_nulls().min() == 99.0
 
     # ------------------------------------------------------------------
@@ -88,7 +88,7 @@ class TestTrajectoryPoolSave:
         pool.save(store_name, overwrite=True)
 
         reloaded = get_workspace()[store_name]
-        assert "age" not in reloaded.static_data(output_format="polars").columns
+        assert "age" not in reloaded.static_data(fmt="polars").columns
 
     # ------------------------------------------------------------------
     # Sub-pool pending-changes warning
@@ -150,11 +150,7 @@ class TestTrajectoryPoolSave:
         pool.save(store_name, overwrite=True)
 
         reloaded = get_workspace()[store_name]
-        cols = (
-            reloaded.sequence_pools["intervals"]
-            .temporal_data(output_format="polars")
-            .columns
-        )
+        cols = reloaded.sequence_pools["intervals"].temporal_data(fmt="polars").columns
         assert "flag_valid" not in cols
 
     def test_save_propagates_subpool_cast(
@@ -167,9 +163,5 @@ class TestTrajectoryPoolSave:
         pool.save(store_name, overwrite=True)
 
         reloaded = get_workspace()[store_name]
-        schema = (
-            reloaded.sequence_pools["intervals"]
-            .temporal_data(output_format="polars")
-            .schema
-        )
+        schema = reloaded.sequence_pools["intervals"].temporal_data(fmt="polars").schema
         assert schema["status"] == pl.Categorical

@@ -20,14 +20,14 @@ class TestSequencePoolAddFeatures:
     ) -> None:
         """New column appears in entity_features settings after add_entity_features."""
         pool = pools_dict[pool_type].copy()
-        n_rows = pool.temporal_data(output_format="polars").height
+        n_rows = pool.temporal_data(fmt="polars").height
         pool.add_entity_features(pl.DataFrame({"noise": [0.5] * n_rows}))
         assert snapshot == sorted(pool.settings.entity_features)
 
     def test_add_entity_marks_dirty(self, pools_dict: dict, pool_type: str) -> None:
         """add_entity_features sets is_dirty to True."""
         pool = pools_dict[pool_type].copy()
-        n_rows = pool.temporal_data(output_format="polars").height
+        n_rows = pool.temporal_data(fmt="polars").height
         pool.add_entity_features(pl.DataFrame({"extra_e": [1.0] * n_rows}))
         assert pool.is_dirty
 
@@ -37,7 +37,7 @@ class TestSequencePoolAddFeatures:
         normed = pool.apply(
             (pl.col("value") - pl.col("value").mean()).alias("value_normed"),
             by_id=True,
-            output_format="polars",
+            fmt="polars",
         )
         pool.add_entity_features(normed)
         assert "value_normed" in pool.settings.entity_features
@@ -47,7 +47,7 @@ class TestSequencePoolAddFeatures:
     ) -> None:
         """ValueError raised on column collision without overwrite=True."""
         pool = pools_dict[pool_type].copy()
-        n_rows = pool.temporal_data(output_format="polars").height
+        n_rows = pool.temporal_data(fmt="polars").height
         feat = pl.DataFrame({"dup_feat": [0.5] * n_rows})
         pool.add_entity_features(feat)
         with pytest.raises(ValueError, match="collision"):
@@ -58,7 +58,7 @@ class TestSequencePoolAddFeatures:
     ) -> None:
         """add_entity_features(overwrite=True) replaces an existing column without error."""
         pool = pools_dict[pool_type].copy()
-        n_rows = pool.temporal_data(output_format="polars").height
+        n_rows = pool.temporal_data(fmt="polars").height
         feat = pl.DataFrame({"overwritable": [0.5] * n_rows})
         pool.add_entity_features(feat)
         pool.add_entity_features(feat, overwrite=True)  # must not raise
@@ -68,7 +68,7 @@ class TestSequencePoolAddFeatures:
         """add_entity_features raises RuntimeError on a filtered view."""
         pool = pools_dict[pool_type]
         view = pool.subset(pool.unique_ids[:2])
-        n_view = view.temporal_data(output_format="polars").height
+        n_view = view.temporal_data(fmt="polars").height
         with pytest.raises(RuntimeError):
             view.add_entity_features(pl.DataFrame({"blocked": [0.0] * n_view}))
 
@@ -84,7 +84,7 @@ class TestSequencePoolAddFeatures:
         summary = pool.apply(
             pl.col("value").mean().alias("value_mean"),
             by_id=True,
-            output_format="polars",
+            fmt="polars",
         )
         pool.add_static_features(summary)
         assert snapshot == sorted(pool.settings.static_features)
@@ -97,10 +97,10 @@ class TestSequencePoolAddFeatures:
         partial = pool.apply(
             pl.col("value").std().alias("value_std"),
             by_id=True,
-            output_format="polars",
+            fmt="polars",
         ).head(3)
         pool.add_static_features(partial)
-        sd = pool.static_data(output_format="polars")
+        sd = pool.static_data(fmt="polars")
         assert sd["value_std"].null_count() > 0
 
     def test_add_static_custom_id_column(
@@ -132,7 +132,7 @@ class TestSequencePoolAddFeatures:
     ) -> None:
         """After add_entity_features, new name appears in pool.metadata.entity_features."""
         pool = pools_dict[pool_type].copy()
-        n_rows = pool.temporal_data(output_format="polars").height
+        n_rows = pool.temporal_data(fmt="polars").height
         pool.add_entity_features(pl.DataFrame({"meta_e": [1.0] * n_rows}))
         names = {f.name for f in pool.metadata.entity_features}
         assert "meta_e" in names
@@ -163,7 +163,7 @@ class TestSequencePoolAddFeaturesPropagation:
     ) -> None:
         """Entity feature added to pool appears in entity.metadata on a child Entity."""
         pool = pools_dict[pool_type].copy()
-        n_rows = pool.temporal_data(output_format="polars").height
+        n_rows = pool.temporal_data(fmt="polars").height
         pool.add_entity_features(pl.DataFrame({"propagated_e": [7.0] * n_rows}))
         entity = pool[pool.unique_ids[0]][0]
         assert "propagated_e" in entity.metadata
@@ -173,7 +173,7 @@ class TestSequencePoolAddFeaturesPropagation:
     ) -> None:
         """Added entity feature is visible in entity.feature_names on a child Entity."""
         pool = pools_dict[pool_type].copy()
-        n_rows = pool.temporal_data(output_format="polars").height
+        n_rows = pool.temporal_data(fmt="polars").height
         pool.add_entity_features(pl.DataFrame({"propagated_e": [7.0] * n_rows}))
         entity = pool[pool.unique_ids[0]][0]
         assert entity.feature_names is not None
@@ -182,7 +182,7 @@ class TestSequencePoolAddFeaturesPropagation:
     def test_entity_feature_in_data(self, pools_dict: dict, pool_type: str) -> None:
         """Added entity feature key is present in entity.data() on a child Entity."""
         pool = pools_dict[pool_type].copy()
-        n_rows = pool.temporal_data(output_format="polars").height
+        n_rows = pool.temporal_data(fmt="polars").height
         pool.add_entity_features(pl.DataFrame({"propagated_e": [7.0] * n_rows}))
         entity = pool[pool.unique_ids[0]][0]
         assert "propagated_e" in entity.data()
@@ -195,7 +195,7 @@ class TestSequencePoolAddFeaturesPropagation:
         df = pl.DataFrame({"id": pool.unique_ids, "propagated_s": [3.0] * len(pool)})
         pool.add_static_features(df)
         seq = pool[pool.unique_ids[0]]
-        sd = seq.static_data(output_format="polars")
+        sd = seq.static_data(fmt="polars")
         assert sd is not None
         assert "propagated_s" in sd.columns
 
@@ -204,7 +204,7 @@ class TestSequencePoolAddFeaturesPropagation:
     ) -> None:
         """After add_entity_features, new name is in seq.metadata.entity_features."""
         pool = pools_dict[pool_type].copy()
-        n_rows = pool.temporal_data(output_format="polars").height
+        n_rows = pool.temporal_data(fmt="polars").height
         pool.add_entity_features(pl.DataFrame({"meta_e": [1.0] * n_rows}))
         seq = pool[pool.unique_ids[0]]
         names = {f.name for f in seq.metadata.entity_features}

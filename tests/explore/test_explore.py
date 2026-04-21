@@ -41,14 +41,14 @@ class TestSequencePool:
         self, pools_dict: dict, pool_type: str, snapshot
     ) -> None:
         """temporal_data() column schema matches snapshot."""
-        df = pools_dict[pool_type].temporal_data(output_format="polars")
+        df = pools_dict[pool_type].temporal_data(fmt="polars")
         assert snapshot == dict(df.schema)
 
     def test_static_data_schema(
         self, pools_dict: dict, pool_type: str, snapshot
     ) -> None:
         """static_data() column schema matches snapshot."""
-        sd = pools_dict[pool_type].static_data(output_format="polars")
+        sd = pools_dict[pool_type].static_data(fmt="polars")
         assert sd is not None
         assert snapshot == dict(sd.schema)
 
@@ -84,7 +84,7 @@ class TestSequence:
         """temporal_data() for the first sequence matches snapshot."""
         pool = pools_dict[pool_type]
         seq = pool[pool.unique_ids[0]]
-        df = seq.temporal_data(output_format="polars")
+        df = seq.temporal_data(fmt="polars")
         assert snapshot == df.select(sorted(df.columns))
 
 
@@ -146,7 +146,7 @@ class TestEntity:
 def masked_pool(request: pytest.FixtureRequest, pools_dict: dict) -> SequencePool:
     """A copy of each pool type with a row mask keeping every other row."""
     pool = pools_dict[request.param].copy()
-    n_rows = pool.temporal_data(output_format="polars").height
+    n_rows = pool.temporal_data(fmt="polars").height
     pool._row_mask = pl.Series([i % 2 == 0 for i in range(n_rows)])
     pool.clear_cache()
     return pool
@@ -236,7 +236,7 @@ class TestTrajectory:
     def test_sub_temporal_data(self, traj_pool: TrajectoryPool, snapshot) -> None:
         """temporal_data() on the 'intervals' sub-sequence of the first trajectory matches snapshot."""
         traj: Trajectory = traj_pool[traj_pool.unique_ids[0]]
-        df = traj["intervals"].temporal_data(output_format="polars")
+        df = traj["intervals"].temporal_data(fmt="polars")
         assert snapshot == df.select(sorted(df.columns))
 
 

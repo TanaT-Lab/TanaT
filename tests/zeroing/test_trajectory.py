@@ -95,7 +95,7 @@ class TestTrajectorySetT0Position:
         """set_t0(position=0, on='events') → t0_data() snapshot."""
         id_col = traj_pool_copy.settings.id_column
         traj_pool_copy.set_t0(position=0, on=_REF_ALIAS)
-        df = traj_pool_copy.t0_data(output_format="polars").sort(id_col)
+        df = traj_pool_copy.t0_data(fmt="polars").sort(id_col)
         assert df[_T0].is_not_null().any()
         assert snapshot == df
 
@@ -103,14 +103,14 @@ class TestTrajectorySetT0Position:
         """set_t0(position=-1, on='events') → t0_data() snapshot."""
         id_col = traj_pool_copy.settings.id_column
         traj_pool_copy.set_t0(position=-1, on=_REF_ALIAS)
-        df = traj_pool_copy.t0_data(output_format="polars").sort(id_col)
+        df = traj_pool_copy.t0_data(fmt="polars").sort(id_col)
         assert snapshot == df
 
     def test_position_out_of_range_gives_null(self, traj_pool_copy) -> None:
         """set_t0(position=9999, on='events') → all _T0_ = null, warning."""
         with pytest.warns(UserWarning):
             traj_pool_copy.set_t0(position=9999, on=_REF_ALIAS)
-        df = traj_pool_copy.t0_data(output_format="polars")
+        df = traj_pool_copy.t0_data(fmt="polars")
         assert df[_T0].is_null().all()
 
 
@@ -127,7 +127,7 @@ class TestTrajectorySetT0Direct:
         value = _sentinel_t0(traj_pool_copy)
         id_col = traj_pool_copy.settings.id_column
         traj_pool_copy.set_t0(direct=value)
-        df = traj_pool_copy.t0_data(output_format="polars").sort(id_col)
+        df = traj_pool_copy.t0_data(fmt="polars").sort(id_col)
         assert (df[_T0] == value).all()
         assert snapshot == df
 
@@ -138,7 +138,7 @@ class TestTrajectorySetT0Direct:
         value = _sentinel_t0(traj_pool_copy)
         mapping = {sid: value for sid in partial_ids}
         traj_pool_copy.set_t0(direct=mapping)
-        df = traj_pool_copy.t0_data(output_format="polars")
+        df = traj_pool_copy.t0_data(fmt="polars")
         id_col = traj_pool_copy.settings.id_column
 
         has_value = df.filter(pl.col(id_col).is_in(partial_ids))
@@ -152,7 +152,7 @@ class TestTrajectorySetT0Direct:
         """Direct T0 is identical in every alias's nearest-rank column set."""
         value = _sentinel_t0(traj_pool_copy)
         traj_pool_copy.set_t0(direct=value)
-        df = traj_pool_copy.t0_data(output_format="polars")
+        df = traj_pool_copy.t0_data(fmt="polars")
         assert (df[_T0] == value).all()
 
 
@@ -177,7 +177,7 @@ class TestTrajectorySetT0Feature:
         self._add_t0_feature(traj_pool_copy)
         id_col = traj_pool_copy.settings.id_column
         traj_pool_copy.set_t0(feature="t0_feat")
-        df = traj_pool_copy.t0_data(output_format="polars").sort(id_col)
+        df = traj_pool_copy.t0_data(fmt="polars").sort(id_col)
         assert df[_T0].is_not_null().all()
         assert snapshot == df
 
@@ -209,7 +209,7 @@ class TestTrajectorySetT0Query:
             use_first=True,
             on=_REF_ALIAS,
         )
-        df = traj_pool_copy.t0_data(output_format="polars").sort(id_col)
+        df = traj_pool_copy.t0_data(fmt="polars").sort(id_col)
         assert snapshot == df
 
     def test_query_use_last(self, traj_pool_copy, snapshot) -> None:
@@ -220,7 +220,7 @@ class TestTrajectorySetT0Query:
             use_first=False,
             on=_REF_ALIAS,
         )
-        df = traj_pool_copy.t0_data(output_format="polars").sort(id_col)
+        df = traj_pool_copy.t0_data(fmt="polars").sort(id_col)
         assert snapshot == df
 
     def test_query_no_match_gives_null(self, traj_pool_copy) -> None:
@@ -230,7 +230,7 @@ class TestTrajectorySetT0Query:
                 query=pl.col("value") > 99999,
                 on=_REF_ALIAS,
             )
-        df = traj_pool_copy.t0_data(output_format="polars")
+        df = traj_pool_copy.t0_data(fmt="polars")
         assert df[_T0].is_null().all()
 
 
@@ -246,7 +246,7 @@ class TestTrajectoryT0Data:
         """t0_data() has expected columns and one row per trajectory."""
         id_col = traj_pool_copy.settings.id_column
         traj_pool_copy.set_t0(position=0, on=_REF_ALIAS)
-        df = traj_pool_copy.t0_data(output_format="polars")
+        df = traj_pool_copy.t0_data(fmt="polars")
         assert len(df) == len(traj_pool_copy)
         assert id_col in df.columns
         assert _T0 in df.columns
@@ -260,16 +260,16 @@ class TestTrajectoryT0Data:
         assert isinstance(result, pd.DataFrame)
 
     def test_polars_output(self, traj_pool_copy) -> None:
-        """t0_data(output_format='polars') returns pl.DataFrame."""
+        """t0_data(fmt='polars') returns pl.DataFrame."""
         traj_pool_copy.set_t0(position=0, on=_REF_ALIAS)
-        result = traj_pool_copy.t0_data(output_format="polars")
+        result = traj_pool_copy.t0_data(fmt="polars")
         assert isinstance(result, pl.DataFrame)
 
     def test_invalid_format_raises(self, traj_pool_copy) -> None:
-        """t0_data(output_format='numpy') → ValueError."""
+        """t0_data(fmt='numpy') → ValueError."""
         traj_pool_copy.set_t0(position=0, on=_REF_ALIAS)
         with pytest.raises(ValueError):
-            traj_pool_copy.t0_data(output_format="numpy")
+            traj_pool_copy.t0_data(fmt="numpy")
 
 
 # ---------------------------------------------------------------------------
@@ -282,7 +282,7 @@ class TestTrajectoryT0Default:
 
     def test_lazy_trigger_produces_valid_t0(self, traj_pool_copy) -> None:
         """t0_data() works without set_t0(); produces non-null values."""
-        df = traj_pool_copy.t0_data(output_format="polars")
+        df = traj_pool_copy.t0_data(fmt="polars")
         assert isinstance(df, pl.DataFrame)
         assert _T0 in df.columns
         assert len(df) == len(traj_pool_copy)
@@ -308,17 +308,17 @@ class TestTrajectoryT0Override:
         id_col = traj_pool_copy.settings.id_column
         traj_pool_copy.set_t0(position=0, on=_REF_ALIAS)
         traj_pool_copy.set_t0(position=-1, on=_REF_ALIAS)
-        df = traj_pool_copy.t0_data(output_format="polars").sort(id_col)
+        df = traj_pool_copy.t0_data(fmt="polars").sort(id_col)
         assert snapshot == df
 
     def test_override_changes_values(self, traj_pool_copy) -> None:
         """Values after second set_t0() differ from first (if pool has >1 row)."""
         id_col = traj_pool_copy.settings.id_column
         traj_pool_copy.set_t0(position=0, on=_REF_ALIAS)
-        df_first = traj_pool_copy.t0_data(output_format="polars").sort(id_col)
+        df_first = traj_pool_copy.t0_data(fmt="polars").sort(id_col)
 
         traj_pool_copy.set_t0(direct=_sentinel_t0(traj_pool_copy))
-        df_second = traj_pool_copy.t0_data(output_format="polars").sort(id_col)
+        df_second = traj_pool_copy.t0_data(fmt="polars").sort(id_col)
 
         assert not df_first[_T0].equals(df_second[_T0])
 
@@ -345,7 +345,7 @@ class TestTrajectoryT0Propagation:
         tid = traj_pool_copy.unique_ids[0]
         traj = traj_pool_copy[tid]
 
-        pool_df = traj_pool_copy.t0_data(output_format="polars")
+        pool_df = traj_pool_copy.t0_data(fmt="polars")
         expected_t0 = pool_df.filter(pl.col(id_col) == tid)[_T0][0]
         assert traj.t0 == expected_t0
 
@@ -360,7 +360,7 @@ class TestTrajectoryT0Propagation:
         assert isinstance(ranks, dict)
         assert set(ranks.keys()) <= set(traj_pool_copy.sequence_pools.keys())
 
-        pool_df = traj_pool_copy.t0_data(output_format="polars")
+        pool_df = traj_pool_copy.t0_data(fmt="polars")
         row = pool_df.filter(pl.col(id_col) == tid)
         for alias, rank in ranks.items():
             col_name = f"{alias}{_T0_NEAREST_RANK}"
@@ -398,7 +398,7 @@ class TestTrajectoryT0SubPoolPropagation:
         # against its own temporal index.  Verify the column is present and
         # the rank is a non-negative integer for IDs that have sequence data.
         for alias, pool in traj_pool_copy.sequence_pools.items():
-            pool_df = pool.t0_data(output_format="polars")
+            pool_df = pool.t0_data(fmt="polars")
             assert _T0_NEAREST_RANK in pool_df.columns
             row = pool_df.filter(pl.col(id_col) == tid)
             if row.height > 0 and row[_T0][0] is not None:
@@ -421,7 +421,7 @@ class TestTrajectoryT0SubPoolPropagation:
         """Before set_t0(), accessing t0_data() on a sub-pool triggers lazy parent
         computation and returns a valid DataFrame (no RuntimeError / None crash)."""
         for pool in traj_pool_copy.sequence_pools.values():
-            df = pool.t0_data(output_format="polars")
+            df = pool.t0_data(fmt="polars")
             assert isinstance(df, pl.DataFrame)
             assert _T0 in df.columns
 
@@ -430,7 +430,7 @@ class TestTrajectoryT0SubPoolPropagation:
         traj_pool_copy.set_t0(position=0, on=_REF_ALIAS)
         tid = traj_pool_copy.unique_ids[0]
         t0_first = {
-            alias: pool.t0_data(output_format="polars").filter(
+            alias: pool.t0_data(fmt="polars").filter(
                 pl.col(traj_pool_copy.settings.id_column) == tid
             )[_T0][0]
             for alias, pool in traj_pool_copy.sequence_pools.items()
@@ -438,7 +438,7 @@ class TestTrajectoryT0SubPoolPropagation:
 
         traj_pool_copy.set_t0(direct=_sentinel_t0(traj_pool_copy))
         t0_second = {
-            alias: pool.t0_data(output_format="polars").filter(
+            alias: pool.t0_data(fmt="polars").filter(
                 pl.col(traj_pool_copy.settings.id_column) == tid
             )[_T0][0]
             for alias, pool in traj_pool_copy.sequence_pools.items()
@@ -508,9 +508,9 @@ class TestTrajectoryT0SubsetCopy:
         id_col = traj_pool_copy.settings.id_column
         ids = traj_pool_copy.unique_ids[:3]
 
-        original_t0 = traj_pool_copy.t0_data(output_format="polars")
+        original_t0 = traj_pool_copy.t0_data(fmt="polars")
         view = traj_pool_copy.subset(ids)
-        subset_t0 = view.t0_data(output_format="polars")
+        subset_t0 = view.t0_data(fmt="polars")
 
         assert len(subset_t0) == 3
         expected = original_t0.filter(pl.col(id_col).is_in(ids)).sort(id_col)
@@ -521,10 +521,10 @@ class TestTrajectoryT0SubsetCopy:
         """set_t0 → copy() → t0_data() matches the original."""
         id_col = traj_pool_copy.settings.id_column
         traj_pool_copy.set_t0(position=0, on=_REF_ALIAS)
-        original_t0 = traj_pool_copy.t0_data(output_format="polars").sort(id_col)
+        original_t0 = traj_pool_copy.t0_data(fmt="polars").sort(id_col)
 
         copied = traj_pool_copy.copy()
-        copied_t0 = copied.t0_data(output_format="polars").sort(id_col)
+        copied_t0 = copied.t0_data(fmt="polars").sort(id_col)
         assert copied_t0[_T0].equals(original_t0[_T0])
 
     def test_t0_preserved_after_drop_and_rebuild(self, traj_pool_copy) -> None:
@@ -532,14 +532,14 @@ class TestTrajectoryT0SubsetCopy:
         traj_pool_copy.set_t0(position=0, on=_REF_ALIAS)
         id_col = traj_pool_copy.settings.id_column
 
-        original_t0 = traj_pool_copy.t0_data(output_format="polars").sort(id_col)
+        original_t0 = traj_pool_copy.t0_data(fmt="polars").sort(id_col)
 
         non_ref_alias = next(
             a for a in traj_pool_copy.sequence_pools if a != _REF_ALIAS
         )
         traj_pool_copy.drop_sequence_pools(non_ref_alias)
 
-        after_drop = traj_pool_copy.t0_data(output_format="polars").sort(id_col)
+        after_drop = traj_pool_copy.t0_data(fmt="polars").sort(id_col)
         assert after_drop[_T0].equals(original_t0[_T0])
         dropped_col = f"{non_ref_alias}{_T0_NEAREST_RANK}"
         assert dropped_col not in after_drop.columns

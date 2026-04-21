@@ -19,7 +19,7 @@ class TestTrajectoryPoolDropFeatures:
         """Dropped feature is absent from static_data() output columns."""
         pool = traj_pool.copy()
         pool.drop_static_features(["age"])
-        sd = pool.static_data(output_format="polars")
+        sd = pool.static_data(fmt="polars")
         if sd is not None:
             assert "age" not in sd.columns
 
@@ -68,7 +68,7 @@ class TestTrajectoryPoolDropFeaturesPropagation:
         pool = traj_pool.copy()
         pool.drop_static_features(["age"])
         traj = pool[pool.unique_ids[0]]
-        sd = traj.static_data(output_format="polars")
+        sd = traj.static_data(fmt="polars")
         assert "age" not in sd.columns
 
     def test_drop_static_feature_absent_from_trajectory_metadata(

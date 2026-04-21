@@ -41,14 +41,14 @@ class TestIntervalPoolAsEvent:
     def test_row_count_preserved(self, pools_dict: dict, anchor: str) -> None:
         """Conversion does not add or remove rows."""
         pool = pools_dict["interval"]
-        n = pool.temporal_data(output_format="polars").height
-        assert pool.as_event(anchor).temporal_data(output_format="polars").height == n
+        n = pool.temporal_data(fmt="polars").height
+        assert pool.as_event(anchor).temporal_data(fmt="polars").height == n
 
     def test_custom_time_column_name(self, pools_dict: dict, anchor: str) -> None:
         """time_column controls the name of the event timestamp in the output."""
         pool = pools_dict["interval"]
         converted = pool.as_event(anchor, time_column="ts")
-        assert "ts" in converted.temporal_data(output_format="polars").columns
+        assert "ts" in converted.temporal_data(fmt="polars").columns
 
     def test_end_column_absent_from_output(self, pools_dict: dict, anchor: str) -> None:
         """The interval end column is not present in the event pool output."""
@@ -56,7 +56,7 @@ class TestIntervalPoolAsEvent:
         converted = pool.as_event(anchor, time_column="time")
         assert (
             pool.settings.end_column
-            not in converted.temporal_data(output_format="polars").columns
+            not in converted.temporal_data(fmt="polars").columns
         )
 
     def test_entity_features_preserved(self, pools_dict: dict, anchor: str) -> None:
@@ -83,9 +83,7 @@ class TestIntervalPoolAsEventColumns:
         """Column set of the converted EventSequencePool matches snapshot."""
         pool = pools_dict["interval"]
         converted = pool.as_event("start", time_column="time")
-        assert snapshot == sorted(
-            converted.temporal_data(output_format="polars").columns
-        )
+        assert snapshot == sorted(converted.temporal_data(fmt="polars").columns)
 
 
 # ---------------------------------------------------------------------------
@@ -149,7 +147,7 @@ class TestIntervalPoolTemporalCast:
         """Event time comes out as Int64 when cast_to_timestep(Int64) is pending."""
         pool = interval_pool_ts.copy()
         pool.cast_to_timestep(pl.Int64)
-        df = pool.as_event(anchor).temporal_data(output_format="polars")
+        df = pool.as_event(anchor).temporal_data(fmt="polars")
         assert df["time"].dtype == pl.Int64
 
     def test_no_pending_cast(
@@ -167,8 +165,8 @@ class TestIntervalPoolTemporalCast:
         """Cast + conversion does not add or remove rows."""
         pool = interval_pool_ts.copy()
         pool.cast_to_timestep(pl.Int64)
-        n = pool.temporal_data(output_format="polars").height
-        assert pool.as_event(anchor).temporal_data(output_format="polars").height == n
+        n = pool.temporal_data(fmt="polars").height
+        assert pool.as_event(anchor).temporal_data(fmt="polars").height == n
 
 
 # ---------------------------------------------------------------------------
@@ -212,13 +210,13 @@ class TestT0PropagationPersist:
         """set_t0(position=2, anchor=anchor) on IntervalPool → persisted EventPool keeps the same T0."""
         pool = interval_pool.copy()
         pool.set_t0(position=2, anchor=anchor)
-        source_t0 = pool.t0_data(output_format="polars")
+        source_t0 = pool.t0_data(fmt="polars")
 
         converted = pool.as_event(
             anchor,
             destination=str(tmp_path / f"t0_event_{anchor}"),
             overwrite=True,
         )
-        converted_t0 = converted.t0_data(output_format="polars")
+        converted_t0 = converted.t0_data(fmt="polars")
 
         assert source_t0[_T0].equals(converted_t0[_T0], null_equal=True)

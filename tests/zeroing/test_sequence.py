@@ -101,7 +101,7 @@ class TestPositionStrategy:
         """
         id_col = pool_copy.settings.id_column
         pool_copy.set_t0(position=0, anchor=_anchor_for(pool_type))
-        df = pool_copy.t0_data(output_format="polars").sort(id_col)
+        df = pool_copy.t0_data(fmt="polars").sort(id_col)
         # At least some sequences must have a valid T0
         assert df[_T0].is_not_null().any()
         assert snapshot == df
@@ -110,7 +110,7 @@ class TestPositionStrategy:
         """set_t0(position=-1, anchor="start") → t0_data() snapshot."""
         id_col = pool_copy.settings.id_column
         pool_copy.set_t0(position=-1, anchor=_anchor_for(pool_type))
-        df = pool_copy.t0_data(output_format="polars").sort(id_col)
+        df = pool_copy.t0_data(fmt="polars").sort(id_col)
         assert snapshot == df
 
     def test_position_anchor_end(self, pool_copy, pool_type: str, snapshot) -> None:
@@ -121,10 +121,10 @@ class TestPositionStrategy:
 
         pool_start = pool_copy.copy()
         pool_start.set_t0(position=0, anchor="start")
-        df_start = pool_start.t0_data(output_format="polars").sort(id_col)
+        df_start = pool_start.t0_data(fmt="polars").sort(id_col)
 
         pool_copy.set_t0(position=0, anchor="end")
-        df_end = pool_copy.t0_data(output_format="polars").sort(id_col)
+        df_end = pool_copy.t0_data(fmt="polars").sort(id_col)
 
         assert not df_end.equals(df_start)
         assert snapshot == df_end
@@ -135,21 +135,21 @@ class TestPositionStrategy:
             pytest.skip("anchor='middle' not applicable to event pools.")
         id_col = pool_copy.settings.id_column
         pool_copy.set_t0(position=0, anchor="middle")
-        df = pool_copy.t0_data(output_format="polars").sort(id_col)
+        df = pool_copy.t0_data(fmt="polars").sort(id_col)
         assert snapshot == df
 
     def test_position_out_of_range_gives_null(self, pool_copy, pool_type: str) -> None:
         """set_t0(position=9999) → all _T0_ = null, UserWarning emitted."""
         with pytest.warns(UserWarning):
             pool_copy.set_t0(position=9999, anchor=_anchor_for(pool_type))
-        df = pool_copy.t0_data(output_format="polars")
+        df = pool_copy.t0_data(fmt="polars")
         assert df[_T0].is_null().all()
 
     def test_position_negative_out_of_range(self, pool_copy, pool_type: str) -> None:
         """set_t0(position=-9999) → all _T0_ = null."""
         with pytest.warns(UserWarning):
             pool_copy.set_t0(position=-9999, anchor=_anchor_for(pool_type))
-        df = pool_copy.t0_data(output_format="polars")
+        df = pool_copy.t0_data(fmt="polars")
         assert df[_T0].is_null().all()
 
 
@@ -167,7 +167,7 @@ class TestDirectStrategy:
         value = _sentinel_t0(pool_copy)
         id_col = pool_copy.settings.id_column
         pool_copy.set_t0(direct=value, anchor=_anchor_for(pool_type))
-        df = pool_copy.t0_data(output_format="polars").sort(id_col)
+        df = pool_copy.t0_data(fmt="polars").sort(id_col)
         assert (df[_T0] == value).all()
         assert snapshot == df
 
@@ -178,7 +178,7 @@ class TestDirectStrategy:
         value = _sentinel_t0(pool_copy)
         mapping = {sid: value for sid in partial_ids}
         pool_copy.set_t0(direct=mapping, anchor=_anchor_for(pool_type))
-        df = pool_copy.t0_data(output_format="polars")
+        df = pool_copy.t0_data(fmt="polars")
         id_col = pool_copy.settings.id_column
 
         # The 3 selected IDs have non-null T0
@@ -225,7 +225,7 @@ class TestFeatureStrategy:
         # Build a static feature with the correct temporal dtype:
         # take the first temporal value per sequence from sequence_data.
         # Use the actual Polars dtype from the schema (metadata.time_index.dtype is a str).
-        seq_df = pool_copy.temporal_data(output_format="polars")
+        seq_df = pool_copy.temporal_data(fmt="polars")
         actual_temporal_dtype = seq_df.schema[temporal_col]
         t0_static = (
             seq_df.group_by(id_col)
@@ -235,7 +235,7 @@ class TestFeatureStrategy:
         pool_copy.add_static_features(t0_static)
         pool_copy.set_t0(feature="t0_feature")
 
-        df = pool_copy.t0_data(output_format="polars").sort(id_col)
+        df = pool_copy.t0_data(fmt="polars").sort(id_col)
         # IDs with temporal data must have a non-null T0; static-only IDs get null
         assert df[_T0].is_not_null().any()
         assert snapshot == df
@@ -269,7 +269,7 @@ class TestQueryStrategy:
             anchor=_anchor_for(pool_type),
             use_first=True,
         )
-        df = pool_copy.t0_data(output_format="polars").sort(id_col)
+        df = pool_copy.t0_data(fmt="polars").sort(id_col)
         assert snapshot == df
 
     def test_query_last_match(self, pool_copy, pool_type: str, snapshot) -> None:
@@ -280,7 +280,7 @@ class TestQueryStrategy:
             anchor=_anchor_for(pool_type),
             use_first=False,
         )
-        df = pool_copy.t0_data(output_format="polars").sort(id_col)
+        df = pool_copy.t0_data(fmt="polars").sort(id_col)
         assert snapshot == df
 
     def test_query_no_match_gives_null(self, pool_copy, pool_type: str) -> None:
@@ -290,7 +290,7 @@ class TestQueryStrategy:
                 query=pl.col("value") > 99999,
                 anchor=_anchor_for(pool_type),
             )
-        df = pool_copy.t0_data(output_format="polars")
+        df = pool_copy.t0_data(fmt="polars")
         assert df[_T0].is_null().all()
 
     def test_query_anchor_end(self, pool_copy, pool_type: str, snapshot) -> None:
@@ -305,14 +305,14 @@ class TestQueryStrategy:
             anchor="start",
             use_first=True,
         )
-        df_start = pool_start.t0_data(output_format="polars").sort(id_col)
+        df_start = pool_start.t0_data(fmt="polars").sort(id_col)
 
         pool_copy.set_t0(
             query=pl.col("status") == "error",
             anchor="end",
             use_first=True,
         )
-        df_end = pool_copy.t0_data(output_format="polars").sort(id_col)
+        df_end = pool_copy.t0_data(fmt="polars").sort(id_col)
 
         # At least one non-null row must differ
         non_null = df_end[_T0].is_not_null() & df_start[_T0].is_not_null()
@@ -331,17 +331,17 @@ class TestT0DataOutput:
     """Tests on the t0_data() return value shape and format."""
 
     def test_columns(self, pool_copy, pool_type: str, snapshot) -> None:
-        """t0_data(output_format='polars').columns == [id_col, '_T0_', '_T0_NEAREST_RANK_']."""
+        """t0_data(fmt='polars').columns == [id_col, '_T0_', '_T0_NEAREST_RANK_']."""
         id_col = pool_copy.settings.id_column
         pool_copy.set_t0(position=0, anchor=_anchor_for(pool_type))
-        df = pool_copy.t0_data(output_format="polars")
+        df = pool_copy.t0_data(fmt="polars")
         assert df.columns == [id_col, _T0, _T0_NEAREST_RANK]
         assert snapshot == df.columns
 
     def test_row_count(self, pool_copy, pool_type: str) -> None:
         """len(t0_data()) == len(pool_copy)."""
         pool_copy.set_t0(position=0, anchor=_anchor_for(pool_type))
-        df = pool_copy.t0_data(output_format="polars")
+        df = pool_copy.t0_data(fmt="polars")
         assert len(df) == len(pool_copy)
 
     def test_pandas_output(self, pool_copy, pool_type: str) -> None:
@@ -351,16 +351,16 @@ class TestT0DataOutput:
         assert isinstance(result, pd.DataFrame)
 
     def test_polars_output(self, pool_copy, pool_type: str) -> None:
-        """t0_data(output_format='polars') returns a pl.DataFrame."""
+        """t0_data(fmt='polars') returns a pl.DataFrame."""
         pool_copy.set_t0(position=0, anchor=_anchor_for(pool_type))
-        result = pool_copy.t0_data(output_format="polars")
+        result = pool_copy.t0_data(fmt="polars")
         assert isinstance(result, pl.DataFrame)
 
     def test_invalid_format_raises(self, pool_copy, pool_type: str) -> None:
-        """t0_data(output_format='numpy') → ValueError."""
+        """t0_data(fmt='numpy') → ValueError."""
         pool_copy.set_t0(position=0, anchor=_anchor_for(pool_type))
         with pytest.raises(ValueError):
-            pool_copy.t0_data(output_format="numpy")  # type: ignore[arg-type]
+            pool_copy.t0_data(fmt="numpy")  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------
@@ -377,7 +377,7 @@ class TestT0Overwrite:
         id_col = pool_copy.settings.id_column
         pool_copy.set_t0(position=0, anchor=_anchor_for(pool_type))
         pool_copy.set_t0(position=-1, anchor=_anchor_for(pool_type))
-        df = pool_copy.t0_data(output_format="polars").sort(id_col)
+        df = pool_copy.t0_data(fmt="polars").sort(id_col)
         assert snapshot == df
 
     def test_set_t0_returns_self(self, pool_copy, pool_type: str) -> None:
@@ -397,7 +397,7 @@ class TestDefaultT0:
 
     def test_default_lazy_trigger(self, pool_copy) -> None:
         """Accessing t0_data() without set_t0() defaults to position=0; result non-empty."""
-        df = pool_copy.t0_data(output_format="polars")
+        df = pool_copy.t0_data(fmt="polars")
         assert len(df) == len(pool_copy)
         assert len(df) > 0
 
@@ -430,7 +430,7 @@ class TestSequenceT0:
         sid = pool_copy.unique_ids[0]
         seq = pool_copy[sid]
 
-        pool_df = pool_copy.t0_data(output_format="polars")
+        pool_df = pool_copy.t0_data(fmt="polars")
         expected_t0 = pool_df.filter(pl.col(id_col) == sid)[_T0][0]
         assert seq.t0 == expected_t0
 
@@ -441,7 +441,7 @@ class TestSequenceT0:
         sid = pool_copy.unique_ids[0]
         seq = pool_copy[sid]
 
-        pool_df = pool_copy.t0_data(output_format="polars")
+        pool_df = pool_copy.t0_data(fmt="polars")
         expected_rank = pool_df.filter(pl.col(id_col) == sid)[_T0_NEAREST_RANK][0]
         assert seq.t0_nearest_rank == expected_rank
 
@@ -477,9 +477,9 @@ class TestT0AfterSubset:
         id_col = pool_copy.settings.id_column
         ids = pool_copy.unique_ids[:3]
 
-        original_t0 = pool_copy.t0_data(output_format="polars")
+        original_t0 = pool_copy.t0_data(fmt="polars")
         view = pool_copy.subset(ids)
-        subset_t0 = view.t0_data(output_format="polars")
+        subset_t0 = view.t0_data(fmt="polars")
 
         assert len(subset_t0) == 3
         # Values for those 3 IDs are preserved
@@ -491,10 +491,10 @@ class TestT0AfterSubset:
         """set_t0 → copy() → t0_data() matches the original."""
         id_col = pool_copy.settings.id_column
         pool_copy.set_t0(position=0, anchor=_anchor_for(pool_type))
-        original_t0 = pool_copy.t0_data(output_format="polars").sort(id_col)
+        original_t0 = pool_copy.t0_data(fmt="polars").sort(id_col)
 
         copied = pool_copy.copy()
-        copied_t0 = copied.t0_data(output_format="polars").sort(id_col)
+        copied_t0 = copied.t0_data(fmt="polars").sort(id_col)
         assert copied_t0.equals(original_t0)
 
 
@@ -511,11 +511,11 @@ class TestT0AfterTrainTestSplit:
         """set_t0 → train_test_split → both halves have t0_data with correct row counts."""
         pool_copy.set_t0(position=0, anchor=_anchor_for(pool_type))
         id_col = pool_copy.settings.id_column
-        original_t0 = pool_copy.t0_data(output_format="polars")
+        original_t0 = pool_copy.t0_data(fmt="polars")
 
         train, test = pool_copy.train_test_split(test_size=0.25, random_state=42)
-        train_t0 = train.t0_data(output_format="polars")
-        test_t0 = test.t0_data(output_format="polars")
+        train_t0 = train.t0_data(fmt="polars")
+        test_t0 = test.t0_data(fmt="polars")
 
         # Row counts match split sizes
         assert len(train_t0) == len(train)
