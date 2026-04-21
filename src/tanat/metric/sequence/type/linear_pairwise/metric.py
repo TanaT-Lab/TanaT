@@ -150,17 +150,21 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
     # Core computation
     # ------------------------------------------------------------------
 
-    def _compute(self, seq_a: Sequence, seq_b: Sequence) -> float:
-        """Compute distance for a single pair of sequences (already validated).
+    def __call__(self, seq_a: Sequence, seq_b: Sequence) -> float:
+        """Compute distance between two sequences.
+
+        Emits a :class:`UserWarning` when one sequence is empty and
+        ``padding_penalty`` is ``None`` (distance is undefined).
 
         Args:
             seq_a: First sequence.
             seq_b: Second sequence.
 
         Returns:
-            Aggregated scalar distance, or ``nan`` when the distance is
-            undefined (empty sequence with no padding).
+            Aggregated scalar distance, or ``nan`` when undefined.
         """
+        self._validate_sequences(seq_a, seq_b)
+        self.validate_composition(seq_a, seq_b)
         n_a, n_b = len(seq_a), len(seq_b)
         if (
             min(n_a, n_b) == 0
@@ -175,6 +179,19 @@ class LinearPairwiseSequenceMetric(SequenceMetric, register_name="linearpairwise
                 stacklevel=2,
             )
             return float("nan")
+
+        return self._compute(seq_a, seq_b)
+
+    def _compute(self, seq_a: Sequence, seq_b: Sequence) -> float:
+        """Compute distance for a single pair of sequences (already validated).
+
+        Args:
+            seq_a: First sequence.
+            seq_b: Second sequence.
+
+        Returns:
+            Aggregated scalar distance, or ``nan`` when undefined.
+        """
         em = self.entity_metric
         agg_fn = self._get_agg_fn()
         return self._compute_pair(seq_a, seq_b, em, agg_fn)
