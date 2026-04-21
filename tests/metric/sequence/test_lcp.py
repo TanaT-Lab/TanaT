@@ -82,10 +82,12 @@ class TestComputeMatrix:
     """Full pairwise matrix: structure and numerical properties."""
 
     def test_returns_distance_matrix(self, cat_pool, entity_metric) -> None:
+        """compute_matrix() returns a DistanceMatrix instance."""
         lcp = LCPSequenceMetric(entity_metric=entity_metric)
         assert isinstance(lcp.compute_matrix(cat_pool), DistanceMatrix)
 
     def test_square_and_ids_match(self, cat_pool, entity_metric) -> None:
+        """Returned matrix is square and reuses pool identifiers."""
         lcp = LCPSequenceMetric(entity_metric=entity_metric)
         dm = lcp.compute_matrix(cat_pool)
         n = len(cat_pool)
@@ -107,6 +109,7 @@ class TestComputeMatrix:
     def test_matrix_values_snapshot(
         self, cat_pool, entity_metric, snapshot: SnapshotAssertion
     ) -> None:
+        """Full LCP matrix stays stable against the snapshot."""
         lcp = LCPSequenceMetric(entity_metric=entity_metric)
         dm = lcp.compute_matrix(cat_pool)
         assert snapshot == dm.to_frame("polars").with_columns(pl.exclude("id").round(4))
@@ -129,14 +132,17 @@ class TestSettings:
     """Settings validation, registry, and config round-trip."""
 
     def test_registrable_lookup(self) -> None:
+        """Registry lookup resolves the LCP metric class."""
         assert SequenceMetric.get_registered("lcp") is LCPSequenceMetric
 
     def test_settings_defaults(self) -> None:
+        """Default settings use distance mode and zero threshold."""
         lcp = LCPSequenceMetric()
         assert lcp.settings.mode == "distance"
         assert lcp.settings.equality_threshold == 0.0
 
     def test_config_roundtrip(self) -> None:
+        """Configuration serialization preserves LCP options."""
         lcp = LCPSequenceMetric(mode="normalized", equality_threshold=0.1)
         cfg = lcp.to_config()
         lcp2 = LCPSequenceMetric.from_config(cfg)

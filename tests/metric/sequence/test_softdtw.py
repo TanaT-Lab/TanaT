@@ -62,6 +62,7 @@ class TestSinglePair:
         assert sdtw_val == pytest.approx(dtw_val, abs=0.5)
 
     def test_gamma_validation(self) -> None:
+        """Non-positive gamma values are rejected."""
         with pytest.raises(Exception):
             SoftDTWSequenceMetric(gamma=0.0)
         with pytest.raises(Exception):
@@ -74,11 +75,15 @@ class TestSinglePair:
 
 
 class TestComputeMatrix:
+    """SoftDTW matrix structure and regression checks."""
+
     def test_returns_distance_matrix(self, cat_pool, entity_metric) -> None:
+        """compute_matrix() returns a DistanceMatrix instance."""
         sdtw = SoftDTWSequenceMetric(entity_metric=entity_metric)
         assert isinstance(sdtw.compute_matrix(cat_pool), DistanceMatrix)
 
     def test_square_and_ids_match(self, cat_pool, entity_metric) -> None:
+        """Returned matrix is square and reuses pool identifiers."""
         sdtw = SoftDTWSequenceMetric(entity_metric=entity_metric)
         dm = sdtw.compute_matrix(cat_pool)
         n = len(cat_pool)
@@ -86,6 +91,7 @@ class TestComputeMatrix:
         assert dm.ids == cat_pool.unique_ids
 
     def test_consistency_single_pair_vs_matrix(self, cat_pool, entity_metric) -> None:
+        """Matrix entries match direct SoftDTW computations."""
         sdtw = SoftDTWSequenceMetric(entity_metric=entity_metric)
         ids = cat_pool.unique_ids[:4]
         sub = cat_pool.subset(ids)
@@ -99,6 +105,7 @@ class TestComputeMatrix:
     def test_matrix_values_snapshot(
         self, cat_pool, entity_metric, snapshot: SnapshotAssertion
     ) -> None:
+        """Full SoftDTW matrix stays stable against the snapshot."""
         sdtw = SoftDTWSequenceMetric(entity_metric=entity_metric)
         dm = sdtw.compute_matrix(cat_pool)
         assert snapshot == dm.to_frame("polars").with_columns(pl.exclude("id").round(4))
@@ -118,14 +125,19 @@ class TestComputeMatrix:
 
 
 class TestSettings:
+    """Registry, defaults, and config round-trip checks."""
+
     def test_registrable_lookup(self) -> None:
+        """Registry lookup resolves the SoftDTW metric class."""
         assert SequenceMetric.get_registered("softdtw") is SoftDTWSequenceMetric
 
     def test_settings_defaults(self) -> None:
+        """Default settings keep gamma at 1.0."""
         sdtw = SoftDTWSequenceMetric()
         assert sdtw.settings.gamma == pytest.approx(1.0)
 
     def test_config_roundtrip(self) -> None:
+        """Configuration serialization preserves gamma."""
         sdtw = SoftDTWSequenceMetric(gamma=0.5)
         cfg = sdtw.to_config()
         sdtw2 = SoftDTWSequenceMetric.from_config(cfg)

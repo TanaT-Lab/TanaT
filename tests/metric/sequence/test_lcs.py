@@ -91,11 +91,15 @@ class TestSinglePair:
 
 
 class TestComputeMatrix:
+    """LCS matrix structure and regression checks."""
+
     def test_returns_distance_matrix(self, cat_pool, entity_metric) -> None:
+        """compute_matrix() returns a DistanceMatrix instance."""
         lcs = LCSSequenceMetric(entity_metric=entity_metric)
         assert isinstance(lcs.compute_matrix(cat_pool), DistanceMatrix)
 
     def test_square_and_ids_match(self, cat_pool, entity_metric) -> None:
+        """Returned matrix is square and reuses pool identifiers."""
         lcs = LCSSequenceMetric(entity_metric=entity_metric)
         dm = lcs.compute_matrix(cat_pool)
         n = len(cat_pool)
@@ -103,6 +107,7 @@ class TestComputeMatrix:
         assert dm.ids == cat_pool.unique_ids
 
     def test_consistency_single_pair_vs_matrix(self, cat_pool, entity_metric) -> None:
+        """Matrix entries match direct LCS computations."""
         lcs = LCSSequenceMetric(entity_metric=entity_metric)
         ids = cat_pool.unique_ids[:4]
         sub = cat_pool.subset(ids)
@@ -116,6 +121,7 @@ class TestComputeMatrix:
     def test_matrix_values_snapshot(
         self, cat_pool, entity_metric, snapshot: SnapshotAssertion
     ) -> None:
+        """Full LCS matrix stays stable against the snapshot."""
         lcs = LCSSequenceMetric(entity_metric=entity_metric)
         dm = lcs.compute_matrix(cat_pool)
         assert snapshot == dm.to_frame("polars").with_columns(pl.exclude("id").round(4))
@@ -135,15 +141,20 @@ class TestComputeMatrix:
 
 
 class TestSettings:
+    """Registry, defaults, and config round-trip checks."""
+
     def test_registrable_lookup(self) -> None:
+        """Registry lookup resolves the LCS metric class."""
         assert SequenceMetric.get_registered("lcs") is LCSSequenceMetric
 
     def test_settings_defaults(self) -> None:
+        """Default settings use distance mode and zero threshold."""
         lcs = LCSSequenceMetric()
         assert lcs.settings.mode == "distance"
         assert lcs.settings.equality_threshold == 0.0
 
     def test_config_roundtrip(self) -> None:
+        """Configuration serialization preserves LCS options."""
         lcs = LCSSequenceMetric(mode="normalized", equality_threshold=0.2)
         cfg = lcs.to_config()
         lcs2 = LCSSequenceMetric.from_config(cfg)

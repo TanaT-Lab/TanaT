@@ -71,11 +71,15 @@ class TestSinglePair:
 
 
 class TestComputeMatrix:
+    """DTW matrix structure and regression checks."""
+
     def test_returns_distance_matrix(self, cat_pool, entity_metric) -> None:
+        """compute_matrix() returns a DistanceMatrix instance."""
         dtw = DTWSequenceMetric(entity_metric=entity_metric)
         assert isinstance(dtw.compute_matrix(cat_pool), DistanceMatrix)
 
     def test_square_and_ids_match(self, cat_pool, entity_metric) -> None:
+        """Returned matrix is square and reuses pool identifiers."""
         dtw = DTWSequenceMetric(entity_metric=entity_metric)
         dm = dtw.compute_matrix(cat_pool)
         n = len(cat_pool)
@@ -83,6 +87,7 @@ class TestComputeMatrix:
         assert dm.ids == cat_pool.unique_ids
 
     def test_consistency_single_pair_vs_matrix(self, cat_pool, entity_metric) -> None:
+        """Matrix entries match direct DTW computations."""
         dtw = DTWSequenceMetric(entity_metric=entity_metric)
         ids = cat_pool.unique_ids[:4]
         sub = cat_pool.subset(ids)
@@ -96,6 +101,7 @@ class TestComputeMatrix:
     def test_matrix_values_snapshot(
         self, cat_pool, entity_metric, snapshot: SnapshotAssertion
     ) -> None:
+        """Full DTW matrix stays stable against the snapshot."""
         dtw = DTWSequenceMetric(entity_metric=entity_metric)
         dm = dtw.compute_matrix(cat_pool)
         assert snapshot == dm.to_frame("polars").with_columns(pl.exclude("id").round(4))
@@ -115,21 +121,27 @@ class TestComputeMatrix:
 
 
 class TestSettings:
+    """Registry, defaults, and validation around DTW settings."""
+
     def test_registrable_lookup(self) -> None:
+        """Registry lookup resolves the DTW metric class."""
         assert SequenceMetric.get_registered("dtw") is DTWSequenceMetric
 
     def test_settings_defaults(self) -> None:
+        """Default settings keep window unset and normalization disabled."""
         dtw = DTWSequenceMetric()
         assert dtw.settings.window is None
         assert dtw.settings.normalize is False
 
     def test_invalid_window_rejected(self) -> None:
+        """Non-positive window values are rejected."""
         with pytest.raises(Exception):
             DTWSequenceMetric(window=0)
         with pytest.raises(Exception):
             DTWSequenceMetric(window=-1)
 
     def test_config_roundtrip(self) -> None:
+        """Configuration serialization preserves DTW options."""
         dtw = DTWSequenceMetric(window=3, normalize=True)
         cfg = dtw.to_config()
         dtw2 = DTWSequenceMetric.from_config(cfg)

@@ -68,11 +68,15 @@ class TestSinglePair:
 
 
 class TestComputeMatrix:
+    """Edit-distance matrix structure and regression checks."""
+
     def test_returns_distance_matrix(self, cat_pool, entity_metric) -> None:
+        """compute_matrix() returns a DistanceMatrix instance."""
         edit = EditSequenceMetric(entity_metric=entity_metric)
         assert isinstance(edit.compute_matrix(cat_pool), DistanceMatrix)
 
     def test_square_and_ids_match(self, cat_pool, entity_metric) -> None:
+        """Returned matrix is square and reuses pool identifiers."""
         edit = EditSequenceMetric(entity_metric=entity_metric)
         dm = edit.compute_matrix(cat_pool)
         n = len(cat_pool)
@@ -80,6 +84,7 @@ class TestComputeMatrix:
         assert dm.ids == cat_pool.unique_ids
 
     def test_consistency_single_pair_vs_matrix(self, cat_pool, entity_metric) -> None:
+        """Matrix entries match direct edit-distance computations."""
         edit = EditSequenceMetric(entity_metric=entity_metric)
         ids = cat_pool.unique_ids[:4]
         sub = cat_pool.subset(ids)
@@ -93,6 +98,7 @@ class TestComputeMatrix:
     def test_matrix_values_snapshot(
         self, cat_pool, entity_metric, snapshot: SnapshotAssertion
     ) -> None:
+        """Full edit-distance matrix stays stable against the snapshot."""
         edit = EditSequenceMetric(entity_metric=entity_metric)
         dm = edit.compute_matrix(cat_pool)
         assert snapshot == dm.to_frame("polars").with_columns(pl.exclude("id").round(4))
@@ -112,21 +118,27 @@ class TestComputeMatrix:
 
 
 class TestSettings:
+    """Registry, defaults, and validation around edit settings."""
+
     def test_registrable_lookup(self) -> None:
+        """Registry lookup resolves the edit metric class."""
         assert SequenceMetric.get_registered("edit") is EditSequenceMetric
 
     def test_settings_defaults(self) -> None:
+        """Default settings keep unit indel cost and no normalization."""
         edit = EditSequenceMetric()
         assert edit.settings.indel_cost == 1.0
         assert edit.settings.normalize is False
 
     def test_invalid_indel_cost_rejected(self) -> None:
+        """Non-positive indel costs are rejected."""
         with pytest.raises(Exception):
             EditSequenceMetric(indel_cost=0.0)
         with pytest.raises(Exception):
             EditSequenceMetric(indel_cost=-1.0)
 
     def test_config_roundtrip(self) -> None:
+        """Configuration serialization preserves edit options."""
         edit = EditSequenceMetric(indel_cost=0.5, normalize=True)
         cfg = edit.to_config()
         edit2 = EditSequenceMetric.from_config(cfg)

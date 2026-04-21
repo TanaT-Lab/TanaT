@@ -63,11 +63,15 @@ class TestSinglePair:
 
 
 class TestComputeMatrix:
+    """Chi2 matrix shape, values, and snapshots."""
+
     def test_returns_distance_matrix(self, cat_pool) -> None:
+        """compute_matrix() returns a DistanceMatrix instance."""
         chi2 = Chi2SequenceMetric(entity_feature="status")
         assert isinstance(chi2.compute_matrix(cat_pool), DistanceMatrix)
 
     def test_square_and_ids_match(self, cat_pool) -> None:
+        """Returned matrix is square and keeps pool identifiers."""
         chi2 = Chi2SequenceMetric(entity_feature="status")
         dm = chi2.compute_matrix(cat_pool)
         n = len(cat_pool)
@@ -75,6 +79,7 @@ class TestComputeMatrix:
         assert dm.ids == cat_pool.unique_ids
 
     def test_consistency_single_pair_vs_matrix(self, cat_pool) -> None:
+        """Matrix entries match direct pairwise Chi2 computations."""
         chi2 = Chi2SequenceMetric(entity_feature="status")
         ids = cat_pool.unique_ids[:4]
         sub = cat_pool.subset(ids)
@@ -88,6 +93,7 @@ class TestComputeMatrix:
     def test_matrix_values_snapshot(
         self, cat_pool, snapshot: SnapshotAssertion
     ) -> None:
+        """Full Chi2 matrix stays stable against the snapshot."""
         chi2 = Chi2SequenceMetric(entity_feature="status")
         dm = chi2.compute_matrix(cat_pool)
         assert snapshot == dm.to_frame("polars").with_columns(pl.exclude("id").round(4))
@@ -102,7 +108,10 @@ class TestComputeMatrix:
 
 
 class TestComputeCrossMatrix:
+    """Cross-matrix behavior between two pools."""
+
     def test_cross_matrix_shape_and_dtype(self, cat_pool) -> None:
+        """Cross-matrix shape and dtype follow the row/column subsets."""
         chi2 = Chi2SequenceMetric(entity_feature="status")
         rows = cat_pool.subset(cat_pool.unique_ids[:4])
         cols = cat_pool.subset(cat_pool.unique_ids[4:7])
@@ -113,6 +122,7 @@ class TestComputeCrossMatrix:
         assert result.dtype == np.float32
 
     def test_consistency_single_pair_vs_cross_matrix(self, cat_pool) -> None:
+        """Cross-matrix entries match direct pairwise Chi2 values."""
         chi2 = Chi2SequenceMetric(entity_feature="status")
         rows = cat_pool.subset(cat_pool.unique_ids[:3])
         cols = cat_pool.subset(cat_pool.unique_ids[3:5])
@@ -124,6 +134,7 @@ class TestComputeCrossMatrix:
                 assert result[i, j] == pytest.approx(expected, abs=1e-5)
 
     def test_same_pool_matches_compute_matrix(self, cat_pool) -> None:
+        """Using the same pool on both axes matches compute_matrix()."""
         chi2 = Chi2SequenceMetric(entity_feature="status")
         sub = cat_pool.subset(cat_pool.unique_ids[:4])
 
@@ -133,6 +144,7 @@ class TestComputeCrossMatrix:
         np.testing.assert_allclose(cross, matrix, atol=1e-5)
 
     def test_cross_matrix_with_pool_specific_categories(self, mixed_cat_pool) -> None:
+        """Pool-specific categories still yield a valid 1x1 result."""
         chi2 = Chi2SequenceMetric(entity_feature="status")
         rows = mixed_cat_pool.subset(["seq_1"])
         cols = mixed_cat_pool.subset(["seq_2"])
@@ -145,6 +157,7 @@ class TestComputeCrossMatrix:
         )
 
     def test_cross_matrix_mixed_empty_sequences(self, mixed_cat_pool) -> None:
+        """Empty/non-empty combinations keep the expected boundary values."""
         chi2 = Chi2SequenceMetric(entity_feature="status")
         rows = mixed_cat_pool.subset(["empty_1", "seq_1"])
         cols = mixed_cat_pool.subset(["empty_2", "seq_2"])
@@ -170,14 +183,19 @@ class TestComputeCrossMatrix:
 
 
 class TestSettings:
+    """Registration and settings round-trip checks."""
+
     def test_registrable_lookup(self) -> None:
+        """Registry lookup resolves the Chi2 metric class."""
         assert SequenceMetric.get_registered("chi2") is Chi2SequenceMetric
 
     def test_settings_defaults(self) -> None:
+        """Default settings leave entity_feature unset."""
         chi2 = Chi2SequenceMetric()
         assert chi2.settings.entity_feature is None
 
     def test_config_roundtrip(self) -> None:
+        """Configuration serialization preserves entity_feature."""
         chi2 = Chi2SequenceMetric(entity_feature="status")
         cfg = chi2.to_config()
         chi2b = Chi2SequenceMetric.from_config(cfg)
