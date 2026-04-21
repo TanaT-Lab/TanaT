@@ -208,9 +208,7 @@ tpool.t0_data().head()
 # %%
 
 # First lab with status matching a known category
-status_values = (
-    labs_pool.temporal_data(output_format="polars")["status"].unique().to_list()
-)
+status_values = labs_pool.temporal_data(fmt="polars")["status"].unique().to_list()
 ref_status = status_values[0]
 
 tpool.set_t0(
@@ -225,7 +223,7 @@ tpool.t0_data().head()
 
 # Last admission matching a status (interval pool, anchor='end')
 adm_status_values = (
-    admissions_pool.temporal_data(output_format="polars")["status"].unique().to_list()
+    admissions_pool.temporal_data(fmt="polars")["status"].unique().to_list()
 )
 ref_adm_status = adm_status_values[0]
 
@@ -285,7 +283,7 @@ for traj in list(tpool)[:6]:
 #   its own column because the temporal grids differ)
 
 # %%
-df = tpool.t0_data(output_format="polars")
+df = tpool.t0_data(fmt="polars")
 print("Columns:", df.columns)
 print(f"Rows   : {len(df)} (one per trajectory)")
 df.head()
@@ -330,6 +328,6 @@ print(f"seq.t0_nearest_rank (labs grid): {seq.t0_nearest_rank}")
 
 # %%
 # Sub-pools expose the same T0 via t0_data()
-labs_t0 = tpool.sequence_pools["labs"].t0_data(output_format="polars")
+labs_t0 = tpool.sequence_pools["labs"].t0_data(fmt="polars")
 print("Columns:", labs_t0.columns)
 labs_t0.head()
