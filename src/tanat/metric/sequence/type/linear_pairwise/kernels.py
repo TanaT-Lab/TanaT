@@ -131,94 +131,7 @@ def compute_single_pair(
 
 
 @njit(parallel=True)
-def compute_matrix_kernel(
-    result,
-    arrays_a,
-    lengths_a,
-    arrays_b,
-    lengths_b,
-    dist_kernel,
-    context,
-    aggregator,
-    padding_penalty,
-    symmetric,
-):
-    """Unified parallel kernel for both symmetric and cross distance matrices.
-
-    When ``symmetric`` is ``True``, only the strict upper triangle is
-    computed and each value is mirrored to ``result[j, i]``.  This halves
-    the work for same-pool computations (``arrays_a`` and ``arrays_b`` must
-    be the same pool, *result* must be square).
-
-    When ``symmetric`` is ``False``, every ``(i, j)`` cell is computed
-    independently.
-
-    Uses ``prange`` on the outer (row) loop for parallelism.
-
-    Args:
-        result:          Pre-allocated float32 array (n × n) when
-                         ``symmetric=True``, (n × k) otherwise.
-        arrays_a:        Encoded sequences for the row pool (n items).
-        lengths_a:       Sequence lengths for the row pool.
-        arrays_b:        Encoded sequences for the column pool (k items).
-        lengths_b:       Sequence lengths for the column pool.
-        dist_kernel:     Numba-compiled entity-level distance function.
-        context:         Opaque tuple forwarded to ``dist_kernel``.
-        aggregator:      Numba-compiled aggregation function.
-        padding_penalty: float32 padding value (``nan`` = no padding).
-        symmetric:       When ``True``, exploit the upper-triangle + mirror
-                         optimisation. Only valid when ``arrays_a`` and
-                         ``arrays_b`` represent the **same pool** (square
-                         matrix).  When ``False``, every ``(i, j)`` cell is
-                         computed independently; required for rectangular
-                         cross-pool matrices.
-    """
-    n = len(lengths_a)
-    k = len(lengths_b)
-    for i in prange(n):  # pylint: disable=not-an-iterable
-        # Diagonal computation
-        result[i, i] = compute_single_pair(
-            arrays_a[i],
-            arrays_b[i],
-            lengths_a[i],
-            lengths_b[i],
-            dist_kernel,
-            context,
-            aggregator,
-            padding_penalty,
-        )
-        if symmetric:
-            for j in range(i + 1, k):
-                d = compute_single_pair(
-                    arrays_a[i],
-                    arrays_b[j],
-                    lengths_a[i],
-                    lengths_b[j],
-                    dist_kernel,
-                    context,
-                    aggregator,
-                    padding_penalty,
-                )
-                result[i, j] = d
-                result[j, i] = d
-        else:
-            for j in range(k):
-                if j == i:
-                    continue  # already computed above
-                result[i, j] = compute_single_pair(
-                    arrays_a[i],
-                    arrays_b[j],
-                    lengths_a[i],
-                    lengths_b[j],
-                    dist_kernel,
-                    context,
-                    aggregator,
-                    padding_penalty,
-                )
-
-
-@njit(parallel=True)
-def compute_matrix_chunk(
+def compute_pairwise_matrix(
     result,
     start,
     end,
@@ -235,7 +148,7 @@ def compute_matrix_chunk(
     """Unified chunk kernel for memmap paths.
 
     Processes rows ``[start, end)`` of *result*.  Behaviour mirrors
-    :func:`compute_matrix_kernel`: when ``symmetric`` is ``True``, only
+    :func:`compute_pairwise_matrix`: when ``symmetric`` is ``True``, only
     the upper triangle of the chunk is computed and values are mirrored;
     when ``False``, every cell in the chunk rows is computed.
 
@@ -260,18 +173,17 @@ def compute_matrix_chunk(
     """
     k = len(lengths_b)
     for i in prange(start, end):  # pylint: disable=not-an-iterable
-        # Diagonal computation
-        result[i, i] = compute_single_pair(
-            arrays_a[i],
-            arrays_b[i],
-            lengths_a[i],
-            lengths_b[i],
-            dist_kernel,
-            context,
-            aggregator,
-            padding_penalty,
-        )
         if symmetric:
+            result[i, i] = compute_single_pair(
+                arrays_a[i],
+                arrays_b[i],
+                lengths_a[i],
+                lengths_b[i],
+                dist_kernel,
+                context,
+                aggregator,
+                padding_penalty,
+            )
             for j in range(i + 1, k):
                 d = compute_single_pair(
                     arrays_a[i],
@@ -287,8 +199,6 @@ def compute_matrix_chunk(
                 result[j, i] = d
         else:
             for j in range(k):
-                if j == i:
-                    continue  # already computed above
                 result[i, j] = compute_single_pair(
                     arrays_a[i],
                     arrays_b[j],
