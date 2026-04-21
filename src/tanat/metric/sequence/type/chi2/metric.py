@@ -6,16 +6,23 @@ Chi2SequenceMetric: Chi-squared distance between state-time distributions.
 from __future__ import annotations
 
 import math
-import warnings
+from pathlib import Path
 from typing import TYPE_CHECKING
 
+import numpy as np
+import polars as pl
 from tanat_utils import settings_dataclass as dataclass
 
 from .....metadata.feature import CategoricalInfo
 from ...base import SequenceMetric
+from ....matrix import DistanceMatrix
+from ...._storage import save_progress
+from .kernels import compute_chi2_matrix
 
 if TYPE_CHECKING:
     from .....sequence.base.sequence import Sequence
+    from .....sequence.base.pool import SequencePool
+    from ...._storage import StorageOptions
 
 
 # ---------------------------------------------------------------------------
@@ -179,13 +186,30 @@ class Chi2SequenceMetric(SequenceMetric, register_name="chi2"):
     """
 
     SETTINGS_CLASS = Chi2Settings
-    MEMMAP_SUPPORT = False
+    MEMMAP_SUPPORT = True
 
     def __init__(
         self,
         entity_feature: str | None = None,
+        *,
+        store_path: str | Path | None = None,
+        chunk_size: int = 500,
+        resume: bool = True,
+        dtype: str = "float32",
     ) -> None:
-        super().__init__(settings=Chi2Settings(entity_feature=entity_feature))
+        if store_path is not None:
+            storage_options: dict | None = {
+                "store_path": store_path,
+                "chunk_size": chunk_size,
+                "resume": resume,
+                "dtype": dtype,
+            }
+        else:
+            storage_options = None
+        super().__init__(
+            settings=Chi2Settings(entity_feature=entity_feature),
+            storage=storage_options,
+        )
 
     def _resolve_feature(self, seq: Sequence) -> str:
         """Return the target feature name, resolving from seq if needed."""
@@ -246,6 +270,79 @@ class Chi2SequenceMetric(SequenceMetric, register_name="chi2"):
             Chi-squared distance >= 0.
         """
         feature = self._resolve_feature(seq_a)
-        hist_a = _build_histogram(seq_a, feature)
-        hist_b = _build_histogram(seq_b, feature)
+        arr_a, vocab_a = _build_histogram(seq_a, feature)
+        arr_b, vocab_b = _build_histogram(seq_b, feature)
+
+        hist_a = (
+            {cat: float(arr_a[0, i]) for i, cat in enumerate(vocab_a)}
+            if vocab_a and arr_a.shape[0] > 0
+            else {}
+        )
+        hist_b = (
+            {cat: float(arr_b[0, i]) for i, cat in enumerate(vocab_b)}
+            if vocab_b and arr_b.shape[0] > 0
+            else {}
+        )
         return _chi2_distance(hist_a, hist_b)
+
+    # ------------------------------------------------------------------
+    # Numba batch protocol
+    # ------------------------------------------------------------------
+
+    def prepare_batch_data(self, pool: SequencePool) -> tuple:
+        """Build histogram arrays for all sequences in *pool*.
+
+        Returns:
+            ``(hists, n_cats)`` where *hists* is a float32 numpy array of
+            shape ``(n, n_cats)`` containing raw (unnormalised) weights, with
+            rows ordered to match ``pool.unique_ids``.
+        """
+        feature = self.settings.entity_feature or pool.metadata.entity_features[0].name
+        hists, vocab = _build_histogram(pool, feature)
+        return hists, len(vocab)
+
+    # ------------------------------------------------------------------
+    # Matrix computation: Numba optimisation
+    # ------------------------------------------------------------------
+
+    def _compute_matrix_impl(
+        self,
+        pool: SequencePool,
+        *,
+        storage: StorageOptions | None = None,
+        result=None,
+        is_resuming: bool = False,
+        completed: int = 0,
+    ) -> DistanceMatrix:
+        """Build histograms then run the parallel Numba Chi2 kernel.
+
+        Chi2 has no entity metric, so the Numba path is always used
+        (no Python fallback needed).
+        """
+        hists, n_cats = self.prepare_batch_data(pool)
+        n = len(hists)
+
+        if result is None:
+            result = np.full((n, n), np.nan, dtype=np.float32)
+
+        chunk_size = storage.chunk_size if storage is not None else n
+        chunks = list(range(0, n, chunk_size))
+
+        with self._create_progress_bar(total=len(chunks), desc="Chunks") as pbar:
+            for chunk_idx, chunk_start in enumerate(chunks):
+                chunk_end = min(chunk_start + chunk_size, n)
+                if is_resuming and chunk_idx < completed:
+                    pbar.update(1)
+                    continue
+                compute_chi2_matrix(result, chunk_start, chunk_end, hists, n_cats, True)
+                if storage is not None:
+                    result.flush()
+                    completed += 1
+                    save_progress(storage, completed, status="computing")
+                pbar.update(1)
+
+        if storage is not None:
+            result.flush()
+            save_progress(storage, completed, status="complete")
+
+        return DistanceMatrix(result, pool.unique_ids)
