@@ -5,16 +5,22 @@ DTWSequenceMetric: Dynamic Time Warping between sequences.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
+import numpy as np
 from pydantic import Field
 from tanat_utils import settings_dataclass as dataclass
 
 from ...base import SequenceMetric
 from ....entity.base import EntityMetric
+from ....matrix import DistanceMatrix
+from .kernels import compute_dtw_matrix
 
 if TYPE_CHECKING:
     from .....sequence.base.sequence import Sequence
+    from .....sequence.base.pool import SequencePool
+    from ...._storage import StorageOptions
 
 
 # ---------------------------------------------------------------------------
@@ -59,10 +65,6 @@ class DTWSequenceMetric(SequenceMetric, register_name="dtw"):
     When ``normalize=True``, divides the raw DTW cost by ``len_a + len_b``
     (an approximation that does not require path backtracking).
 
-    .. note::
-        Full path normalisation (by actual path length) requires O(n×m)
-        memory for backtracking and is deferred to Phase 3.
-
     Example::
 
         dtw = DTWSequenceMetric(window=3, normalize=True)
@@ -71,20 +73,36 @@ class DTWSequenceMetric(SequenceMetric, register_name="dtw"):
     """
 
     SETTINGS_CLASS = DTWSettings
-    MEMMAP_SUPPORT = False
+    MEMMAP_SUPPORT = True
 
     def __init__(
         self,
         entity_metric: EntityMetric | str = "hamming",
         window: int | None = None,
         normalize: bool = False,
+        *,
+        store_path: str | Path | None = None,
+        chunk_size: int = 500,
+        resume: bool = True,
+        dtype: str = "float32",
     ) -> None:
+        if store_path is not None:
+            storage_options: dict | None = {
+                "store_path": store_path,
+                "chunk_size": chunk_size,
+                "resume": resume,
+                "dtype": dtype,
+            }
+        else:
+            storage_options = None
+
         super().__init__(
             settings=DTWSettings(
                 entity_metric=entity_metric,
                 window=window,
                 normalize=normalize,
-            )
+            ),
+            storage=storage_options,
         )
 
     # ------------------------------------------------------------------
@@ -147,3 +165,72 @@ class DTWSequenceMetric(SequenceMetric, register_name="dtw"):
         if self.settings.normalize:
             d = d / (n + m)
         return d
+
+    # ------------------------------------------------------------------
+    # Matrix computation: Numba optimisation
+    # ------------------------------------------------------------------
+
+    def _compute_matrix_impl(
+        self,
+        pool: SequencePool,
+        *,
+        storage: StorageOptions | None = None,
+        result=None,
+        is_resuming: bool = False,
+        completed: int = 0,
+    ) -> DistanceMatrix:
+        """Dispatch to Numba or Python path based on entity metric capability."""
+        em = self.entity_metric
+        if em.NUMBA_OPTIM:
+            return self._compute_matrix_numba(
+                pool, storage, result, is_resuming, completed
+            )
+        return self._compute_matrix_python(
+            pool, storage, result, is_resuming, completed
+        )
+
+    def _compute_cross_matrix_impl(
+        self,
+        pool_rows: SequencePool,
+        pool_cols: SequencePool,
+    ) -> np.ndarray:
+        """Dispatch to Numba or Python path for cross (n × k) matrices."""
+        em = self.entity_metric
+        if em.NUMBA_OPTIM:
+            return self._compute_cross_matrix_numba(pool_rows, pool_cols)
+        return self._compute_cross_matrix_python(pool_rows, pool_cols)
+
+    def _compute_matrix_numba(
+        self,
+        pool: SequencePool,
+        storage: StorageOptions | None = None,
+        result=None,
+        is_resuming: bool = False,
+        completed: int = 0,
+    ) -> DistanceMatrix:
+        """Numba fast path for the pairwise distance matrix."""
+        em = self.entity_metric
+        window_int = self.settings.window if self.settings.window is not None else -1
+        normalize = self.settings.normalize
+        return self._run_numba_matrix(
+            pool,
+            compute_dtw_matrix,
+            (window_int, normalize),
+            storage=storage,
+            result=result,
+            is_resuming=is_resuming,
+            completed=completed,
+            symmetric=em.IS_SYMMETRIC,
+        )
+
+    def _compute_cross_matrix_numba(
+        self,
+        pool_rows: SequencePool,
+        pool_cols: SequencePool,
+    ) -> np.ndarray:
+        """Numba fast path for cross (n × k) distance matrix."""
+        window_int = self.settings.window if self.settings.window is not None else -1
+        normalize = self.settings.normalize
+        return self._run_numba_cross_matrix(
+            pool_rows, pool_cols, compute_dtw_matrix, (window_int, normalize)
+        )
