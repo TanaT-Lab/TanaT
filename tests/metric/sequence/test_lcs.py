@@ -5,12 +5,14 @@ Tests: LCSSequenceMetric
 
 from __future__ import annotations
 
+import numpy as np
 import polars as pl
 import pytest
 from syrupy.assertion import SnapshotAssertion
 
 from tanat.metric.sequence import SequenceMetric, LCSSequenceMetric
 from tanat.metric.matrix import DistanceMatrix
+from tanat.metric.entity import HammingEntityMetric
 
 # ---------------------------------------------------------------------------
 # Single-pair computation
@@ -147,3 +149,39 @@ class TestSettings:
         lcs2 = LCSSequenceMetric.from_config(cfg)
         assert lcs2.settings.mode == "normalized"
         assert lcs2.settings.equality_threshold == pytest.approx(0.2)
+
+
+#
+# ---------------------------------------------------------------------------
+# Numba consistency: fast path == slow path
+# ---------------------------------------------------------------------------
+
+
+class TestNumbaConsistency:
+    """Numba fast path produces the same result as the Python fallback."""
+
+    def test_matrix_numba_vs_python(self, cat_pool, entity_metric) -> None:
+        """Numba and Python paths produce identical matrices (NaN-aware)."""
+        lcs = LCSSequenceMetric(entity_metric=entity_metric)
+        fast = lcs.compute_matrix(cat_pool).to_numpy()
+        # pylint: disable=protected-access
+        slow = lcs._compute_matrix_python(cat_pool).to_numpy()
+        np.testing.assert_array_equal(np.isnan(fast), np.isnan(slow))
+        mask = ~np.isnan(fast)
+        np.testing.assert_array_almost_equal(fast[mask], slow[mask], decimal=5)
+
+    def test_cross_matrix(self, cat_pool) -> None:
+        """compute_cross_matrix returns (n × k) consistent with single-pair."""
+        hamming = HammingEntityMetric(entity_feature="status")
+        ids = cat_pool.unique_ids[:8]
+        sub = cat_pool.subset(ids)
+        pool_rows = sub.subset(ids[:4])
+        pool_cols = sub.subset(ids[4:])
+
+        lcs = LCSSequenceMetric(entity_metric=hamming)
+        cross = lcs.compute_cross_matrix(pool_rows, pool_cols)
+
+        assert cross.shape == (4, 4)
+        seq_r = pool_rows[ids[0]]
+        seq_c = pool_cols[ids[4]]
+        assert float(cross[0, 0]) == pytest.approx(lcs(seq_r, seq_c), abs=1e-4)
