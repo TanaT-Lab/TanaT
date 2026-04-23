@@ -79,7 +79,7 @@ class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
         """
 
     # ------------------------------------------------------------------
-    # Matrix computation
+    # Public API
     # ------------------------------------------------------------------
 
     def compute_matrix(
@@ -92,7 +92,6 @@ class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
         dtype: str = "float32",
     ) -> DistanceMatrix:
         """Compute the full pairwise distance matrix for *pool*.
-
 
         Args:
             pool:       A :class:`~tanat.sequence.base.pool.SequencePool`.
@@ -167,26 +166,9 @@ class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
         self._probe_composition(pool_cols)
         return self._compute_cross_matrix_impl(pool_rows, pool_cols)
 
-    def _compute_cross_matrix_impl(
-        self,
-        pool_rows: SequencePool,
-        pool_cols: SequencePool,
-    ) -> np.ndarray:
-        """Override point for optimised cross-pool distance computation.
-
-        Subclasses (e.g. Numba-enabled metrics) override this method to
-        replace the pure-Python loop with a faster kernel.  Pools are
-        already validated when this method is called.  The default
-        delegates to :meth:`_compute_cross_matrix_python`.
-
-        Args:
-            pool_rows: Pool whose sequences form the rows   (n items).
-            pool_cols: Pool whose sequences form the columns (k items).
-
-        Returns:
-            float32 numpy array of shape ``(n, k)``.
-        """
-        return self._compute_cross_matrix_python(pool_rows, pool_cols)
+    # ------------------------------------------------------------------
+    # Template Method chain (pairwise)
+    # ------------------------------------------------------------------
 
     def _compute_matrix_impl(
         self,
@@ -212,65 +194,91 @@ class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
             completed=completed,
         )
 
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
+    def _compute_matrix_python(
+        self,
+        pool: SequencePool,
+        storage=None,
+        result=None,
+        is_resuming: bool = False,
+        completed: int = 0,
+    ) -> DistanceMatrix:
+        """Naive Python pairwise fallback.
 
-    @property
-    def entity_metric(self) -> EntityMetric:
-        """Resolve ``settings.entity_metric`` (string → instance or pass-through).
-
-        Returns:
-            The resolved :class:`~tanat.metric.entity.base.EntityMetric`.
-
-        Raises:
-            AttributeError: If the concrete settings class has no
-                ``entity_metric`` field.
-        """
-        metric = self.settings.entity_metric
-        if isinstance(metric, str):
-            return EntityMetric.get_registered(metric)()
-        return metric
-
-    def _validate_pool(self, pool: SequencePool) -> None:
-        """Type-check the pool argument."""
-        if not isinstance(pool, SequencePool):
-            raise TypeError(f"pool must be a SequencePool, got {type(pool).__name__}")
-
-    @abstractmethod
-    def validate_composition(
-        self, seq_a: Sequence, seq_b: Sequence | None = None
-    ) -> None:
-        """Composition compatibility check between this metric and the given sequence(s).
-
-        Called from :meth:`__call__` with both sequences, and from
-        :meth:`compute_matrix` with a single sample sequence (``seq_b=None``).
-        Subclasses that compose with an :class:`~tanat.metric.entity.base.EntityMetric`
-        probe a sample entity to surface schema errors early.
+        Delegates to :func:`~tanat.metric._utils.default_pairwise_matrix` and
+        computes the full ``(n, n)`` square.
 
         Args:
-            seq_a: Primary sequence to probe.
-            seq_b: Optional second sequence.
+            pool:        Sequence pool.
+            storage:     Optional storage options.
+            result:      Pre-opened memmap or ``None`` for in-memory.
+            is_resuming: Whether partial chunks are already on disk.
+            completed:   Number of chunks already flushed.
 
-        Raises:
-            TypeError: If the entity feature has an incompatible dtype.
-            KeyError:  If a required feature is absent.
+        Returns:
+            A :class:`~tanat.metric.DistanceMatrix` of shape ``(n, n)``.
         """
-
-    def _probe_composition(self, pool: SequencePool) -> None:
-        """Validate composition on the first non-empty sequence in *pool*."""
-        for sid in pool.unique_ids:
-            seq = pool[sid]
-            if seq:
-                self.validate_composition(seq)
-                break
-
-    def _validate_sequences(self, seq_a: Sequence, seq_b: Sequence) -> None:
-        """Type-check both sequence arguments."""
-        validate_pair(seq_a, seq_b, Sequence, "seq_a", "seq_b")
+        ids = pool.unique_ids
+        items = pool.get_sequences()
+        return default_pairwise_matrix(
+            items,
+            ids,
+            self._compute,
+            self._create_progress_bar,
+            storage=storage,
+            result=result,
+            is_resuming=is_resuming,
+            completed=completed,
+        )
 
     # ------------------------------------------------------------------
-    # Shared Numba / Python boilerplate (used by entity-metric subtypes)
+    # Template Method chain (cross-matrix)
+    # ------------------------------------------------------------------
+
+    def _compute_cross_matrix_impl(
+        self,
+        pool_rows: SequencePool,
+        pool_cols: SequencePool,
+    ) -> np.ndarray:
+        """Override point for optimised cross-pool distance computation.
+
+        Subclasses (e.g. Numba-enabled metrics) override this method to
+        replace the pure-Python loop with a faster kernel.  Pools are
+        already validated when this method is called.  The default
+        delegates to :meth:`_compute_cross_matrix_python`.
+
+        Args:
+            pool_rows: Pool whose sequences form the rows   (n items).
+            pool_cols: Pool whose sequences form the columns (k items).
+
+        Returns:
+            float32 numpy array of shape ``(n, k)``.
+        """
+        return self._compute_cross_matrix_python(pool_rows, pool_cols)
+
+    def _compute_cross_matrix_python(
+        self,
+        pool_rows: SequencePool,
+        pool_cols: SequencePool,
+    ) -> np.ndarray:
+        """Naive Python cross-matrix fallback.
+
+        Delegates to :func:`~tanat.metric._utils.default_cross_matrix`.
+
+        Args:
+            pool_rows: Pool whose sequences form the rows.
+            pool_cols: Pool whose sequences form the columns.
+
+        Returns:
+            float32 numpy array of shape ``(n, k)``.
+        """
+        ids_r = pool_rows.unique_ids
+        ids_c = pool_cols.unique_ids
+        seqs_r = pool_rows.get_sequences()
+        seqs_c = pool_cols.get_sequences()
+        return default_cross_matrix(seqs_r, ids_r, seqs_c, ids_c, self._compute)
+
+    # ------------------------------------------------------------------
+    # Optimised kernels (Numba)
     # ------------------------------------------------------------------
 
     def _run_numba_matrix(
@@ -387,60 +395,59 @@ class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
             )
         return result
 
-    def _compute_matrix_python(
-        self,
-        pool: SequencePool,
-        storage=None,
-        result=None,
-        is_resuming: bool = False,
-        completed: int = 0,
-    ) -> DistanceMatrix:
-        """Naive Python pairwise fallback.
+    # ------------------------------------------------------------------
+    # Validation & helpers
+    # ------------------------------------------------------------------
 
-        Delegates to :func:`~tanat.metric._utils.default_pairwise_matrix` and
-        computes the full ``(n, n)`` square.
+    def _validate_pool(self, pool: SequencePool) -> None:
+        """Type-check the pool argument."""
+        if not isinstance(pool, SequencePool):
+            raise TypeError(f"pool must be a SequencePool, got {type(pool).__name__}")
 
-        Args:
-            pool:        Sequence pool.
-            storage:     Optional storage options.
-            result:      Pre-opened memmap or ``None`` for in-memory.
-            is_resuming: Whether partial chunks are already on disk.
-            completed:   Number of chunks already flushed.
+    def _validate_sequences(self, seq_a: Sequence, seq_b: Sequence) -> None:
+        """Type-check both sequence arguments."""
+        validate_pair(seq_a, seq_b, Sequence, "seq_a", "seq_b")
 
-        Returns:
-            A :class:`~tanat.metric.DistanceMatrix` of shape ``(n, n)``.
-        """
-        ids = pool.unique_ids
-        items = pool.get_sequences()
-        return default_pairwise_matrix(
-            items,
-            ids,
-            self._compute,
-            self._create_progress_bar,
-            storage=storage,
-            result=result,
-            is_resuming=is_resuming,
-            completed=completed,
-        )
+    @abstractmethod
+    def validate_composition(
+        self, seq_a: Sequence, seq_b: Sequence | None = None
+    ) -> None:
+        """Composition compatibility check between this metric and the given sequence(s).
 
-    def _compute_cross_matrix_python(
-        self,
-        pool_rows: SequencePool,
-        pool_cols: SequencePool,
-    ) -> np.ndarray:
-        """Naive Python cross-matrix fallback.
-
-        Delegates to :func:`~tanat.metric._utils.default_cross_matrix`.
+        Called from :meth:`__call__` with both sequences, and from
+        :meth:`compute_matrix` with a single sample sequence (``seq_b=None``).
+        Subclasses that compose with an :class:`~tanat.metric.entity.base.EntityMetric`
+        probe a sample entity to surface compatibility errors early.
 
         Args:
-            pool_rows: Pool whose sequences form the rows.
-            pool_cols: Pool whose sequences form the columns.
+            seq_a: Primary sequence to probe.
+            seq_b: Optional second sequence.
+
+        Raises:
+            TypeError: If the entity feature has an incompatible dtype.
+            KeyError:  If a required feature is absent.
+        """
+
+    def _probe_composition(self, pool: SequencePool) -> None:
+        """Validate composition on the first non-empty sequence in *pool*."""
+        for sid in pool.unique_ids:
+            seq = pool[sid]
+            if seq:
+                self.validate_composition(seq)
+                break
+
+    @property
+    def entity_metric(self) -> EntityMetric:
+        """Resolve ``settings.entity_metric`` (string → instance or pass-through).
 
         Returns:
-            float32 numpy array of shape ``(n, k)``.
+            The resolved :class:`~tanat.metric.entity.base.EntityMetric`.
+
+        Raises:
+            AttributeError: If the concrete settings class has no
+                ``entity_metric`` field.
         """
-        ids_r = pool_rows.unique_ids
-        ids_c = pool_cols.unique_ids
-        seqs_r = pool_rows.get_sequences()
-        seqs_c = pool_cols.get_sequences()
-        return default_cross_matrix(seqs_r, ids_r, seqs_c, ids_c, self._compute)
+        metric = self.settings.entity_metric
+        if isinstance(metric, str):
+            return EntityMetric.get_registered(metric)()
+        return metric

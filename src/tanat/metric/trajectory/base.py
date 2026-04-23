@@ -47,7 +47,7 @@ class TrajectoryMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
         )
 
     # ------------------------------------------------------------------
-    # Public interface
+    # Public API
     # ------------------------------------------------------------------
 
     def __call__(self, traj_a: Trajectory, traj_b: Trajectory) -> float:
@@ -76,7 +76,7 @@ class TrajectoryMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
         """
 
     # ------------------------------------------------------------------
-    # Matrix computation
+    # Public API — Matrix computation
     # ------------------------------------------------------------------
 
     def compute_matrix(
@@ -162,26 +162,9 @@ class TrajectoryMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
         self._validate_pool(pool_cols)
         return self._compute_cross_matrix_impl(pool_rows, pool_cols)
 
-    def _compute_cross_matrix_impl(
-        self,
-        pool_rows: TrajectoryPool,
-        pool_cols: TrajectoryPool,
-    ) -> np.ndarray:
-        """Override point for optimised cross-pool distance computation.
-
-        Subclasses override this method to replace the pure-Python loop with
-        a faster kernel.  Pools are already validated when this method is
-        called.  The default delegates to
-        :meth:`_compute_cross_matrix_python`.
-
-        Args:
-            pool_rows: Pool whose trajectories form the rows   (n items).
-            pool_cols: Pool whose trajectories form the columns (k items).
-
-        Returns:
-            float32 numpy array of shape ``(n, k)``.
-        """
-        return self._compute_cross_matrix_python(pool_rows, pool_cols)
+    # ------------------------------------------------------------------
+    # Template Method chain (pairwise)
+    # ------------------------------------------------------------------
 
     def _compute_matrix_impl(
         self,
@@ -242,6 +225,30 @@ class TrajectoryMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
             is_resuming=is_resuming,
             completed=completed,
         )
+
+    # ------------------------------------------------------------------
+    # Template Method chain (cross-matrix)
+    # ------------------------------------------------------------------
+
+    def _compute_cross_matrix_impl(
+        self,
+        pool_rows: TrajectoryPool,
+        pool_cols: TrajectoryPool,
+    ) -> np.ndarray:
+        """Override point for optimised cross-pool distance computation.
+
+        Subclasses override this method to replace the pure-Python loop with
+        a faster kernel.  Pools are already validated when this method is
+        called.  The default delegates to :meth:`_compute_cross_matrix_python`.
+
+        Args:
+            pool_rows: Pool whose trajectories form the rows   (n items).
+            pool_cols: Pool whose trajectories form the columns (k items).
+
+        Returns:
+            float32 numpy array of shape ``(n, k)``.
+        """
+        return self._compute_cross_matrix_python(pool_rows, pool_cols)
 
     def _compute_cross_matrix_python(
         self,
