@@ -12,7 +12,12 @@ import numpy as np
 from tanat_utils import SettingsMixin, Registrable, DisplayMixin
 
 from ..matrix import DistanceMatrix
-from .._utils import resolve_storage, default_pairwise_matrix, validate_pair
+from .._utils import (
+    resolve_storage,
+    default_pairwise_matrix,
+    default_cross_matrix,
+    validate_pair,
+)
 from .._storage import StorageOptions, open_or_create_matrix, compute_metric_config
 from ...trajectory.pool import TrajectoryPool
 from ...trajectory.trajectory import Trajectory
@@ -162,10 +167,12 @@ class TrajectoryMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
         pool_rows: TrajectoryPool,
         pool_cols: TrajectoryPool,
     ) -> np.ndarray:
-        """In-memory O(n×k) double-loop fallback for cross-pool distances.
+        """Override point for optimised cross-pool distance computation.
 
-        Subclasses override this method to use optimised kernels.
-        Pools are already validated when this method is called.
+        Subclasses override this method to replace the pure-Python loop with
+        a faster kernel.  Pools are already validated when this method is
+        called.  The default delegates to
+        :meth:`_compute_cross_matrix_python`.
 
         Args:
             pool_rows: Pool whose trajectories form the rows   (n items).
@@ -174,38 +181,89 @@ class TrajectoryMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
         Returns:
             float32 numpy array of shape ``(n, k)``.
         """
-        ids_r = pool_rows.unique_ids
-        ids_c = pool_cols.unique_ids
-        n, k = len(ids_r), len(ids_c)
-        result = np.empty((n, k), dtype=np.float32)
-        for i, id_r in enumerate(ids_r):
-            for j, id_c in enumerate(ids_c):
-                result[i, j] = float(self._compute(pool_rows[id_r], pool_cols[id_c]))
-        return result
+        return self._compute_cross_matrix_python(pool_rows, pool_cols)
 
     def _compute_matrix_impl(
         self,
         pool: TrajectoryPool,
         *,
-        storage=None,  # pylint: disable=unused-argument
-        result=None,  # pylint: disable=unused-argument
-        is_resuming: bool = False,  # pylint: disable=unused-argument
-        completed: int = 0,  # pylint: disable=unused-argument
+        storage=None,
+        result=None,
+        is_resuming: bool = False,
+        completed: int = 0,
     ) -> DistanceMatrix:
-        """In-memory O(n²) double-loop fallback.
+        """Override point for optimised pairwise matrix computation.
 
-        This default implementation **ignores** ``storage``, ``result``,
-        ``is_resuming`` and ``completed``.  It always runs fully in memory
-        with no disk persistence and no resume capability.
-
-        Subclasses that need disk-backed computation (memmap, chunked writes,
-        resume) must override this method, set ``MEMMAP_SUPPORT = True``, and
-        consume the injected keyword arguments directly.
+        Subclasses override this method to replace the pure-Python loop with
+        a faster kernel.  The default delegates to
+        :meth:`_compute_matrix_python`, which handles both in-memory execution
+        and optional disk-backed chunked computation.
         """
-        items = {tid: pool[tid] for tid in pool.unique_ids}
-        return default_pairwise_matrix(
-            items, pool.unique_ids, self._compute, self._create_progress_bar
+        return self._compute_matrix_python(
+            pool,
+            storage=storage,
+            result=result,
+            is_resuming=is_resuming,
+            completed=completed,
         )
+
+    def _compute_matrix_python(
+        self,
+        pool: TrajectoryPool,
+        storage=None,
+        result=None,
+        is_resuming: bool = False,
+        completed: int = 0,
+    ) -> DistanceMatrix:
+        """Naive Python pairwise fallback.
+
+        Delegates to :func:`~tanat.metric._utils.default_pairwise_matrix` and
+        computes the full ``(n, n)`` square.
+
+        Args:
+            pool:        Trajectory pool.
+            storage:     Optional storage options.
+            result:      Pre-opened memmap or ``None`` for in-memory.
+            is_resuming: Whether partial chunks are already on disk.
+            completed:   Number of chunks already flushed.
+
+        Returns:
+            A :class:`~tanat.metric.DistanceMatrix` of shape ``(n, n)``.
+        """
+        ids = pool.unique_ids
+        items = pool.get_trajectories()
+        return default_pairwise_matrix(
+            items,
+            ids,
+            self._compute,
+            self._create_progress_bar,
+            storage=storage,
+            result=result,
+            is_resuming=is_resuming,
+            completed=completed,
+        )
+
+    def _compute_cross_matrix_python(
+        self,
+        pool_rows: TrajectoryPool,
+        pool_cols: TrajectoryPool,
+    ) -> np.ndarray:
+        """Naive Python cross-matrix fallback.
+
+        Delegates to :func:`~tanat.metric._utils.default_cross_matrix`.
+
+        Args:
+            pool_rows: Pool whose trajectories form the rows.
+            pool_cols: Pool whose trajectories form the columns.
+
+        Returns:
+            float32 numpy array of shape ``(n, k)``.
+        """
+        ids_r = pool_rows.unique_ids
+        ids_c = pool_cols.unique_ids
+        trajs_r = pool_rows.get_trajectories()
+        trajs_c = pool_cols.get_trajectories()
+        return default_cross_matrix(trajs_r, ids_r, trajs_c, ids_c, self._compute)
 
     # ------------------------------------------------------------------
     # Validation

@@ -13,7 +13,12 @@ from tanat_utils import SettingsMixin, Registrable, DisplayMixin
 
 from ..matrix import DistanceMatrix
 from ..entity.base import EntityMetric
-from .._utils import resolve_storage, default_pairwise_matrix, validate_pair
+from .._utils import (
+    resolve_storage,
+    default_pairwise_matrix,
+    default_cross_matrix,
+    validate_pair,
+)
 from ...sequence.base.pool import SequencePool
 from ...sequence.base.sequence import Sequence
 from .._storage import (
@@ -167,10 +172,12 @@ class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
         pool_rows: SequencePool,
         pool_cols: SequencePool,
     ) -> np.ndarray:
-        """In-memory O(n×k) double-loop fallback for cross-pool distances.
+        """Override point for optimised cross-pool distance computation.
 
-        Subclasses override this method to use Numba kernels when available.
-        Pools are already validated when this method is called.
+        Subclasses (e.g. Numba-enabled metrics) override this method to
+        replace the pure-Python loop with a faster kernel.  Pools are
+        already validated when this method is called.  The default
+        delegates to :meth:`_compute_cross_matrix_python`.
 
         Args:
             pool_rows: Pool whose sequences form the rows   (n items).
@@ -179,39 +186,30 @@ class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
         Returns:
             float32 numpy array of shape ``(n, k)``.
         """
-        ids_r = pool_rows.unique_ids
-        ids_c = pool_cols.unique_ids
-        seqs_r = {sid: pool_rows[sid] for sid in ids_r}
-        seqs_c = {sid: pool_cols[sid] for sid in ids_c}
-        n, k = len(ids_r), len(ids_c)
-        result = np.empty((n, k), dtype=np.float32)
-        for i, id_r in enumerate(ids_r):
-            for j, id_c in enumerate(ids_c):
-                result[i, j] = float(self._compute(seqs_r[id_r], seqs_c[id_c]))
-        return result
+        return self._compute_cross_matrix_python(pool_rows, pool_cols)
 
     def _compute_matrix_impl(
         self,
         pool: SequencePool,
         *,
-        storage=None,  # pylint: disable=unused-argument
-        result=None,  # pylint: disable=unused-argument
-        is_resuming: bool = False,  # pylint: disable=unused-argument
-        completed: int = 0,  # pylint: disable=unused-argument
+        storage=None,
+        result=None,
+        is_resuming: bool = False,
+        completed: int = 0,
     ) -> DistanceMatrix:
-        """In-memory O(n²) double-loop fallback.
+        """Override point for optimised pairwise matrix computation.
 
-        This default implementation **ignores** ``storage``, ``result``,
-        ``is_resuming`` and ``completed``.  It always runs fully in memory
-        with no disk persistence and no resume capability.
-
-        Subclasses that need disk-backed computation (memmap, chunked writes,
-        resume) must override this method, set ``MEMMAP_SUPPORT = True``, and
-        consume the injected keyword arguments directly.
+        Subclasses (e.g. Numba-enabled metrics) override this method to
+        replace the pure-Python loop with a faster kernel.  The default
+        delegates to :meth:`_compute_matrix_python`, which handles both
+        in-memory execution and optional disk-backed chunked computation.
         """
-        items = {sid: pool[sid] for sid in pool.unique_ids}
-        return default_pairwise_matrix(
-            items, pool.unique_ids, self._compute, self._create_progress_bar
+        return self._compute_matrix_python(
+            pool,
+            storage=storage,
+            result=result,
+            is_resuming=is_resuming,
+            completed=completed,
         )
 
     # ------------------------------------------------------------------
@@ -397,14 +395,10 @@ class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
         is_resuming: bool = False,
         completed: int = 0,
     ) -> DistanceMatrix:
-        """Python double-loop fallback with optional memmap storage.
+        """Naive Python pairwise fallback.
 
-        Iterates all O(n²) unique pairs and fills a symmetric matrix.
-        Uses chunked writes when *storage* is set.
-
-        Subclasses with non-standard pair computation (e.g.
-        :class:`~tanat.metric.sequence.type.linear_pairwise.metric.LinearPairwiseSequenceMetric`)
-        may override this method.
+        Delegates to :func:`~tanat.metric._utils.default_pairwise_matrix` and
+        computes the full ``(n, n)`` square.
 
         Args:
             pool:        Sequence pool.
@@ -417,46 +411,26 @@ class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
             A :class:`~tanat.metric.DistanceMatrix` of shape ``(n, n)``.
         """
         ids = pool.unique_ids
-        n = len(ids)
-        seqs = {sid: pool[sid] for sid in ids}
-
-        if result is None:
-            result = np.full((n, n), np.nan, dtype=np.float32)
-
-        chunk_size = storage.chunk_size if storage is not None else n
-        chunks = list(range(0, n, chunk_size))
-
-        with self._create_progress_bar(total=n * (n - 1) // 2, desc="Pairs") as pbar:
-            for chunk_idx, chunk_start in enumerate(chunks):
-                chunk_end = min(chunk_start + chunk_size, n)
-                if is_resuming and chunk_idx < completed:
-                    for i in range(chunk_start, chunk_end):
-                        pbar.update(n - i - 1)
-                    continue
-                for i in range(chunk_start, chunk_end):
-                    result[i, i] = float(self._compute(seqs[ids[i]], seqs[ids[i]]))
-                    for j in range(i + 1, n):
-                        d = float(self._compute(seqs[ids[i]], seqs[ids[j]]))
-                        result[i, j] = result[j, i] = d
-                        pbar.update(1)
-                if storage is not None:
-                    result.flush()
-                    completed += 1
-                    save_progress(storage, completed, status="computing")
-
-        if storage is not None:
-            result.flush()
-            save_progress(storage, completed, status="complete")
-        return DistanceMatrix(result, ids)
+        items = pool.get_sequences()
+        return default_pairwise_matrix(
+            items,
+            ids,
+            self._compute,
+            self._create_progress_bar,
+            storage=storage,
+            result=result,
+            is_resuming=is_resuming,
+            completed=completed,
+        )
 
     def _compute_cross_matrix_python(
         self,
         pool_rows: SequencePool,
         pool_cols: SequencePool,
     ) -> np.ndarray:
-        """Python double-loop fallback for cross (n × k) distance matrices.
+        """Naive Python cross-matrix fallback.
 
-        Subclasses with non-standard pair computation may override this method.
+        Delegates to :func:`~tanat.metric._utils.default_cross_matrix`.
 
         Args:
             pool_rows: Pool whose sequences form the rows.
@@ -467,11 +441,6 @@ class SequenceMetric(SettingsMixin, Registrable, DisplayMixin, ABC):
         """
         ids_r = pool_rows.unique_ids
         ids_c = pool_cols.unique_ids
-        seqs_r = {sid: pool_rows[sid] for sid in ids_r}
-        seqs_c = {sid: pool_cols[sid] for sid in ids_c}
-        n, k = len(ids_r), len(ids_c)
-        result = np.empty((n, k), dtype=np.float32)
-        for i, id_r in enumerate(ids_r):
-            for j, id_c in enumerate(ids_c):
-                result[i, j] = float(self._compute(seqs_r[id_r], seqs_c[id_c]))
-        return result
+        seqs_r = pool_rows.get_sequences()
+        seqs_c = pool_cols.get_sequences()
+        return default_cross_matrix(seqs_r, ids_r, seqs_c, ids_c, self._compute)

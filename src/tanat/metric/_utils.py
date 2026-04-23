@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from .matrix import DistanceMatrix
-from ._storage import StorageOptions
+from ._storage import StorageOptions, save_progress
 
 if TYPE_CHECKING:
     from typing import Callable
@@ -72,8 +72,16 @@ def default_pairwise_matrix(
     ids: list,
     compute_fn: Callable,
     progress_bar_fn: Callable,
+    *,
+    storage: StorageOptions | None = None,
+    result: np.ndarray | None = None,
+    is_resuming: bool = False,
+    completed: int = 0,
 ) -> DistanceMatrix:
-    """Default O(n^2) double-loop pairwise distance matrix.
+    """O(n²) double-loop pairwise distance matrix with optional storage.
+
+    Computes the full ``(n, n)`` square matrix.  When *storage* is provided,
+    flushes to disk in chunks and supports resuming from a partial run.
 
     Args:
         items:           ``{id: item}`` mapping (sequences or trajectories).
@@ -81,20 +89,71 @@ def default_pairwise_matrix(
         compute_fn:      ``(item_a, item_b) -> float`` distance function.
         progress_bar_fn: Callable returning a context-managed progress bar
                          (e.g. ``self._create_progress_bar``).
+        storage:         Optional :class:`StorageOptions` for disk-backed runs.
+        result:          Pre-opened memmap array or ``None`` for in-memory.
+        is_resuming:     Whether partial chunks are already on disk.
+        completed:       Number of chunks already flushed.
 
     Returns:
-        In-memory DistanceMatrix.
+        :class:`~tanat.metric.DistanceMatrix` of shape ``(n, n)``.
     """
     n = len(ids)
-    result = np.full((n, n), np.nan, dtype=np.float32)
+
+    if result is None:
+        result = np.full((n, n), np.nan, dtype=np.float32)
+
+    chunk_size = storage.chunk_size if storage is not None else n
+    chunks = list(range(0, n, chunk_size))
 
     with progress_bar_fn(total=n * n, desc="Pairs") as pbar:
-        for i in range(n):
-            for j in range(n):
-                result[i, j] = float(compute_fn(items[ids[i]], items[ids[j]]))
-                pbar.update(1)
+        for chunk_idx, chunk_start in enumerate(chunks):
+            chunk_end = min(chunk_start + chunk_size, n)
+            if is_resuming and chunk_idx < completed:
+                pbar.update((chunk_end - chunk_start) * n)
+                continue
+            for i in range(chunk_start, chunk_end):
+                for j in range(n):
+                    result[i, j] = float(compute_fn(items[ids[i]], items[ids[j]]))
+                    pbar.update(1)
+            if storage is not None:
+                result.flush()
+                completed += 1
+                save_progress(storage, completed, status="computing")
+
+    if storage is not None:
+        result.flush()
+        save_progress(storage, completed, status="complete")
 
     return DistanceMatrix(result, ids)
+
+
+def default_cross_matrix(
+    items_rows: dict,
+    ids_rows: list,
+    items_cols: dict,
+    ids_cols: list,
+    compute_fn: Callable,
+) -> np.ndarray:
+    """Default O(n×k) double-loop cross-pool distance matrix.
+
+    Args:
+        items_rows: ``{id: item}`` mapping for row items.
+        ids_rows: Ordered list of row identifiers.
+        items_cols: ``{id: item}`` mapping for column items.
+        ids_cols: Ordered list of column identifiers.
+        compute_fn: ``(item_a, item_b) -> float`` distance function.
+
+    Returns:
+        ``float32`` numpy array of shape ``(n, k)``.
+    """
+    n, k = len(ids_rows), len(ids_cols)
+    result = np.empty((n, k), dtype=np.float32)
+
+    for i, id_row in enumerate(ids_rows):
+        for j, id_col in enumerate(ids_cols):
+            result[i, j] = float(compute_fn(items_rows[id_row], items_cols[id_col]))
+
+    return result
 
 
 def validate_type(value: object, expected_type: type, param_name: str) -> None:
