@@ -3,8 +3,7 @@
 TrajectoryViewMixin: shared view-layer logic for TrajectoryPool and Trajectory.
 
 Both ``TrajectoryPool`` and ``Trajectory`` are **scoped views** on a
-``TrajectoryStore``.  This mixin factors out the logic they share:
-
+``TrajectoryStore``.
 """
 
 from __future__ import annotations
@@ -129,12 +128,10 @@ class TrajectoryViewMixin:
             {alias: self._store.sequence_stores[alias] for alias in self._store_aliases}
         )
 
-        # Static: casts + masks, then drop ID column directly (rename is useless here).
-        static_lf = self._get_static_data_from_store()
+        # Static
+        static_lf = self._static_data_lf()
         if static_lf is not None:
-            static_lf = self._apply_masks(static_lf)
-            visible_features = self.settings.available_features()
-            static_lf = static_lf.select(visible_features) if visible_features else None
+            static_lf = static_lf.drop(self.settings.id_column)
 
         return TrajectoryMetadata(
             traj_id=traj_id_dtype,
@@ -189,6 +186,32 @@ class TrajectoryViewMixin:
         return lf.rename(self.settings.get_column_rename_map())
 
     # ------------------------------------------------------------------
+    # Lazy data access (no collect, for internal consumers)
+    # ------------------------------------------------------------------
+
+    def _static_data_lf(
+        self,
+        features: list[str] | str | None = None,
+    ) -> pl.LazyFrame | None:
+        """Return static data as a :class:`~polars.LazyFrame` without collecting.
+
+        Applies masks, column selection, and renaming.
+
+        Returns ``None`` when no static features are visible.
+        """
+        valid_features = self._resolve_valid_features(features)
+        if not valid_features:
+            return None
+
+        lf = self._get_static_data_from_store()
+        if lf is None:
+            return None
+
+        lf = self._apply_masks(lf)
+        lf = self._select_columns(lf, valid_features)
+        return self._rename_columns(lf)
+
+    # ------------------------------------------------------------------
     # Data access
     # ------------------------------------------------------------------
 
@@ -203,6 +226,24 @@ class TrajectoryViewMixin:
             id_caster=self._casts.id_caster(),
             feature_exprs=self._casts.feature_exprs(),
         )
+
+    # ------------------------------------------------------------------
+    # Collected data (cached)
+    # ------------------------------------------------------------------
+
+    @Cachable.cached_method()
+    def _static_data_df(
+        self,
+        features: list[str] | str | None = None,
+    ) -> pl.DataFrame | None:
+        """Collect and cache static data as a Polars DataFrame.
+
+        Wraps :meth:`_static_data_lf` with a final ``.collect()`` and
+        caches the result. Returns ``None`` when no static features are
+        visible.
+        """
+        lf = self._static_data_lf(features)
+        return lf.collect() if lf is not None else None
 
     # ------------------------------------------------------------------
     # Apply (read-only computation)
@@ -244,12 +285,10 @@ class TrajectoryViewMixin:
         if isinstance(exprs, pl.Expr):
             exprs = [exprs]
 
-        lf = self._get_static_data_from_store()
+        lf = self._static_data_lf()
         if lf is None:
             raise ValueError("No static features available.")
 
-        lf = self._apply_masks(lf)
-        lf = self._rename_columns(lf)
         result_lf = lf.select(exprs)
 
         if lazy:
