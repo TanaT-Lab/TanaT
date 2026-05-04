@@ -147,7 +147,7 @@ def masked_pool(request: pytest.FixtureRequest, pools_dict: dict) -> SequencePoo
     """A copy of each pool type with a row mask keeping every other row."""
     pool = pools_dict[request.param].copy()
     n_rows = pool.temporal_data(fmt="polars").height
-    pool._row_mask = pl.Series([i % 2 == 0 for i in range(n_rows)])
+    pool._entity_row_mask = pl.Series([i % 2 == 0 for i in range(n_rows)])
     pool.clear_cache()
     return pool
 
