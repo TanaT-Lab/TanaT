@@ -27,6 +27,9 @@ The API is organized hierarchically by module. Click on a module below to explor
 
 **Analysis and Visualization**
 
+* :py:mod:`tanat.criterion` - Criteria for filtering and selecting sequences
+* :py:mod:`tanat.metric` - Compose your own distance metric
+* :py:mod:`tanat.clustering` - Clustering algorithms
 * :py:mod:`tanat.visualization` - Visualization tools for temporal sequences
 * :py:mod:`tanat.zeroing` - Temporal zeroing and alignment operations
 
