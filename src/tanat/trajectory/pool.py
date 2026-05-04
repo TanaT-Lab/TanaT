@@ -30,6 +30,7 @@ from ..store.trajectory.builder import TrajectoryStoreBuilder
 from ..store.trajectory.schema import TrajectorySchema as TSCH
 from ..core.path import resolve_path
 from ..core.format import resolve_fmt, to_pandas
+from ..core.validation import ensure_criterion
 from ..sequence.base.pool import BinSize, SequencePool
 from ..sequence.base._utils import merge_optional_frames, resolve_ids_to_add
 from ..core import registry as _registry
@@ -42,6 +43,7 @@ from .view_mixin import TrajectoryViewMixin
 
 if TYPE_CHECKING:
     from ..store.trajectory.store import TrajectoryStore
+    from ..criterion.base import Criterion
 
 LOGGER = logging.getLogger(__name__)
 
@@ -1113,6 +1115,79 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             return self
 
         return self._copy_with_mask(effective)
+
+    # ------------------------------------------------------------------
+    # Criterion API
+    # ------------------------------------------------------------------
+
+    def which(self, criterion: Criterion, *, verbose: bool = True) -> set:
+        """Return the set of IDs in this pool satisfying *criterion*.
+
+        Args:
+            criterion: A :class:`~tanat.criterion.base.Criterion` instance.
+            verbose: If ``True``, print a one-line report.
+
+        Returns:
+            Set of matching IDs.
+
+        Raises:
+            TypeError: If *criterion* is not a Criterion object.
+            CriterionLevelError: If the criterion is incompatible with Trajectory level.
+        """
+        ensure_criterion(criterion)
+        return criterion.which_ids(self, verbose=verbose)
+
+    def filter_entities(
+        self,
+        criterion: Criterion,
+        *,
+        alias: str,
+        inplace: bool = False,
+        verbose: bool = True,
+    ) -> TrajectoryPool:
+        """Return a new TrajectoryPool view with entities filtered by *criterion*.
+
+        Args:
+            criterion: A :class:`~tanat.criterion.base.Criterion` instance.
+            alias: Sequence alias to apply the criterion on.
+            inplace: If ``True``, modify this pool's in place instead
+                of returning a new view.
+            verbose: If ``True``, print a one-line report.
+
+        Returns:
+            A new :class:`TrajectoryPool` view with the criterion applied, or
+            ``self`` if *inplace* is ``True``.
+
+        Raises:
+            TypeError: If *criterion* is not a Criterion object.
+            CriterionLevelError: If the criterion is incompatible with entity filtering.
+        """
+        ensure_criterion(criterion)
+
+        # check alias validity early
+        if alias not in self._store_aliases:
+            raise ValueError(
+                f"Alias '{alias}' is not available in this pool. "
+                f"Available aliases: {self._store_aliases}"
+            )
+
+        if inplace:
+            target = self.sequence_pools[alias]
+            # pylint: disable=protected-access
+            with target._unlocked():
+                criterion.filter_entities(target, inplace=True, verbose=verbose)
+            self.clear_cache()
+            return self
+
+        new_pool = self._copy_with_mask(
+            set(self._id_mask) if self._id_mask is not None else None
+        )
+        target = new_pool.sequence_pools[alias]
+        # pylint: disable=protected-access
+        with target._unlocked():
+            criterion.filter_entities(target, inplace=True, verbose=verbose)
+        new_pool.clear_cache()
+        return new_pool
 
     # ------------------------------------------------------------------
     # Train-test split
