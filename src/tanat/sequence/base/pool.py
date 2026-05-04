@@ -6,6 +6,7 @@ Base class for sequence pool objects.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+import contextlib
 from dataclasses import asdict, replace
 import logging
 from pathlib import Path
@@ -29,6 +30,7 @@ from tanat_utils.pretty_format import (
 
 from ...core.path import resolve_path
 from ...core.format import resolve_fmt, to_pandas
+from ...core.validation import ensure_criterion
 from ...core import registry as _registry
 from ...store.base.utils import normalise_to_lazyframe, check_no_reserved_names
 from ...store.sequence.builder.base import SequenceStoreBuilder
@@ -36,12 +38,13 @@ from .cast import SequenceCastRecipe
 from .sequence import Sequence
 from ._utils import merge_optional_frames, resolve_ids_to_add
 from .view_mixin import SequenceViewMixin
-from ...zeroing import T0Setter
+from ...zeroing import T0Setter, _T0
 
 if TYPE_CHECKING:
     from ...store.sequence.store import SequenceStore
     from .settings import SequenceSettings
     from ...trajectory.pool import TrajectoryPool
+    from ...criterion.base import Criterion
 
 
 LOGGER = logging.getLogger(__name__)
@@ -186,6 +189,23 @@ class SequencePool(
                 f"  • Apply this operation on the parent TrajectoryPool to keep all sub-pools in sync.\n"
                 f"  • Or call pool.copy() first to get an independent standalone pool."
             )
+
+    @contextlib.contextmanager
+    def _unlocked(self):
+        """Context manager that temporarily unlocks this pool for coordinated mutations.
+
+        Intended for use by :class:`~tanat.trajectory.pool.TrajectoryPool` only.
+        Re-entrant: the previous lock state is saved and restored in the
+        ``finally`` block, even if an exception is raised inside the
+        ``with`` body, so nesting two ``_unlocked()`` blocks does not
+        accidentally re-lock a pool that started out unlocked.
+        """
+        previous = self._locked
+        self._locked = False
+        try:
+            yield self
+        finally:
+            self._locked = previous
 
     def _cleanup_virtual(self) -> None:
         """
@@ -1192,6 +1212,48 @@ class SequencePool(
         new_pool.clear_cache()
         return new_pool
 
+    # ------------------------------------------------------------------
+    # Criterion API
+    # ------------------------------------------------------------------
+
+    def which(self, criterion: Criterion, *, verbose: bool = True) -> set:
+        """Return the set of IDs in this pool satisfying *criterion*.
+
+        Args:
+            criterion: A :class:`~tanat.criterion.base.Criterion` instance.
+            verbose: If ``True``, print a one-line report.
+
+        Returns:
+            Set of matching IDs.
+
+        Raises:
+            TypeError: If *criterion* is not a Criterion object.
+        """
+        ensure_criterion(criterion)
+        return criterion.which_ids(self, verbose=verbose)
+
+    def filter_entities(
+        self, criterion: Criterion, *, inplace: bool = False, verbose: bool = True
+    ) -> SequencePool:
+        """Return a view with entities pruned by *criterion*.
+
+        Args:
+            criterion: A :class:`~tanat.criterion.base.Criterion` instance
+                supporting :attr:`~tanat.criterion.base.CriterionLevel.ENTITY`.
+            inplace: If ``True``, modify this pool in place.
+            verbose: If ``True``, print a one-line report.
+
+        Returns:
+            Filtered pool (or *self* when *inplace=True*).
+
+        Raises:
+            TypeError: If *criterion* is not a Criterion object.
+            CriterionLevelError: If the criterion does not support entity filtering.
+        """
+        self._check_not_locked("filter_entities")
+        ensure_criterion(criterion)
+        return criterion.filter_entities(self, inplace=inplace, verbose=verbose)
+
     def train_test_split(
         self,
         *,
@@ -1403,6 +1465,200 @@ class SequencePool(
                 virtual_id=self._virtual_id,
             )
 
+    # ------------------------------------------------------------------
+    # Survival target
+    # ------------------------------------------------------------------
+
+    def survival_target(
+        self,
+        endpoint_time: str,
+        occurred: str | None = None,
+        censure_time: str | None = None,
+        fmt: Literal["sksurv", "polars", "pandas"] = "sksurv",
+    ) -> tuple[np.ndarray | pl.DataFrame | pd.DataFrame, list]:
+        """Build a survival target (occurred, time) from static features stored in the pool.
+
+        For each patient, assembles a binary indicator (did the endpoint occur?) and the
+        corresponding duration (time from T0 to the endpoint, or to the last observation
+        for censored patients). Patients with unresolvable or non-positive durations are
+        excluded and reported via a warning.
+
+        Durations are computed as the difference between the absolute value stored in the
+        static column and the per-patient T0.
+
+        If ``censure_time`` is ``None``, the last recorded time in the sequence is used
+        as the censoring reference.
+
+        Args:
+            endpoint_time: Name of the static column containing the absolute time at
+                which the endpoint occurred (e.g. age at death, event datetime). T0 is
+                subtracted internally to produce the duration. Null = endpoint not
+                observed (censored), when occurred is None. Expected dtype: same as the
+                pool time axis (numeric for timestep pools, datetime for datetime pools).
+            occurred: Name of the static column with a binary endpoint indicator.
+                True (or 1) = endpoint observed, False (or 0) or null = censored.
+                Expected dtype: bool or numeric (int or float); cast to bool internally.
+                If None, inferred as endpoint_time.is_not_null().
+            censure_time: Name of the static column containing the absolute time of
+                the last observation for censored patients (e.g. age at last visit,
+                last visit datetime). T0 is subtracted internally to produce the
+                duration. Expected dtype: same as the pool time axis. If None, derived
+                automatically as ``max(get_temporal_columns()[-1])`` per patient
+                (i.e. max of time_column for events, max of end_column for
+                state/interval pools).
+            fmt: Format of the returned target y. "sksurv" returns a
+                structured np.ndarray with fields (occurred: bool, time: float)
+                compatible with scikit-survival. "polars" and "pandas" return a
+                DataFrame with columns ["id", "occurred", "time"].
+
+        Returns:
+            A tuple (y, valid_ids). y is the survival target in the requested
+            format. valid_ids is the list of patient identifiers retained after
+            filtering invalid rows.
+
+        Raises:
+            KeyError: If a column name is not found in the pool's static features.
+            RuntimeError: If no static features are available in this pool.
+
+        Examples:
+            >>> y, valid_ids = pool.survival_target(
+            ...     endpoint_time="death_age_occur",
+            ... )
+            >>> y, valid_ids = pool.survival_target(
+            ...     endpoint_time="death_age_occur",
+            ...     occurred="death",
+            ... )
+        """
+        fmt = resolve_fmt(fmt, allowed=("sksurv", "polars", "pandas"), default="sksurv")
+        valid_df = self._build_survival_frame(endpoint_time, occurred, censure_time)
+        valid_ids = valid_df[self.settings.id_column].to_list()
+
+        if fmt == "polars":
+            return valid_df, valid_ids
+        if fmt == "pandas":
+            return valid_df.to_pandas(), valid_ids
+
+        # Sksurv
+        time_series = valid_df["time"]
+        if str(time_series.dtype).startswith("Duration"):
+            time_np = time_series.dt.total_seconds().to_numpy().astype(float)
+        else:
+            time_np = time_series.to_numpy(allow_copy=True).astype(float)
+        dtype = np.dtype([("occurred", bool), ("time", float)])
+        y = np.empty(len(valid_df), dtype=dtype)
+        y["occurred"] = valid_df["occurred"].to_numpy()
+        y["time"] = time_np
+        return y, valid_ids
+
+    def _build_survival_frame(
+        self,
+        endpoint_time: str,
+        occurred: str | None,
+        censure_time: str | None,
+    ) -> pl.DataFrame:
+        """Build the (id, occurred, time) DataFrame, filtering invalid rows.
+
+        Called by :meth:`survival_target`. Applies the full Polars lazy pipeline:
+        static join, T0 subtraction, default censor computation, exclusion filter,
+        and exclusion warning.
+
+        Args:
+            endpoint_time: Static column with absolute endpoint time.
+            occurred: Static column with binary endpoint indicator, or ``None``
+                to infer from ``endpoint_time.is_not_null()``.
+            censure_time: Static column with absolute censoring time, or ``None``
+                to derive from ``max(get_temporal_columns()[-1])`` per patient.
+
+        Returns:
+            Polars DataFrame with columns ``[id_col, "occurred", "time"]``,
+            containing only valid (non-excluded) rows.
+        """
+        id_col = self.settings.id_column
+
+        # 1. Validate static columns (raises KeyError on unknown column)
+        cols_to_read = [endpoint_time]
+        if occurred is not None:
+            cols_to_read.append(occurred)
+        if censure_time is not None:
+            cols_to_read.append(censure_time)
+        self.settings.validate_features(cols_to_read, is_static=True)
+
+        # 2. Read static columns via existing pipeline
+        static_lf = self._static_data_lf(features=cols_to_read)
+        if static_lf is None:
+            raise RuntimeError(
+                "No static features available in this pool. "
+                "Add static features before calling survival_target()."
+            )
+
+        # 3. Join T0 (lazy default position=0 triggered if not explicitly set).
+        # Use a left join so patients without a resolvable T0 are kept and
+        # surfaced through the standard exclusion + warning pipeline below
+        # (their `time` column will be null and they will be reported).
+        t0_df = self._get_t0_df()
+        lf = static_lf.join(t0_df.lazy().select([id_col, _T0]), on=id_col, how="left")
+
+        # 4. Default censoring: max of last temporal column per patient
+        censor_src = censure_time if censure_time is not None else "__censor__"
+        if censure_time is None:
+            censor_col = self.settings.get_time_columns()[-1]
+            default_censor_lf = (
+                self._temporal_data_lf()
+                .group_by(id_col)
+                .agg(pl.col(censor_col).max().alias("__censor__"))
+            )
+            lf = lf.join(default_censor_lf, on=id_col, how="left")
+
+        # 5. Occurred expression: infer from endpoint_time or cast explicit column.
+        # Null in an explicit occurred column is treated as False (censored), per spec.
+        if occurred is None:
+            lf = lf.with_columns(
+                pl.col(endpoint_time).is_not_null().alias("__occurred__")
+            )
+        else:
+            lf = lf.with_columns(
+                pl.col(occurred).cast(pl.Boolean).fill_null(False).alias("__occurred__")
+            )
+
+        # 6. Compute time = absolute_value - T0
+        lf = lf.with_columns(
+            pl.when(pl.col("__occurred__"))
+            .then(pl.col(endpoint_time) - pl.col(_T0))
+            .otherwise(pl.col(censor_src) - pl.col(_T0))
+            .alias("time")
+        )
+
+        # 7. Collect with sentinel columns needed for exclusion logic
+        full_df = lf.select(
+            [id_col, pl.col("__occurred__").alias("occurred"), "time", endpoint_time]
+        ).collect()
+
+        # 8. Build exclusion mask (handles both Duration and numeric time types)
+        time_series = full_df["time"]
+        if str(time_series.dtype).startswith("Duration"):
+            time_nonpositive = time_series.dt.total_microseconds() <= 0
+        else:
+            time_nonpositive = time_series <= 0
+
+        excluded_mask = (
+            (full_df["occurred"] & full_df[endpoint_time].is_null())
+            | time_series.is_null()
+            | time_nonpositive
+        )
+
+        # 9. Warn on excluded patients
+        excluded_df = full_df.filter(excluded_mask)
+        if len(excluded_df) > 0:
+            excluded_ids = excluded_df[id_col].to_list()
+            LOGGER.warning(
+                "survival_target: %d patient(s) excluded (unresolvable or "
+                "non-positive duration): %s",
+                len(excluded_ids),
+                excluded_ids,
+            )
+
+        # 10. Return valid rows with only the output columns
+        return full_df.filter(~excluded_mask).select([id_col, "occurred", "time"])
 
     # ------------------------------------------------------------------
     # Discretize helpers
