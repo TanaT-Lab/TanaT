@@ -1114,6 +1114,10 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
 
         return self._copy_with_mask(effective)
 
+    # ------------------------------------------------------------------
+    # Train-test split
+    # ------------------------------------------------------------------
+
     def train_test_split(
         self,
         *,
@@ -1187,6 +1191,10 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         test_ids = ids[n_train : n_train + n_test]
 
         return self.subset(train_ids), self.subset(test_ids)
+
+    # ------------------------------------------------------------------
+    # Drop / Cast
+    # ------------------------------------------------------------------
 
     def drop_static_features(
         self,
