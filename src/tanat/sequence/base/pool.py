@@ -1730,10 +1730,11 @@ class SequencePool(
         id_col: str,
         ohe: bool,
     ) -> tuple[pl.DataFrame, list[str]]:
-        """Build and materialise the entity frame for grid projection.
+        """Build and materialise the entity frame for bin projection.
 
-        Shared by :meth:`to_grid` and
-        :meth:`~tanat.trajectory.pool.TrajectoryPool.to_grid` (called on each
+        Shared by :meth:`binned_data` / :meth:`to_tensor` and
+        :meth:`~tanat.trajectory.pool.TrajectoryPool.binned_data` /
+        :meth:`~tanat.trajectory.pool.TrajectoryPool.to_tensor` (called on each
         alias pool).  *features* must already be validated by the caller.
 
         Args:
@@ -1826,10 +1827,12 @@ class SequencePool(
                     f"which exceeds the safety limit of {self.MAX_BINS_LIMIT:,}. "
                     "Use a larger bin_size or set max_bins explicitly to override."
                 )
+        # When max_bins is provided explicitly the safety cap is intentionally
+        # not enforced: the caller has knowingly opted in to a large grid.
 
         return t_min, is_datetime, bin_size_native
 
-    def _build_binned_grid(
+    def _build_binned_data(
         self,
         lf_binned: pl.LazyFrame,
         valid_features: list[str],
@@ -1839,10 +1842,10 @@ class SequencePool(
         fill_value: Any,
         bin_col: str = "__bin__",
     ) -> tuple[pl.DataFrame, int]:
-        """Resolve bin conflicts, truncate/pad to *max_bins*, build the id×bin grid.
+        """Resolve bin conflicts, truncate/pad to *max_bins*, build the id×bin table.
 
         Returns:
-            ``(df_grid, n_bins)``: the complete ``(N × M)`` long-format
+            ``(df_binned, n_bins)``: the complete ``(N × M)`` long-format
             DataFrame and the effective bin count.
         """
         agg_exprs = [
@@ -1877,7 +1880,7 @@ class SequencePool(
 
         return df, n_bins
 
-    def _to_grid_with_axis(
+    def _to_binned_axis(
         self,
         frame: pl.DataFrame | pl.LazyFrame,
         feat_cols: list[str],
@@ -1896,9 +1899,11 @@ class SequencePool(
         ``t_min``, ``bin_size_native``, ``is_datetime`` and ``max_bins`` are
         supplied by the caller, and *frame* is already masked / renamed.
 
-        This is the low-level hook consumed by :meth:`to_grid` (which resolves
-        the axis first and builds the frame) and by
-        :meth:`~tanat.trajectory.pool.TrajectoryPool.to_grid` (which computes
+        This is the low-level hook consumed by :meth:`binned_data` /
+        :meth:`to_tensor` (which resolve the axis first and build the frame)
+        and by
+        :meth:`~tanat.trajectory.pool.TrajectoryPool.binned_data` /
+        :meth:`~tanat.trajectory.pool.TrajectoryPool.to_tensor` (which compute
         a single shared axis across all stores before calling this method on
         each alias pool).
 
@@ -1934,7 +1939,7 @@ class SequencePool(
             is_datetime,
             bin_col=bin_col,
         )
-        df, _ = self._build_binned_grid(
+        df, _ = self._build_binned_data(
             lf_binned,
             feat_cols,
             id_col,
@@ -1945,82 +1950,25 @@ class SequencePool(
         )
         return df
 
-    def to_grid(
+    def _binned_core(
         self,
         features: list[str] | str,
         bin_size: BinSize,
-        max_bins: int | None = None,
-        fill_value: Any = None,
-        overlap_rule: str = "first",
-        ohe: bool = False,
-        fmt: Literal["pandas", "polars", "numpy"] = "pandas",
-        use_arrow: bool = True,
-        bin_col: str = "__bin__",
-    ) -> pd.DataFrame | np.ndarray | pl.DataFrame:
-        """
-        Project sequences onto a regular temporal grid.
-
-        Each sequence is aligned to a shared time axis divided into fixed-size
-        bins. When multiple values compete for the same bin (sampling conflict),
-        *overlap_rule* resolves the ambiguity.
-
-        Internally this method resolves the temporal axis via
-        :meth:`_resolve_bin_params` and then delegates all binning work to
-        :meth:`_to_grid_with_axis`.
-
-        Args:
-            features: Feature(s) to project onto the grid.
-            bin_size: Width of each bin.  The expected type depends on the
-                time column type:
-
-                - **Datetime sequences** (``pl.Datetime`` / ``pl.Date``):
-                  a duration string parsed by :class:`pandas.Timedelta`;
-                  any pandas-compatible format is accepted, e.g. ``"1h"``,
-                  ``"30min"``, ``"12h"``, ``"1d"``, ``"90s"``,
-                  ``"2h30min"``, ``"1W"``.
-                - **Timestep sequences** (numeric column): an ``int`` or
-                  ``float`` in the same unit as the time column.
-                  E.g. if the column holds integer timesteps, ``bin_size=2``
-                  produces bins of size 2 timesteps.
-            max_bins: Maximum number of bins. Sequences longer than this are
-                truncated; shorter ones are padded with *fill_value*.
-                When ``None``, inferred from the data span
-                (capped by :attr:`MAX_BINS_LIMIT`).
-            overlap_rule: Name of a :class:`polars.Expr` aggregation method
-                used to resolve multiple values competing for the same bin.
-                Any valid Polars aggregation is accepted, e.g. ``"first"``,
-                ``"last"``, ``"mean"``, ``"max"``, ``"min"``, ``"sum"``,
-                ``"median"``.
-            ohe: If ``True``, one-hot encode the specified features **before**
-                binning. Features must be ``Categorical`` or ``Enum`` - cast
-                first with ``cast_features`` if needed.
-                Binary (0/1) indicator columns are then aggregated per bin via
-                *overlap_rule* (e.g. ``"max"`` = presence, ``"sum"`` = count).
-            fill_value: Value to fill empty bins (default ``None`` keeps nulls).
-            fmt: Format of the returned object:
-
-                - ``"pandas"`` *(default)*: :class:`pandas.DataFrame` in
-                  **long** format - ``(N × M)`` rows with columns
-                  ``[id, bin_col, feat1, feat2, …]``.
-                - ``"polars"``: same as above as a :class:`polars.DataFrame`.
-                - ``"numpy"``: 3-D :class:`numpy.ndarray` of shape
-                  ``(N, M, K)`` where *N* = sequences, *M* = bins,
-                  *K* = feature columns (original features, or dummy columns
-                  when ``ohe=True``). The id and bin columns are excluded.
-                  Sequence order follows :attr:`unique_ids`.
-            bin_col: Name of the bin-index column in ``"pandas"`` /
-                ``"polars"`` output (default ``"__bin__"``). Unused for
-                ``"numpy"``.
+        max_bins: int | None,
+        fill_value: Any,
+        overlap_rule: str,
+        ohe: bool,
+        bin_col: str,
+    ) -> tuple[pl.DataFrame, list[str], int, str]:
+        """Shared computation core for :meth:`binned_data` and :meth:`to_tensor`.
 
         Returns:
-            Grid-aligned data in the requested format.
+            ``(df_polars_long, feat_cols_out, n_bins, id_col)``
         """
-        fmt = resolve_fmt(fmt, allowed=("pandas", "polars", "numpy"), default="pandas")
         valid_features, time_cols, id_col = self._validate_discretize_inputs(
             features, overlap_rule
         )
 
-        # Build frame once - reused by both _resolve_bin_params and _to_grid_with_axis.
         frame, feat_cols = self._build_entity_frame(
             valid_features, time_cols, id_col, ohe
         )
@@ -2036,7 +1984,7 @@ class SequencePool(
             is_datetime,
             bin_col=bin_col,
         )
-        df, n_bins = self._build_binned_grid(
+        df, n_bins = self._build_binned_data(
             lf_binned,
             feat_cols,
             id_col,
@@ -2045,15 +1993,117 @@ class SequencePool(
             fill_value,
             bin_col=bin_col,
         )
+        feat_cols_out = [c for c in df.columns if c not in {id_col, bin_col}]
+        return df, feat_cols_out, n_bins, id_col
 
-        if fmt == "numpy":
-            feat_cols_out = [c for c in df.columns if c not in {id_col, bin_col}]
-            arr = df.select(feat_cols_out).to_numpy()  # (N*M, K)
-            return arr.reshape(len(self.unique_ids), n_bins, len(feat_cols_out))
+    def binned_data(
+        self,
+        features: list[str] | str,
+        bin_size: BinSize,
+        max_bins: int | None = None,
+        fill_value: Any = None,
+        overlap_rule: str = "first",
+        ohe: bool = False,
+        fmt: Literal["pandas", "polars"] = "pandas",
+        use_arrow: bool = True,
+        bin_col: str = "__bin__",
+    ) -> pd.DataFrame | pl.DataFrame:
+        """Project sequences onto a binned temporal table (long-format dataframe).
 
+        Each sequence is aligned to a shared time axis divided into fixed-size
+        bins. When multiple values compete for the same bin, ``overlap_rule``
+        resolves the ambiguity. Empty bins are filled with ``fill_value``.
+
+        For an ML-ready 3-D tensor with feature labels and ID order, see
+        :meth:`to_tensor`.
+
+        Args:
+            features: Feature(s) to project onto the grid.
+            bin_size: Width of each bin (duration string for datetime, numeric
+                otherwise).
+            max_bins: Maximum number of bins. ``None`` infers from the data
+                span, capped by :attr:`MAX_BINS_LIMIT`. An explicit value
+                **bypasses** the safety cap — the caller opts in knowingly.
+            fill_value: Value used to fill empty bins. ``None`` keeps nulls.
+            overlap_rule: Polars aggregation name for in-bin conflict
+                resolution (``"first"``, ``"last"``, ``"mean"``, ``"max"``,
+                ``"sum"``, ``"median"``, ...).
+            ohe: One-hot encode features before binning. Requires
+                ``Categorical`` or ``Enum`` dtypes.
+            fmt: ``"pandas"`` (default) or ``"polars"``.
+            use_arrow: Pandas conversion uses Arrow when ``True``.
+            bin_col: Output column name for the bin index.
+
+        Returns:
+            DataFrame with columns ``[id_col, bin_col, *feature_cols]`` and
+            ``len(unique_ids) * n_bins`` rows.
+        """
+        fmt = resolve_fmt(fmt, allowed=("pandas", "polars"), default="pandas")
+        df, _, _, _ = self._binned_core(
+            features, bin_size, max_bins, fill_value, overlap_rule, ohe, bin_col
+        )
         if fmt == "polars":
             return df
         return to_pandas(df, use_arrow=use_arrow)
+
+    def to_tensor(
+        self,
+        features: list[str] | str,
+        bin_size: BinSize,
+        max_bins: int | None = None,
+        fill_value: Any = None,
+        overlap_rule: str = "first",
+        ohe: bool = False,
+        bin_col: str = "__bin__",
+    ) -> tuple[np.ndarray, list, list[str]]:
+        """Project sequences onto a 3-D temporal grid (ML-ready tensor).
+
+        Returns a dense ``(N, M, K)`` ndarray together with the list of K-axis
+        feature labels. Sequence order on the N axis follows :attr:`unique_ids`.
+
+        For a long-format dataframe variant (joins, plotting, exploration),
+        see :meth:`binned_data`.
+
+        Args:
+            features: Feature(s) to project.
+            bin_size: Bin width (duration string for datetime, numeric
+                otherwise).
+            max_bins: Maximum bins. ``None`` infers from the data span, capped
+                by :attr:`MAX_BINS_LIMIT`. An explicit value **bypasses** the
+                safety cap — the caller opts in knowingly.
+            fill_value: Value for empty bins. ``None`` keeps NaN.
+            overlap_rule: In-bin aggregation. See :meth:`binned_data`.
+            ohe: One-hot encode before binning. Post-OHE column names are
+                reflected in the returned ``feature_names``.
+            bin_col: Internal bin column name (forwarded to the underlying
+                pipeline for consistency; not present in the output).
+
+        Returns:
+            A 3-tuple ``(arr, ids, feature_names)`` where:
+
+            * ``arr`` has shape ``(N, M, K)`` = ``(len(unique_ids), n_bins,
+              len(feature_names))``.
+            * ``ids`` is the sequence of entity IDs matching the N-axis order
+              (identical to :attr:`unique_ids`).
+            * ``feature_names`` lists the K-axis labels in column order
+              (post-OHE names when ``ohe=True``).
+
+        Examples::
+
+            arr, ids, names = pool.to_tensor(["dose", "route"], "1d", ohe=True)
+            # arr.shape == (N, M, K)
+            # names == ["dose", "route_oral", "route_iv"]
+        """
+        df, feat_cols_out, n_bins, _ = self._binned_core(
+            features, bin_size, max_bins, fill_value, overlap_rule, ohe, bin_col
+        )
+        ids = self.unique_ids
+        arr = df.select(feat_cols_out).to_numpy()  # (N*M, K)
+        return (
+            arr.reshape(len(ids), n_bins, len(feat_cols_out)),
+            ids,
+            feat_cols_out,
+        )
 
     # ------------------------------------------------------------------
     # Extend
