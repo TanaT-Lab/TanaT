@@ -273,16 +273,10 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
 
     @Cachable.cached_property
     def sequences(self) -> dict:
-        """
-        All visible :class:`Sequence` instances for this trajectory,
-        keyed by store alias.
+        """All visible :class:`Sequence` instances for this trajectory, keyed by store alias.
 
-        Materialises every sequence reachable through the current alias
-        mask.  Useful when several aliases are accessed repeatedly in
-        the same computation.
-
-        Cached: rebuilt automatically when the alias mask or cast recipe
-        changes (i.e. after :meth:`clear_cache`).
+        Cached per trajectory state: built once and reused across calls.
+        Invalidated automatically when underlying settings change.
         """
         return {alias: self._build_sequence(alias) for alias in self._store_aliases}
 
