@@ -392,27 +392,6 @@ class SequencePool(
             return f"{label} (from trajectory)"
         return label
 
-    @Cachable.cached_method()
-    def _get_t0_df(
-        self,
-    ) -> pl.DataFrame:
-        """Cached T0 DataFrame with columns ``[id_col, _T0_, _T0_NEAREST_RANK_]``.
-
-        Triggers lazy computation if ``set_t0()`` was never called, then
-        filters by ``_id_mask`` and resolves nearest ranks.
-        """
-        setter = self._t0_setter
-        df = setter.df
-        if df is None:
-            if self._parent_pool is not None:
-                setter.compute_from_trajectory(self._parent_pool)
-            else:
-                setter.compute_from_sequence(self)
-            df = setter.df
-        if self._id_mask is not None:
-            df = df.filter(pl.col(self.settings.id_column).is_in(self._id_mask))
-        return self._resolve_nearest_rank(df)
-
     def t0_data(
         self,
         fmt: Literal["pandas", "polars"] = "pandas",
