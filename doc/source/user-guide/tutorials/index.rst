@@ -35,6 +35,7 @@ End-to-end workflows on real datasets:
 * :doc:`Filtering and preparing a cohort <mimic/filter_and_prepare>`: criteria, T0 anchor, relative window
 * :doc:`Analysing and clustering a cohort <mimic/analyse_and_cluster>`: distance matrix, hierarchical clustering, faceted timeline
 * :doc:`Survival analysis by admission cluster <mimic/survival_analysis>`: mortality endpoint, survival target, per-cluster Kaplan-Meier curves
+* :doc:`Learning clinical phenotypes with SWoTTeD <mimic/phenotype_with_swotted>`: OHE tensor, dictionary learning, phenotype interpretation
 
 
 .. rubric:: Education: Learning Session Analysis

@@ -44,8 +44,9 @@ Learn how different TanaT components work together to solve real-world problems.
    | :doc:`Exploring a patient cohort <auto_tutorials/mimic/explore_a_cohort>`
    | :doc:`Filtering and preparing a cohort <auto_tutorials/mimic/filter_and_prepare>`
    | :doc:`Analysing and clustering a cohort <auto_tutorials/mimic/analyse_and_cluster>`
-   | :doc:`Survival analysis by admission cluster <auto_tutorials/mimic/survival_analysis>`
-   | *End-to-end pipeline on real EHR data: load → filter → T0 anchor → cluster → survival*
+   | :doc:`Survival analysis by admission cluster <auto_tutorials/mimic/survival_analysis>`   
+   | :doc:`Learning clinical phenotypes with SWoTTeD <auto_tutorials/mimic/phenotype_with_swotted>`   
+   | *End-to-end pipeline on real EHR data: load → filter → T0 anchor → cluster → survival* 
 
 ----
 
