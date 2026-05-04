@@ -279,15 +279,25 @@ entity features.
    # Static features
    dummies = pool.to_dummies(["site"], is_static=True)
 
-``to_grid``: regular time grid
-------------------------------
+``binned_data`` / ``to_tensor``: regular time bins
+--------------------------------------------------
 
-Project temporal features onto a regular time grid. Useful for fixed-width
-feature matrices or matrix-based models.
+Project temporal features onto a regular time grid.
+
+* :meth:`~tanat.sequence.base.pool.SequencePool.binned_data` returns a
+  long-format DataFrame (pandas or polars). Useful for exploration, joins,
+  and plotting.
+* :meth:`~tanat.sequence.base.pool.SequencePool.to_tensor` returns a dense
+  ``(N, M, K)`` ndarray together with IDs and K-axis feature labels. Useful
+  for ML pipelines.
 
 .. code-block:: python
 
-   grid = pool.to_grid(features=["value", "score"], bin_size="1d")
+   # Long-format dataframe
+   df = pool.binned_data(features=["value", "score"], bin_size="1d")
+
+   # ML-ready tensor with IDs and feature names
+   arr, ids, feature_names = pool.to_tensor(features=["value", "score"], bin_size="1d")
 
 ----
 
