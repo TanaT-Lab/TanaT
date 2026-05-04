@@ -18,6 +18,9 @@ doc/source/user-guide/auto_tutorials/*
 doc/source/reference/api/*
 !doc/source/reference/api/index.rst
 doc/source/sg_execution_times.rst
+doc/source/user-guide/tutorials/mimic/lightning_logs/*
+lightning_logs/*/*
+
 
 # Ignore test outputs and coverage reports
 .coverage
