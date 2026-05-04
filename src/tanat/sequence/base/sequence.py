@@ -380,12 +380,12 @@ class Sequence(
     # Masking helpers
     # ------------------------------------------------------------------
 
-    def _apply_masks(
+    def _apply_id_mask(
         self,
         lf: pl.LazyFrame,
-        *,
-        is_static: bool = False,
     ) -> pl.LazyFrame:
+        """Scope a LazyFrame to this sequence's ID."""
+        return lf.filter(pl.col(self._store.seq_id_col) == self._id_value)
 
     # -------------------------------------------------------------------
     # Mutation
