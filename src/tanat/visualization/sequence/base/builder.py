@@ -287,7 +287,7 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
             entity_feature=entity_feature,
         )
 
-        fig, ax = plt.subplots(figsize=self.settings.figsize)
+        fig, ax = plt.subplots(figsize=self.settings.figsize, layout="constrained")
         self._render(ax, data)
         self._apply_styling(ax)
 
