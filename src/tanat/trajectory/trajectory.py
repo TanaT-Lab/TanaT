@@ -366,27 +366,6 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
     # Data access
     # ------------------------------------------------------------------
 
-    @Cachable.cached_method()
-    def _static_data_raw(
-        self,
-        features: list[str] | str | None = None,
-    ) -> pl.DataFrame | None:
-        """Cached data layer - always returns a Polars DataFrame or None.
-
-        Used internally by :meth:`static_data`.  Cache invalidated by
-        :meth:`clear_cache` (e.g. after ``cast_features``, ``drop_features``).
-        """
-        visible = self._resolve_valid_features(features)
-        if not visible:
-            return None
-        lf = self._get_static_data_from_store()
-        if lf is None:
-            return None
-        lf = self._apply_masks(lf)
-        lf = self._select_columns(lf, visible)
-        lf = self._rename_columns(lf)
-        return lf.collect()
-
     def static_data(
         self,
         features: list[str] | str | None = None,
@@ -406,7 +385,7 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
             static features are available in the current view.
         """
         fmt = resolve_fmt(fmt, allowed=("pandas", "polars"), default="pandas")
-        df = self._static_data_raw(features)
+        df = self._static_data_df(features)
         if df is None:
             return None
         if fmt == "polars":
