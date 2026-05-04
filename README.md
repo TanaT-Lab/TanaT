@@ -30,7 +30,7 @@ TanaT bridges the gap between traditional time series analysis and complex tempo
 - **Clustering**: Specialized algorithms for grouping similar temporal patterns
 - **Filtering & Selection**: Advanced criteria-based data selection and manipulation
 - **Visualization**: Comprehensive tools for temporal data exploration
-- **Survival analysis**: Model and predict time until key events
+- **Survival analysis**: Streamline the preparation of survival targets and time-to-event data
 
 ## Scientific Foundation
 
@@ -46,12 +46,12 @@ TanaT provides a comprehensive suite of interconnected modules for end-to-end te
 
 | Feature | Description |
 |---------|-------------|
-| **Simulation** | Generate synthetic data for statistical power analysis and algorithm benchmarking |
+| **Simulation** | Easily generate synthetic data to explore the framework's features |
 | **Visualization** | Explore and interpret temporal sequences through rich visual representations |
 | **Data Wrangling** | Manipulate, filter, and transform temporal data with flexible operations |
 | **Survival Analysis** | Integrate time-to-event modeling and survival techniques |
 | **Metrics & Clustering** | Apply specialized distance metrics and clustering algorithms for temporal data |
-| **Workflow Orchestration** | Build reproducible, automated analysis pipelines |
+| **Workflow Orchestration** | Organize your analysis, ensuring reproducible code and modular pipelines |
 
 ## Resources
 
