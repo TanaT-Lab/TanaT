@@ -89,7 +89,7 @@ class SequencePool(
         self._virtual_id: str | None = None
 
         self._id_mask: set | None = None
-        self._row_mask: pl.Series | None = None
+        self._entity_row_mask: pl.Series | None = None
         self._has_soft_drops: bool = False
         self._casts: SequenceCastRecipe = SequenceCastRecipe.coerce(cast_recipe)
         if not self._casts.is_empty():
@@ -220,7 +220,7 @@ class SequencePool(
             self._store = self._resolve_store(dest_path)
             self._gc_state[0] = self._store
         self._id_mask = None
-        self._row_mask = None
+        self._entity_row_mask = None
         self._has_soft_drops = False
         self._casts = SequenceCastRecipe()  # baked into the written store
         self.clear_cache()
@@ -234,7 +234,7 @@ class SequencePool(
         cast_recipe: SequenceCastRecipe,
         virtual_id: str | None,
         id_mask: set | None,
-        row_mask: pl.Series | None,
+        entity_row_mask: pl.Series | None,
         has_soft_drops: bool,
         t0_setter: T0Setter,
         parent_pool: TrajectoryPool | None = None,
@@ -250,7 +250,8 @@ class SequencePool(
             cast_recipe: Already-probed :class:`SequenceCastRecipe`.
             virtual_id: Forked virtual context UUID (or ``None``).
             id_mask: Set of sequence IDs to expose (or ``None`` for all).
-            row_mask: Row-level boolean mask (or ``None``).
+            entity_row_mask: Boolean :class:`~polars.Series` aligned on the physical
+                store (``None`` when no entity filter is active).
             has_soft_drops: Whether soft-dropped sequences exist.
             t0_setter: T0 strategy (own setter; ignored for managed pools).
             parent_pool: Owning
@@ -267,7 +268,7 @@ class SequencePool(
         weakref.finalize(pool, SequencePool._finalize_cleanup, pool._gc_state)
         pool._virtual_id = virtual_id
         pool._id_mask = id_mask
-        pool._row_mask = row_mask
+        pool._entity_row_mask = entity_row_mask
         pool._has_soft_drops = has_soft_drops
         pool._parent_pool = parent_pool
         return pool
@@ -353,7 +354,7 @@ class SequencePool(
         return (
             self._virtual_id is not None
             or self._id_mask is not None
-            or self._row_mask is not None
+            or self._entity_row_mask is not None
             or not self._casts.is_empty()
             or self._has_soft_drops
         )
@@ -787,13 +788,13 @@ class SequencePool(
 
         Raises:
             RuntimeError: If the pool has an active ``_id_mask`` or
-                ``_row_mask`` (filtered view).  Call ``pool.save()`` first
+                ``_entity_row_mask`` (filtered view).  Call ``pool.save()`` first
                 and then add features to the resulting unfiltered pool.
             ValueError: If the number of rows in *df* does not match the
                 number of entity rows in the store.
         """
         # Guard: positional alignment requires the full unfiltered store.
-        if self._id_mask is not None or self._row_mask is not None:
+        if self._id_mask is not None or self._entity_row_mask is not None:
             raise RuntimeError(
                 "Cannot add entity features on a filtered view. "
                 "Save the current view first with pool.save(), "
@@ -1181,7 +1182,11 @@ class SequencePool(
             cast_recipe=self._casts,
             virtual_id=self._store.fork_virtual_context(self._virtual_id),
             id_mask=set(self._id_mask) if self._id_mask is not None else None,
-            row_mask=self._row_mask.clone() if self._row_mask is not None else None,
+            entity_row_mask=(
+                self._entity_row_mask.clone()
+                if self._entity_row_mask is not None
+                else None
+            ),
             has_soft_drops=self._has_soft_drops,
             t0_setter=self._t0_setter,
             parent_pool=self._parent_pool,
@@ -2200,7 +2205,7 @@ class SequencePool(
             cast_recipe=cast_for_new,
             virtual_id=virtual_id,
             id_mask=self._id_mask,
-            row_mask=self._row_mask,
+            entity_row_mask=self._entity_row_mask,
             has_soft_drops=self._has_soft_drops,
             t0_setter=self._t0_setter,
         )
@@ -2258,7 +2263,7 @@ class SequencePool(
             cast_recipe=SequenceCastRecipe(),
             virtual_id=None,
             id_mask=None,
-            row_mask=None,
+            entity_row_mask=None,
             has_soft_drops=False,
             t0_setter=self._t0_setter,
         )
