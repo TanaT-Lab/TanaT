@@ -779,9 +779,7 @@ class SequenceStore(BaseStore):
             new_ti = active_ti.select(pl.col(SCH.T_END).alias(SCH.T_EVENT))
         else:  # middle
             # Resolve the effective dtype without a lazy-plan collect when possible.
-            col_type = (
-                time_index_dtype or self.time_index().collect_schema()[SCH.T_START]
-            )
+            col_type = time_index_dtype or active_ti.collect_schema()[SCH.T_START]
             if isinstance(col_type, (pl.Datetime, pl.Date)):
                 # Polars forbids adding two absolute timestamps (`start + end`),
                 # so the midpoint must be expressed as `start + (end - start) / 2`
