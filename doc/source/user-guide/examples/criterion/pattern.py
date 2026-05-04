@@ -39,18 +39,18 @@ See :doc:`../../../reference/criterion` for the full reference.
 # ~~~~~~~
 
 # %%
-from tanat import build_states
+from tanat import build_intervals
 from tanat.criterion import ANY, WILDCARD, PatternCriterion
-from tanat.dataset import simulate_states
+from tanat.dataset import simulate_intervals
 
 # %% [markdown]
 # Simulate data
 # ~~~~~~~~~~~~~
 
 # %%
-temporal = simulate_states(n_ids=50, features=["score", "status"], seed=42)
+temporal = simulate_intervals(n_ids=50, features=["score", "status"], seed=42)
 
-pool = build_states(
+pool = build_intervals(
     temporal_data=temporal,
     id_column="id",
     start_column="start",
