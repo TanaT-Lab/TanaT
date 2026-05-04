@@ -41,7 +41,7 @@ class TestSimulateEvents:
         assert isinstance(result, pd.DataFrame)
 
     def test_default_columns(self) -> None:
-        """Default columns are id, time, f_0 (float64), f_1 (string)."""
+        """Default columns are id, time, f_0 (Int64), f_1 (string)."""
         df = simulate_events(n_ids=50, seed=42)
         assert set(df.columns) == {"id", "time", "f_0", "f_1"}
 
@@ -151,13 +151,13 @@ class TestFeatureGeneration:
         assert "flag" in df.columns
 
     def test_named_entity_features_types(self) -> None:
-        """Type cycling: position 0 -> float64, 1 -> string, 2 -> bool."""
+        """Type cycling: position 0 -> Int64, 1 -> string, 2 -> bool."""
         df = simulate_events(
             n_ids=10,
             features=["score", "status", "flag"],
             seed=0,
         )
-        assert df["score"].dtype == np.float64
+        assert df["score"].dtype == np.int64
         assert pd.api.types.is_string_dtype(df["status"])
         assert df["flag"].dtype == bool
 

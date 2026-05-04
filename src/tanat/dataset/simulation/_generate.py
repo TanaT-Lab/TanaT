@@ -72,7 +72,7 @@ def _generate_features(
     result: dict[str, np.ndarray] = {}
     for name, ftype in typed_names:
         if ftype == "numeric":
-            result[name] = rng.standard_normal(n)
+            result[name] = rng.integers(1, 101, size=n)
         elif ftype == "categorical":
             result[name] = rng.choice(_VOCAB, size=n).astype(object)
         else:  # boolean
