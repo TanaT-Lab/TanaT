@@ -160,6 +160,7 @@ class SequenceStore(BaseStore):
         id_caster: Callable[[pl.Expr], pl.Expr] | None = None,
         *,
         explode: bool = False,
+        with_seq_rank: bool = False,
         **_kw,
     ) -> pl.LazyFrame:
         """Sequence IDs as a single-column lazy frame, with optional cast recipe applied.
@@ -172,9 +173,14 @@ class SequenceStore(BaseStore):
                 (unique IDs).  When ``True``, expands each ID by its entity
                 count so the result is row-aligned with :meth:`entity` and
                 :meth:`get_time_index`.
+            with_seq_rank: When ``True`` (and *explode* is ``True``), appends a
+                ``__phys_seq_rank__`` column: the 0-based per-sequence rank
+                computed from the store structure, **before any view-level mask**.
+                Ignored when *explode* is ``False``.
 
         Returns:
-            A :class:`polars.LazyFrame` with a single column of sequence IDs.
+            A :class:`polars.LazyFrame` with a single column of sequence IDs
+            (plus ``__phys_seq_rank__`` when requested).
         """
         if explode:
             lf = (
@@ -182,6 +188,13 @@ class SequenceStore(BaseStore):
                 .filter(pl.col(SCH.LENGTH) > 0)
                 .select(pl.col(SCH.SEQ_ID).repeat_by(pl.col(SCH.LENGTH)).explode())
             )
+            if with_seq_rank:
+                lf = lf.with_columns(
+                    pl.int_range(pl.len())
+                    .over(SCH.SEQ_ID)
+                    .cast(pl.UInt32)
+                    .alias("__phys_seq_rank__")
+                )
         else:
             lf = self.sequence_index.select(SCH.SEQ_ID)
         if id_caster is not None:
@@ -237,6 +250,16 @@ class SequenceStore(BaseStore):
     def seq_id_dtype(self) -> pl.DataType:
         """Physical dtype of the sequence ID column (IPC header read, no data scan)."""
         return self.sequence_index.collect_schema()[SCH.SEQ_ID]
+
+    @property
+    def n_entities(self) -> int:
+        """Total number of entity rows in the physical store.
+
+        Computed by summing the ``length`` column of the sequence index.
+        """
+        return int(
+            self.sequence_index.select(pl.col(SCH.LENGTH).sum()).collect().item()
+        )
 
     # ------------------------------------------------------------------
     # Cast probes (fast validation on a small sample before accepting a cast)
@@ -350,15 +373,24 @@ class SequenceStore(BaseStore):
         id_caster: Callable[[pl.Expr], pl.Expr] | None = None,
         time_index_caster: Callable[[pl.Expr], pl.Expr] | None = None,
         feature_exprs: list[pl.Expr] | None = None,
+        with_store_index: bool = False,
     ) -> pl.LazyFrame:
         """Returns the full temporal data: seq_id + time index + entity features.
 
         Cast recipes are applied after assembly - physical store is never touched.
+
+        Args:
+            with_store_index: When ``True``, prepends ``__store_idx__`` (the
+                absolute physical row position in the store) to the result.
         """
         lf = pl.concat(
             [
                 self.get_id_lf(id_caster=id_caster, explode=True),
-                self.get_time_index(virtual_id, time_index_caster=time_index_caster),
+                self.get_time_index(
+                    virtual_id,
+                    time_index_caster=time_index_caster,
+                    with_store_index=with_store_index,
+                ),
                 self.entity(virtual_id),
             ],
             how="horizontal",
@@ -372,6 +404,7 @@ class SequenceStore(BaseStore):
         virtual_id: str | None = None,
         *,
         time_index_caster: Callable[[pl.Expr], pl.Expr] | None = None,
+        with_store_index: bool = False,
     ) -> pl.LazyFrame:
         """Returns time-index columns only, with optional cast recipe applied.
 
@@ -382,14 +415,20 @@ class SequenceStore(BaseStore):
             virtual_id: Optional virtual context identifier.
             time_index_caster: If set, applied to each time column as a
                 column-agnostic ``Callable[[pl.Expr], pl.Expr]``.
+            with_store_index: When ``True``, appends ``__store_idx__`` (the
+                0-based absolute row position in the physical store) stamped
+                **after** any cast is applied.
 
         Returns:
-            A :class:`polars.LazyFrame` of the time-index columns.
+            A :class:`polars.LazyFrame` of the time-index columns (plus
+            ``__store_idx__`` when requested).
         """
         lf = self.time_index(virtual_id)
         if time_index_caster is not None:
             cols = lf.collect_schema().names()
             lf = lf.with_columns([time_index_caster(pl.col(c)) for c in cols])
+        if with_store_index:
+            lf = lf.with_row_index("__store_idx__")
         return lf
 
     def get_id_time_index(
@@ -398,16 +437,25 @@ class SequenceStore(BaseStore):
         *,
         id_caster: Callable[[pl.Expr], pl.Expr] | None = None,
         time_index_caster: Callable[[pl.Expr], pl.Expr] | None = None,
+        with_store_index: bool = False,
     ) -> pl.LazyFrame:
         """Returns seq_id + time-index columns only (no entity features).
 
         Cheaper than :meth:`get_temporal_data` when entity features are not needed.
         Cast recipes are applied after assembly.
+
+        Args:
+            with_store_index: When ``True``, prepends ``__store_idx__`` (the
+                absolute physical row position in the store) to the result.
         """
         return pl.concat(
             [
                 self.get_id_lf(id_caster=id_caster, explode=True),
-                self.get_time_index(virtual_id, time_index_caster=time_index_caster),
+                self.get_time_index(
+                    virtual_id,
+                    time_index_caster=time_index_caster,
+                    with_store_index=with_store_index,
+                ),
             ],
             how="horizontal",
         )
