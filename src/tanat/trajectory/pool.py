@@ -1812,27 +1812,29 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         is_datetime: bool,
         max_bins: int,
         *,
-        fill_value: Any,
         overlap_rule: str,
         bin_col: str,
     ) -> dict[str, pl.DataFrame]:
-        """Run ``_to_grid_with_axis`` on each alias and prefix feature columns.
+        """Run ``_to_binned_axis`` on each alias and prefix feature columns.
+
+        Fill-value is **not** applied here; it is applied once after the
+        cross-join in :meth:`_join_and_fill_bins`.
 
         Returns:
-            Mapping of alias → long-format grid DataFrame with prefixed columns.
+            Mapping of alias → long-format binned DataFrame with prefixed columns.
         """
         alias_grids: dict[str, pl.DataFrame] = {}
         for alias in features:
             pool = self.sequence_pools[alias]  # pylint: disable=protected-access
             frame, feat_cols_alias = alias_cache[alias]
-            df_alias = pool._to_grid_with_axis(  # pylint: disable=protected-access
+            df_alias = pool._to_binned_axis(  # pylint: disable=protected-access
                 frame,
                 feat_cols_alias,
                 t_min,
                 bin_size_native,
                 is_datetime,
                 max_bins,
-                fill_value=fill_value,
+                fill_value=None,  # fill once after cross-join in _join_and_fill_bins
                 overlap_rule=overlap_rule,
                 bin_col=bin_col,
             )
@@ -1846,7 +1848,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         return alias_grids
 
     @staticmethod
-    def _join_and_fill_grids(
+    def _join_and_fill_bins(
         alias_grids: dict[str, pl.DataFrame],
         alias_id_col: str,
         traj_ids: list,
@@ -1880,99 +1882,21 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
     # ------------------------------------------------------------------
     # Grid
     # ------------------------------------------------------------------
-
-    def to_grid(
+    def _binned_core(
         self,
         features: dict[str, list[str] | str],
         bin_size: BinSize,
-        max_bins: int | None = None,
-        fill_value: Any = None,
-        overlap_rule: str = "first",
-        ohe: bool = False,
-        fmt: Literal["pandas", "polars", "numpy"] = "pandas",
-        use_arrow: bool = True,
-        bin_col: str = "__bin__",
-    ) -> pd.DataFrame | pl.DataFrame | np.ndarray:
-        """Project all trajectory stores onto a single shared temporal grid.
-
-        Unlike :meth:`~tanat.sequence.base.pool.SequencePool.to_grid`, which
-        computes one independent axis per store, this method derives a single
-        global temporal axis from the **union** of all temporal indices across
-        the requested stores, so that bin *k* represents the same time window
-        regardless of the alias.
-
-        Internally, each alias's :class:`~tanat.sequence.base.pool.SequencePool`
-        is called via :meth:`~tanat.sequence.base.pool.SequencePool._to_grid_with_axis`
-        with the shared ``(t_min, bin_size_native, is_datetime, max_bins)``
-        tuple.  Results are horizontally joined on ``(id_col, bin_col)`` and
-        the trajectory ID mask is applied to guarantee that only visible
-        trajectories appear in the output.
-
-        Args:
-            features: Mapping of ``alias → feature name(s)`` that defines
-                both **which stores** to query and **which features** to
-                project from each store.  Every key must be a visible alias
-                in the current pool view.
-
-                Example::
-
-                    {
-                        "vitals": ["heart_rate", "spo2"],
-                        "labs": "creatinine",
-                    }
-
-            bin_size: Width of each bin.  The expected type depends on the
-                time column type:
-
-                - **Datetime sequences** (``pl.Datetime`` / ``pl.Date``):
-                  a duration string parsed by :class:`pandas.Timedelta`;
-                  any pandas-compatible format is accepted, e.g. ``"1h"``,
-                  ``"30min"``, ``"12h"``, ``"1d"``, ``"90s"``,
-                  ``"2h30min"``, ``"1W"``.
-                - **Timestep sequences** (numeric column): an ``int`` or
-                  ``float`` in the same unit as the time column.
-                  E.g. if the column holds integer timesteps, ``bin_size=2``
-                  produces bins of size 2 timesteps.
-
-                A **single** bin size is applied uniformly across all aliases.
-            max_bins: Maximum number of bins.  When ``None``, inferred from
-                the global temporal span ``(t_max - t_min) / bin_size``
-                (capped by :attr:`~tanat.sequence.base.pool.SequencePool.MAX_BINS_LIMIT`).
-            fill_value: Value used to fill empty bins, including bins that
-                fall outside a store's own temporal span (default ``None``
-                keeps nulls).
-            overlap_rule: :class:`polars.Expr` aggregation name for bin
-                conflict resolution (e.g. ``"first"``, ``"mean"``).
-            ohe: If ``True``, one-hot encode the specified features before
-                binning.  All features must be ``Categorical`` or ``Enum``.
-            fmt: Format of the returned object:
-
-                - ``"pandas"`` *(default)* / ``"polars"``: **long** format
-                  with ``N × M`` rows.  Columns are
-                  ``[id_col, bin_col, alias1_feat1, alias1_feat2, …]``,
-                  where each ``alias_feat`` column holds the binned values
-                  of feature ``feat`` from store ``alias`` (prefixed by
-                  the alias name).
-                - ``"numpy"``: 3-D :class:`numpy.ndarray` of shape
-                  ``(N, M, K)`` where *N* = trajectories (ordered by
-                  :attr:`unique_ids`), *M* = bins, *K* = total feature
-                  columns across all aliases.
-
-            bin_col: Name of the bin-index column used internally and
-                surfaced in the long-format intermediate representation
-                (default ``"__bin__"``).
+        max_bins: int | None,
+        fill_value: Any,
+        overlap_rule: str,
+        ohe: bool,
+        bin_col: str,
+    ) -> tuple[pl.DataFrame, list[str], int]:
+        """Shared computation core for :meth:`binned_data` and :meth:`to_tensor`.
 
         Returns:
-            Grid-aligned multi-modal trajectory data in the requested format.
-
-        Raises:
-            KeyError: If any key in *features* is not a visible alias.
-            TypeError: If *bin_size* has the wrong type for the temporal kind
-                (string for Datetime, numeric for timestep).
-            ValueError: If *bin_size* would produce too many bins and
-                *max_bins* is not set.
+            ``(df_polars_long, prefixed_feat_cols, n_bins)``
         """
-        fmt = resolve_fmt(fmt, allowed=("pandas", "polars", "numpy"), default="pandas")
         # ------------------------------------------------------------------ #
         # Step 1 - Validate aliases
         # ------------------------------------------------------------------ #
@@ -2028,17 +1952,16 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             bin_size_native,
             is_datetime,
             max_bins,
-            fill_value=fill_value,
             overlap_rule=overlap_rule,
             bin_col=bin_col,
         )
         traj_ids = self.unique_ids
-        result = self._join_and_fill_grids(
+        result = self._join_and_fill_bins(
             alias_grids, alias_id_col, traj_ids, max_bins, fill_value, bin_col
         )
 
         # ------------------------------------------------------------------ #
-        # Step 10 - Dispatch fmt
+        # Step 10 - Normalise ID column + derive feature column list
         # ------------------------------------------------------------------ #
         traj_id_col = self.settings.id_column
         if alias_id_col != traj_id_col:
@@ -2047,14 +1970,109 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         feat_cols_result = [
             c for c in result.columns if c not in {traj_id_col, bin_col}
         ]
+        return result, feat_cols_result, max_bins
 
-        if fmt == "numpy":
-            arr = result.select(feat_cols_result).to_numpy()  # (N*M, K)
-            return arr.reshape(len(traj_ids), max_bins, len(feat_cols_result))
+    def binned_data(
+        self,
+        features: dict[str, list[str] | str],
+        bin_size: BinSize,
+        max_bins: int | None = None,
+        fill_value: Any = None,
+        overlap_rule: str = "first",
+        ohe: bool = False,
+        fmt: Literal["pandas", "polars"] = "pandas",
+        use_arrow: bool = True,
+        bin_col: str = "__bin__",
+    ) -> pd.DataFrame | pl.DataFrame:
+        """Project all aliases onto a single shared binned table (long format).
 
+        All sub-pools share one global ``(t_min, t_max, bin_size)`` axis,
+        derived from the union of their temporal spans. Output columns are
+        prefixed ``"{alias}_{feature}"`` to avoid collisions.
+
+        For an ML-ready 3-D tensor with feature labels and ID order, see
+        :meth:`to_tensor`.
+
+        Args:
+            features: Mapping ``{alias: feature(s)}``. Each alias must exist
+                in this pool. ``str`` values are auto-promoted to ``[str]``.
+            bin_size: Bin width on the shared axis.
+            max_bins: Capped by :attr:`~tanat.sequence.base.pool.SequencePool.MAX_BINS_LIMIT`
+                when ``None``. An explicit value **bypasses** the cap — the
+                caller opts in knowingly.
+            fill_value: Applied **once**, after the cross-join over trajectory
+                IDs. Per-alias fills are not applied.
+            overlap_rule: In-bin aggregation, applied per alias.
+            ohe: One-hot encode per alias. Output names reflect post-OHE columns.
+            fmt: ``"pandas"`` or ``"polars"``.
+            use_arrow: Arrow-backed pandas conversion.
+            bin_col: Output bin index column name.
+
+        Returns:
+            DataFrame with columns
+            ``[traj_id, bin_col, "{alias1}_{feat1}", "{alias1}_{feat2}", ...,
+            "{alias2}_{feat1}", ...]``.
+        """
+        fmt = resolve_fmt(fmt, allowed=("pandas", "polars"), default="pandas")
+        result, _, _ = self._binned_core(
+            features, bin_size, max_bins, fill_value, overlap_rule, ohe, bin_col
+        )
         if fmt == "polars":
             return result
         return to_pandas(result, use_arrow=use_arrow)
+
+    def to_tensor(
+        self,
+        features: dict[str, list[str] | str],
+        bin_size: BinSize,
+        max_bins: int | None = None,
+        fill_value: Any = None,
+        overlap_rule: str = "first",
+        ohe: bool = False,
+        bin_col: str = "__bin__",
+    ) -> tuple[np.ndarray, list, list[str]]:
+        """Project all aliases onto a single 3-D tensor with prefixed labels.
+
+        The K axis stacks features from every alias, ordered by the iteration
+        order of ``features`` then by feature order within each alias. The
+        returned ``feature_names`` list mirrors that ordering exactly.
+
+        For a long-format dataframe variant (joins, plotting, exploration),
+        see :meth:`binned_data`.
+
+        Args:
+            features: Same as :meth:`binned_data`.
+            bin_size, max_bins, fill_value, overlap_rule, ohe, bin_col: Same
+                semantics as :meth:`binned_data`.
+
+        Returns:
+            A 3-tuple ``(arr, ids, feature_names)`` where:
+
+            * ``arr`` has shape ``(N, M, K)`` = ``(len(unique_ids), n_bins,
+              len(feature_names))``.
+            * ``ids`` is the trajectory ID sequence matching the N-axis order
+              (identical to :attr:`unique_ids`).
+            * ``feature_names`` lists the K-axis labels in column order,
+              prefixed ``"{alias}_{feat}"``.
+
+        Examples::
+
+            arr, ids, names = tpool.to_tensor(
+                {"drugs": "dose", "labs": ["hb", "wbc"]}, "1d"
+            )
+            # names == ["drugs_dose", "labs_hb", "labs_wbc"]
+            # arr.shape == (N, M, 3)
+        """
+        result, feat_cols_result, max_bins = self._binned_core(
+            features, bin_size, max_bins, fill_value, overlap_rule, ohe, bin_col
+        )
+        traj_ids = self.unique_ids
+        arr = result.select(feat_cols_result).to_numpy()  # (N*M, K)
+        return (
+            arr.reshape(len(traj_ids), max_bins, len(feat_cols_result)),
+            traj_ids,
+            feat_cols_result,
+        )
 
     # ------------------------------------------------------------------
     # Save
