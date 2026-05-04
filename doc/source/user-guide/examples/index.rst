@@ -10,6 +10,7 @@ Each example is self-contained and can be adapted to your own data.
    container/index
    visualization/index
    zeroing/index
+   criterion/index
    metric_entity/index
    metric_sequence/index
    metric_trajectory/index
@@ -91,6 +92,45 @@ distances or visualising cross-individual comparisons.
         <a href="zeroing/trajectory_t0.html" class="tanat-gallery-card">
             <p><strong>Trajectory Zeroing</strong><br>
             Define a reference point (T0) for trajectories across multiple sub-pools.</p>
+        </a>
+    </div>
+
+Criteria
+--------
+
+Filter sequences and entity rows using composable criteria.
+
+.. raw:: html
+
+    <div class="tanat-gallery">
+        <a href="criterion/entity.html" class="tanat-gallery-card">
+            <p><strong>EntityCriterion</strong><br>
+            Select sequences or prune entity rows with a Polars expression on temporal data.</p>
+        </a>
+
+        <a href="criterion/static.html" class="tanat-gallery-card">
+            <p><strong>StaticCriterion</strong><br>
+            Filter sequences by per-ID static features (age, group, &hellip;).</p>
+        </a>
+
+        <a href="criterion/time.html" class="tanat-gallery-card">
+            <p><strong>TimeCriterion</strong><br>
+            Select entities or sequences inside a temporal window; overlap or containment mode.</p>
+        </a>
+
+        <a href="criterion/pattern.html" class="tanat-gallery-card">
+            <p><strong>PatternCriterion</strong><br>
+            Match ordered patterns of values with free-gap (ANY) and wildcard (*) sentinels.</p>
+        </a>
+
+        <a href="criterion/length.html" class="tanat-gallery-card">
+            <p><strong>LengthCriterion</strong><br>
+            Select sequences by number of entity rows.</p>
+        </a>
+
+        <a href="criterion/rank.html" class="tanat-gallery-card">
+            <p><strong>RankCriterion</strong><br>
+            Keep entities at specific positional ranks, absolute or relative to T0.</p>
         </a>
     </div>
 
