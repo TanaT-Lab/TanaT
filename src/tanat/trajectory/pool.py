@@ -562,27 +562,6 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
     # Data access
     # ------------------------------------------------------------------
 
-    @Cachable.cached_method()
-    def _static_data_raw(
-        self,
-        features: list[str] | str | None = None,
-    ) -> pl.DataFrame | None:
-        """Cached data layer - always returns a Polars DataFrame or None.
-
-        Used internally by :meth:`static_data`.  Cache invalidated by
-        :meth:`clear_cache` (e.g. after ``cast_features``, ``drop_features``).
-        """
-        visible_features = self._resolve_valid_features(features)
-        if not visible_features:
-            return None
-        lf = self._get_static_data_from_store()
-        if lf is None:
-            return None
-        lf = self._apply_masks(lf)
-        lf = self._select_columns(lf, visible_features)
-        lf = self._rename_columns(lf)
-        return lf.collect()
-
     def static_data(
         self,
         features: list[str] | str | None = None,
@@ -604,7 +583,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         To restrict to a subset of IDs, use ``pool.subset(ids).static_data()``.
         """
         fmt = resolve_fmt(fmt, allowed=("pandas", "polars"), default="pandas")
-        df = self._static_data_raw(features)
+        df = self._static_data_df(features)
         if df is None:
             return None
         if fmt == "polars":
