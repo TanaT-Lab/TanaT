@@ -213,37 +213,15 @@ class Sequence(
         """
         return self._t0_result[1]
 
-    def _get_t0_df(self) -> pl.DataFrame:
-        """Single-row T0 table ``[id_col, _T0_, _T0_NEAREST_RANK_]`` for this sequence.
-
-        Mirrors :meth:`~tanat.sequence.base.pool.SequencePool._get_t0_df`.
-
-        Returns:
-            Polars DataFrame with one row and columns
-            ``[id_col, _T0_, _T0_NEAREST_RANK_]``.
-        """
-        id_col = self.settings.id_column
-        if self._parent_pool is not None:
-            # Fast path: filter the parent pool's already-cached result.
-            full = self._parent_pool._get_t0_df()
-            return full.filter(pl.col(id_col) == self._id_value)
-        # Standalone path: trigger computation if needed, then filter to this ID.
-        setter = self._t0_setter
-        if setter.df is None:
-            setter.compute_from_sequence(self)
-        df = setter.df
-        if df is None:
-            return pl.DataFrame()
-        row = df.filter(pl.col(id_col) == self._id_value)
-        return self._resolve_nearest_rank(row)
-
     def __len__(self) -> int:
-        """Number of events/states in this sequence (respects row mask)."""
-        if self._row_mask is not None:
-            return int(self._row_mask.sum())
-        return self._store.get_sequence_length(
-            self._id_value, id_caster=self._casts.id_caster()
-        )
+        """Number of entities in this sequence."""
+        # Fast path: no row mask -> read length straight from the store index
+        # without materialising the full per-rank DataFrame.
+        if self._entity_row_mask is None:
+            return self._store.get_sequence_length(
+                self._id_value, id_caster=self._casts.id_caster()
+            )
+        return len(self._entity_ranks_df)
 
     def __iter__(self):
         """Iterate over entities in index order.
@@ -257,15 +235,10 @@ class Sequence(
             for entity in seq:
                 print(entity.rank, entity.temporal_extent, entity.data())
         """
-        if self._row_mask is not None:
-            for logical, physical in enumerate(self._row_mask.arg_true()):
-                yield self._build_entity(int(physical), logical_rank=logical)
-        else:
-            n = self._store.get_sequence_length(
-                self._id_value, id_caster=self._casts.id_caster()
+        for row in self._entity_ranks_df.iter_rows(named=True):
+            yield self._build_entity(
+                row["__phys_seq_rank__"], logical_rank=row["__logical_seq_rank__"]
             )
-            for rank in range(n):
-                yield self._build_entity(rank)
 
     def __repr__(self) -> str:
         cls = type(self).__name__
@@ -347,11 +320,8 @@ class Sequence(
                 f"Entity rank {rank} out of range for sequence of length {len(self)}"
             )
 
-        if self._row_mask is not None:
-            physical_rank = int(self._row_mask.arg_true()[rank])
-            return self._build_entity(physical_rank, logical_rank=rank)
-
-        return self._build_entity(rank)
+        phys = self._entity_ranks_df["__phys_seq_rank__"][rank]
+        return self._build_entity(phys, logical_rank=rank)
 
     def _build_entity(
         self, physical_rank: int, *, logical_rank: int | None = None
