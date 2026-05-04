@@ -544,6 +544,8 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
         """Apply common axis styling from settings."""
         s = self.settings
 
+        self._set_custom_ticks(ax)
+
         if s.title.text:
             ax.set_title(
                 s.title.text,
@@ -592,6 +594,17 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
                 loc=s.legend.location,
                 title=s.legend.title,
             )
+
+    def _set_custom_ticks(self, ax: Any) -> None:
+        """Subclass hook to install custom tick positions / labels.
+
+        Called from :meth:`_apply_styling` **before** any tick_params /
+        label / limit configuration. Override this in subclasses that need
+        :meth:`Axes.set_xticks` / :meth:`Axes.set_yticks` /
+        :meth:`Axes.set_xticklabels` / :meth:`Axes.set_yticklabels`.
+
+        The default implementation is a no-op.
+        """
 
     @staticmethod
     def _build_color_map(keys: list[str], spec: Any) -> dict[str, str]:
