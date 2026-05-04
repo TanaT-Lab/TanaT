@@ -16,8 +16,20 @@ from .entity import (
 ## -- Sequence Metrics --
 from .sequence import (
     SequenceMetric,
+    Chi2SequenceMetric,
+    Chi2Settings,
+    DTWSequenceMetric,
+    DTWSettings,
+    EditSequenceMetric,
+    EditSettings,
+    LCPSequenceMetric,
+    LCPSettings,
+    LCSSequenceMetric,
+    LCSSettings,
     LinearPairwiseSequenceMetric,
     LinearPairwiseSettings,
+    SoftDTWSequenceMetric,
+    SoftDTWSettings,
 )
 
 ## -- Trajectory Metrics --
@@ -36,8 +48,20 @@ __all__ = [
     "HammingSettings",
     ## -- Sequence Metrics --
     "SequenceMetric",
+    "Chi2SequenceMetric",
+    "Chi2Settings",
+    "DTWSequenceMetric",
+    "DTWSettings",
+    "EditSequenceMetric",
+    "EditSettings",
+    "LCPSequenceMetric",
+    "LCPSettings",
+    "LCSSequenceMetric",
+    "LCSSettings",
     "LinearPairwiseSequenceMetric",
     "LinearPairwiseSettings",
+    "SoftDTWSequenceMetric",
+    "SoftDTWSettings",
     ## -- Trajectory Metrics --
     "TrajectoryMetric",
     "AggregationTrajectoryMetric",
