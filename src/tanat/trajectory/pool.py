@@ -549,7 +549,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             return list(ids)
         return [uid for uid in ids if uid in self._id_mask]
 
-    def _apply_masks(
+    def _apply_id_mask(
         self,
         lf: pl.LazyFrame,
     ) -> pl.LazyFrame:
