@@ -39,6 +39,24 @@ Learn how different TanaT components work together to solve real-world problems.
 
 ----
 
+**MIMIC-IV: Clinical Cohort Analysis**
+
+   | :doc:`Exploring a patient cohort <auto_tutorials/mimic/explore_a_cohort>`
+   | :doc:`Filtering and preparing a cohort <auto_tutorials/mimic/filter_and_prepare>`
+   | :doc:`Analysing and clustering a cohort <auto_tutorials/mimic/analyse_and_cluster>`
+   | :doc:`Survival analysis by admission cluster <auto_tutorials/mimic/survival_analysis>`
+   | *End-to-end pipeline on real EHR data: load → filter → T0 anchor → cluster → survival*
+
+----
+
+**Education: Learning Session Analysis**
+
+   | :doc:`Exploring learner activity sequences <auto_tutorials/mooc/explore_sessions>`
+   | :doc:`Clustering sessions by action patterns <auto_tutorials/mooc/cluster_sessions>`
+   | *Session detection, Optimal Matching distance, hierarchical clustering on MOOC data*
+
+----
+
 Getting Help
 ------------
 
