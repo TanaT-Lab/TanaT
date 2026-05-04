@@ -11,46 +11,34 @@ function show_help()
   cat << HELP
 USAGE
 
-  ${0##*/} [-h] [-v]
+  ${0##*/} [-h]
 
 OPTIONS
 
   -h
     Show this help message and exit.
 
-  -v
-    Use a Python virtual environment to build the documentation.
-
 HELP
   exit "$1"
 }
 
-in_venv=false
-while getopts "hv" opt
+while getopts "h" opt
 do
   case "$opt" in
     h) show_help 0 ;;
-    v) in_venv=true ;;
     *) show_help 1 ;;
   esac
 done
 
-if "$in_venv"
-then
-  if [[ ! -e venv ]]
-  then
-    python -m venv venv
-    source venv/bin/activate
-    pip install -U pip
-  else
-    source venv/bin/activate
-  fi
+if [[ ! -e venv ]]; then
+  python3 -m venv venv
+  venv/bin/pip install -U pip
 fi
+source venv/bin/activate
 
-pip install -e . # install tanat (editable for dev)
-pip install -U -r doc/requirements.txt
+pip install -e '.[sql,tutorials,doc]' # install tanat with all doc-build dependencies
 rm -rf public   # clean stale output files
-sphinx-apidoc -o doc/source/reference/api -f -H "API Documentation" ./src/tanat
+sphinx-apidoc -o doc/source/reference/api -f -H "API Documentation" src/tanat
 
 # sphinx-gallery overwrites auto_examples/index.rst and auto_tutorials/index.rst
 # with its own generated versions.  We seed them with our hand-written indexes
