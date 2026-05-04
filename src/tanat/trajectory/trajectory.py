@@ -22,6 +22,7 @@ from ..sequence.base.sequence import Sequence
 from ..store.trajectory.store import TrajectoryStore
 from ..core import registry as _registry
 from ..core.format import resolve_fmt, to_pandas
+from ..core.validation import ensure_criterion
 from ..zeroing import T0Setter, T0Value, _T0, _T0_NEAREST_RANK
 from .cast import TrajectoryCastRecipe
 from .settings import TrajectorySettings
@@ -29,6 +30,7 @@ from .view_mixin import TrajectoryViewMixin
 
 if TYPE_CHECKING:
     from .pool import TrajectoryPool
+    from ..criterion.base import Criterion
 
 
 class Trajectory(TrajectoryViewMixin, CachableSettings):
@@ -287,6 +289,23 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
     def _apply_id_mask(self, lf: pl.LazyFrame, **_) -> pl.LazyFrame:
         """Scopes a LazyFrame to this trajectory's ID."""
         return lf.filter(pl.col(self._store.traj_id_col) == self._id_value)
+
+    # ------------------------------------------------------------------
+    # Criterion API
+    # ------------------------------------------------------------------
+
+    def match(self, criterion: Criterion) -> bool:
+        """Return ``True`` if this trajectory satisfies *criterion*.
+
+        Args:
+            criterion: A :class:`~tanat.criterion.base.Criterion` instance.
+
+        Raises:
+            TypeError: If *criterion* is not a Criterion object.
+            CriterionLevelError: If the criterion is incompatible with trajectories.
+        """
+        ensure_criterion(criterion)
+        return criterion.match(self)
 
     # ------------------------------------------------------------------
     # T0 / Zeroing
