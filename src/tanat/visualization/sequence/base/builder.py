@@ -465,18 +465,21 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
             )
 
         if self.settings.legend.show and legend_handles:
+            # Avoid: ValueError: Automatic legend placement (loc='best')
+            # not implemented for figure legend
+            loc = self.settings.legend.location
+            if loc == "best":
+                loc = "outside center right"
             fig.legend(
                 legend_handles,
                 legend_labels,
-                loc="center left",
-                bbox_to_anchor=(1.0, 0.5),
+                loc=loc,
                 title=self.settings.legend.title,
                 frameon=True,
             )
-            # constrained_layout handles the right margin automatically
 
-        # constrained_layout (set at figure creation) handles all spacing,
-        # including suptitle — no tight_layout() call needed.
+        # constrained_layout (set on every figure: simple draw and faceted)
+        # handles all spacing including the suptitle. No tight_layout() call.
         return VisualizationResult(fig)
 
     # ------------------------------------------------------------------
