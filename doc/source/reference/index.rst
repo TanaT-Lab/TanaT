@@ -12,6 +12,7 @@ information about classes, methods, parameters, and return types.
    builder
    manipulation
    zeroing
+   criterion
    metadata
    metrics
    clustering
@@ -36,6 +37,11 @@ What's in this section?
 :doc:`zeroing`
    Setting a reference date (T0) with the four built-in strategies (position,
    direct, feature, query), pool-level inspection, and null handling.
+
+:doc:`criterion`
+   Filter and select sequences using declarative criteria on entity attributes,
+   static features, time bounds, value patterns, sequence length, or rank.
+   Covers level compatibility, parameters, and chaining.
 
 :doc:`metadata`
    Metadata objects (``SequenceMetadata``, ``TrajectoryMetadata``, feature types),
