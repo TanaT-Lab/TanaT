@@ -208,6 +208,131 @@ class SequenceViewMixin:
             lf = self._apply_entity_row_mask(lf)
         return self._apply_id_mask(lf)
 
+    @Cachable.cached_property
+    def _entity_ranks_df(self) -> pl.DataFrame:
+        """Per-sequence rank indices for all visible entities.
+
+        Columns: ``[id_col, "__phys_seq_rank__", "__logical_seq_rank__"]``.
+
+        * ``"__phys_seq_rank__"``    : 0-based rank within the sequence in the store,
+          computed **before any view-level mask**.  Stable identifier used by
+          :class:`~tanat.sequence.base.entity.Entity` to locate its store row.
+        * ``"__logical_seq_rank__"`` : 0-based rank within the sequence in **this
+          view**, re-indexed after all masks are applied.
+
+        Three resolution paths, in order of cost:
+
+        1. **Pool-managed sequence**: filter parent pool's cached DataFrame (zero I/O).
+        2. **No entity mask** (fast path): ``__logical_seq_rank__`` is a copy of
+           ``__phys_seq_rank__`` (no rows were removed).
+        3. **Entity mask active** (slow path): ``__logical_seq_rank__`` is
+           re-computed after both masks.
+        """
+        # Pool-managed sequence: delegate to parent, then slice.
+        if (
+            hasattr(self, "_id_value")
+            and getattr(self, "_parent_pool", None) is not None
+        ):
+            id_col = self.settings.id_column
+            # pylint: disable=protected-access
+            return self._parent_pool._entity_ranks_df.filter(
+                pl.col(id_col) == self._id_value
+            )
+
+        id_col = self.settings.id_column
+
+        # __phys_seq_rank__ is stamped by the store on the full N_STORE rows,
+        # so _apply_entity_row_mask (positional on N_STORE) must come first.
+        lf = self._store.get_id_lf(
+            id_caster=self._casts.id_caster(),
+            explode=True,
+            with_seq_rank=True,
+        )
+        lf = self._apply_masks(lf)
+        lf = lf.rename({self._store.seq_id_col: id_col})
+
+        # Fast path: no entity mask, __logical_seq_rank__ == __phys_seq_rank__.
+        if self._entity_row_mask is None:
+            return lf.with_columns(
+                pl.col("__phys_seq_rank__").alias("__logical_seq_rank__")
+            ).collect()
+
+        # Slow path: compute logical rank after mask.
+        return lf.with_columns(
+            pl.int_range(pl.len())
+            .over(id_col)
+            .cast(pl.UInt32)
+            .alias("__logical_seq_rank__")
+        ).collect()
+
+    def _compute_raw_t0_df(self) -> pl.DataFrame:
+        """Raw T0 DataFrame ``[id_col, _T0_]`` for this view, no nearest rank.
+
+        Safe to call from within the entity-criteria pipeline (e.g.
+        :class:`~tanat.criterion.type.rank.RankCriterion`) because it never
+        triggers :meth:`_temporal_data_lf` / :meth:`_apply_masks`.
+
+        Three resolution paths, mirroring :attr:`_entity_ranks_df`:
+
+        1. **Pool-managed sequence**: filter parent pool's cached raw result.
+        2. **Managed pool** (owned by a :class:`~tanat.trajectory.pool.TrajectoryPool`):
+           compute via trajectory.
+        3. **Standalone pool or sequence**: compute from own data.
+
+        ID scoping applied after computation:
+
+        - :class:`Sequence`: filter to ``_id_value``.
+        - :class:`SequencePool`: filter by ``_id_mask`` when set.
+        """
+        id_col = self.settings.id_column
+
+        # Pool-managed sequence: filter parent pool's already-cached raw result.
+        if (
+            hasattr(self, "_id_value")
+            and getattr(self, "_parent_pool", None) is not None
+        ):
+            full = self._parent_pool._compute_raw_t0_df()
+            return full.filter(pl.col(id_col) == self._id_value)
+
+        # Compute T0 if not yet done.
+        setter = self._t0_setter
+        df = setter.df
+        if df is None:
+            if getattr(self, "_parent_pool", None) is not None:
+                # Managed pool owned by a TrajectoryPool.
+                setter.compute_from_trajectory(self._parent_pool)
+            else:
+                setter.compute_from_sequence(self)
+            df = setter.df
+
+        if df is None:
+            return pl.DataFrame()
+
+        # Scope to visible IDs.
+        if hasattr(self, "_id_value"):
+            df = df.filter(pl.col(id_col) == self._id_value)
+        elif getattr(self, "_id_mask", None) is not None:
+            df = df.filter(pl.col(id_col).is_in(self._id_mask))
+
+        return df
+
+    @Cachable.cached_method()
+    def _get_t0_df(self) -> pl.DataFrame:
+        """T0 DataFrame ``[id_col, _T0_, _T0_NEAREST_RANK_]`` for this view.
+
+        Thin wrapper: :meth:`_compute_raw_t0_df` + :meth:`_resolve_nearest_rank`.
+        """
+        # Pool-managed sequence: delegate to parent pool's full cached result.
+        id_col = self.settings.id_column
+        if (
+            hasattr(self, "_id_value")
+            and getattr(self, "_parent_pool", None) is not None
+        ):
+            full = self._parent_pool._get_t0_df()
+            return full.filter(pl.col(id_col) == self._id_value)
+
+        return self._resolve_nearest_rank(self._compute_raw_t0_df())
+
     # ------------------------------------------------------------------
     # Lazy data access (no collect, for internal consumers)
     # ------------------------------------------------------------------
