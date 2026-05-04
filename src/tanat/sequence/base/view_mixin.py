@@ -215,29 +215,52 @@ class SequenceViewMixin:
     def _temporal_data_lf(
         self,
         features: list[str] | str | None = None,
+        with_store_index: bool = False,
     ) -> pl.LazyFrame:
         """Return temporal data as a :class:`~polars.LazyFrame` without collecting.
 
-        Applies masks, column selection, and renaming identically to
-        :meth:`temporal_data`, but skips the final ``.collect()`` call.
-        Use this when chaining further lazy operations.
+        Pipeline (in order):
+        1. Fetch all columns from store (optionally with ``__store_idx__``).
+        2. Apply masks (entity row mask first, then ID mask).
+        3. Rename store columns to user-facing names.
+        4. Select structural (id + time) + requested feature columns.
+
+        Args:
+            features: Feature names to include (``None`` → all visible).
+            with_store_index: When ``True``, prepends ``__store_idx__`` (the
+                absolute physical row position in the store) to the result.
+                Useful for consumers that need to map view-space rows back to
+                store-space positions (e.g. :class:`~tanat.criterion.type.rank.RankCriterion`).
         """
         valid_features = self._resolve_valid_features(features, is_static=False)
-        lf = self._get_data_from_store(is_static=False)
+        lf = self._get_data_from_store(
+            is_static=False, with_store_index=with_store_index
+        )
         lf = self._apply_masks(lf, is_static=False)
-        lf = self._select_columns(lf, valid_features, is_static=False)
-        return self._rename_columns(lf, is_static=False)
+        lf = self._rename_columns(lf, is_static=False)
+        # Select structural (id + time) + requested feature columns.
+        id_col = self.settings.id_column
+        time_cols = self.settings.get_time_columns()
+        select_cols = [id_col] + time_cols + valid_features
+        if with_store_index:
+            select_cols = select_cols + ["__store_idx__"]
+        return lf.select(select_cols)
 
-    def _id_time_index_lf(self) -> pl.LazyFrame:
+    def _id_time_index_lf(self, with_store_index: bool = False) -> pl.LazyFrame:
         """Return ``id + time index`` columns as a :class:`~polars.LazyFrame`, masks applied.
 
         Cheaper than :meth:`_temporal_data_lf` when entity features are not needed.
         Works regardless of the temporal type (datetime, integer timestep, etc.).
+
+        Args:
+            with_store_index: When ``True``, prepends ``__store_idx__`` (the
+                absolute physical row position in the store) to the result.
         """
         lf = self._store.get_id_time_index(
             virtual_id=self._virtual_id,
             id_caster=self._casts.id_caster(),
             time_index_caster=self._casts.time_index_caster(),
+            with_store_index=with_store_index,
         )
         lf = self._apply_masks(lf, is_static=False)
         return self._rename_columns(lf, is_static=False)
@@ -256,9 +279,10 @@ class SequenceViewMixin:
         lf = self._get_data_from_store(is_static=True)
         if lf is None:
             return None
-        lf = self._apply_masks(lf, is_static=True)
-        lf = self._select_columns(lf, valid_features, is_static=True)
-        return self._rename_columns(lf, is_static=True)
+        lf = self._apply_id_mask(lf)
+        lf = self._rename_columns(lf, is_static=True)
+        id_col = self.settings.id_column
+        return lf.select([id_col] + valid_features)
 
     # ------------------------------------------------------------------
     # Collected data (cached)
@@ -333,10 +357,18 @@ class SequenceViewMixin:
     def _get_data_from_store(
         self,
         is_static: bool = False,
+        with_store_index: bool = False,
     ) -> pl.LazyFrame | None:
         """
         Fetches all features from the store, merges virtual layer, and applies
         view-level cast recipes.
+
+        Args:
+            is_static: When ``True``, returns static features; otherwise temporal.
+            with_store_index: When ``True``, prepends ``__store_idx__`` (absolute
+                physical row position in the store) to the returned LazyFrame.
+                Only meaningful for temporal data (ignored when *is_static* is
+                ``True``).
 
         Returns ``None`` when ``is_static=True`` and no static features exist.
         """
@@ -351,6 +383,7 @@ class SequenceViewMixin:
             id_caster=self._casts.id_caster(),
             time_index_caster=self._casts.time_index_caster(),
             feature_exprs=self._casts.feature_exprs(is_static=False),
+            with_store_index=with_store_index,
         )
 
     # ------------------------------------------------------------------
