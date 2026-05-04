@@ -9,6 +9,8 @@ practical examples.
    :hidden:
 
    building_pools
+   mimic/index
+   mooc/index
 
 Building & Ingesting Data
 --------------------------
@@ -20,22 +22,27 @@ Master the builder API and load data from multiple heterogeneous sources:
   compose trajectory pools, and manage the workspace
 
 
-Working with Your Data
------------------------
-
-Master data manipulation and configuration:
-
-* **Metadata management**: inspect, update, and control temporal and feature metadata
-* **Type conversions**: convert between Event, State, and Interval sequence types
-* **Data wrangling**: filter, transform, and prepare sequences and trajectories
-
 Real-World Applications
 ------------------------
 
-Apply TanaT to actual datasets:
+End-to-end workflows on real datasets:
 
-* **Clinical data (MIMIC-IV)**: analyze electronic health records
-* **MOOC student activity**: explore learner activity sequences from Massive Open Online Courses
+.. rubric:: MIMIC-IV: Clinical Cohort Analysis
+
+:doc:`mimic/index` · A series of tutorials on the MIMIC-IV demo dataset:
+
+* :doc:`Exploring a patient cohort <mimic/explore_a_cohort>`: load, inspect, visualise, train/test split
+* :doc:`Filtering and preparing a cohort <mimic/filter_and_prepare>`: criteria, T0 anchor, relative window
+* :doc:`Analysing and clustering a cohort <mimic/analyse_and_cluster>`: distance matrix, hierarchical clustering, faceted timeline
+* :doc:`Survival analysis by admission cluster <mimic/survival_analysis>`: mortality endpoint, survival target, per-cluster Kaplan-Meier curves
+
+
+.. rubric:: Education: Learning Session Analysis
+
+:doc:`mooc/index` · A series of tutorials on the MOOC demo dataset:
+
+* :doc:`Exploring learner activity sequences <mooc/explore_sessions>`: load, inspect, visualise, train/test split
+* :doc:`Clustering sessions by action patterns <mooc/cluster_sessions>`: criteria, T0 anchor, relative window
 
 ----
 
