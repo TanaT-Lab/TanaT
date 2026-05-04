@@ -386,13 +386,38 @@ class Sequence(
         *,
         is_static: bool = False,
     ) -> pl.LazyFrame:
+
+    # -------------------------------------------------------------------
+    # Mutation
+    # ------------------------------------------------------------------
+
+    def copy(self) -> Sequence:
+        """Return a standalone copy of this sequence, detached from any parent pool.
+
+        Returns:
+            A new standalone :class:`Sequence` with ``_parent_pool=None``.
+
+        Examples::
+
+            seq = pool[42]
+            standalone = seq.copy()         # detaches from pool
+            standalone.filter_entities(crit, inplace=True)  # safe
         """
-        Scopes a LazyFrame to this sequence's ID and applies the row mask.
-        """
-        lf = lf.filter(pl.col(self._store.seq_id_col) == self._id_value)
-        if not is_static and self._row_mask is not None:
-            lf = lf.filter(pl.lit(self._row_mask))
-        return lf
+        new_seq = object.__new__(type(self))
+        Sequence.__init__(new_seq, self._id_value, self._store, self.settings)
+        # Snapshot the combined entity row mask so the detached copy
+        # preserves the full filter state without depending on the parent pool.
+        # pylint: disable=protected-access
+        mask = self._entity_row_mask
+        new_seq._own_entity_row_mask = mask.clone() if mask is not None else None
+        # Snapshot the cast recipe so the copy keeps type conversions
+        # even after being detached from the parent pool.
+        new_seq._own_casts = self._casts
+        # Snapshot the effective T0 setter so the copy keeps any custom T0
+        # inherited from the parent pool (otherwise it would silently fall
+        # back to the default fallback setter on first access).
+        new_seq._fallback_t0_setter = self._t0_setter
+        return new_seq
 
     # ------------------------------------------------------------------
     # Data access
