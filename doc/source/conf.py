@@ -99,6 +99,13 @@ class _ExampleOrder:
         # zeroing: sequence-level → trajectory-level
         "sequence_t0.py": 0,
         "trajectory_t0.py": 1,
+        # criterion
+        "entity.py": 0,
+        "static.py": 1,
+        "time.py": 2,
+        "pattern.py": 3,
+        "length.py": 4,
+        "rank.py": 5,
         # metric: entity → sequence → trajectory
         "hamming.py": 0,
         "linear_pairwise.py": 0,
@@ -112,6 +119,17 @@ class _ExampleOrder:
         "hierarchical.py": 0,
         "pam.py": 1,
         "clara.py": 2,
+        # Tutorials:
+        #    - Build pool from multiple sources
+        "building_pools.py": 0,
+        #    - Mimic: end-to-end pipeline
+        "explore_a_cohort.py": 1,
+        "filter_and_prepare.py": 2,
+        "analyse_and_cluster.py": 3,
+        "survival_analysis.py": 4,
+        #    - MOOC: learning session analysis
+        "explore_sessions.py": 0,
+        "cluster_sessions.py": 1,
     }
 
     def __init__(self, src_dir):
