@@ -1403,6 +1403,11 @@ class SequencePool(
                 virtual_id=self._virtual_id,
             )
 
+
+    # ------------------------------------------------------------------
+    # Discretize helpers
+    # ------------------------------------------------------------------
+
     @staticmethod
     def _to_bin_expr(
         col: str, t_min, bin_size_native: int | float, is_datetime: bool
@@ -1429,10 +1434,6 @@ class SequencePool(
         - **Event**: one bin per row (single timestamp).
         - **Interval / State**: explode across ``[bin_start, bin_end]`` inclusive.
         """
-
-    # ------------------------------------------------------------------
-    # Discretize helpers
-    # ------------------------------------------------------------------
 
     def _validate_discretize_inputs(
         self,
