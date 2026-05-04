@@ -229,3 +229,19 @@ class StateSequencePool(SequencePool, register_name="state"):
             destination=destination,
             overwrite=overwrite,
         )
+
+    # ------------------------------------------------------------------
+    # Criterion
+    # ------------------------------------------------------------------
+
+    def filter_entities(self, criterion, *, inplace=False, verbose=True):
+        """Not supported on state pools.
+
+        States are **contiguous and non-overlapping** by definition: removing
+        individual rows would leave temporal gaps and break the invariant
+        ``T_END[i] == T_START[i+1]``.
+        """
+        raise TypeError(
+            "filter_entities() is not supported on StateSequencePool, "
+            "consider using IntervalSequencePool instead."
+        )

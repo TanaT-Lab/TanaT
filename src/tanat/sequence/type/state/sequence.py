@@ -83,3 +83,19 @@ class StateSequence(Sequence, register_name="state"):
             *_duration_stats_exprs(settings.start_column, settings.end_column),
             _n_transitions_expr(settings.entity_features),
         ]
+
+    # ------------------------------------------------------------------
+    # Criterion
+    # ------------------------------------------------------------------
+
+    def filter_entities(self, criterion, *, inplace=False, verbose=True):
+        """Not supported on state sequences.
+
+        States are **contiguous and non-overlapping** by definition: removing
+        individual rows would leave temporal gaps and break the invariant
+        ``T_END[i] == T_START[i+1]``.
+        """
+        raise TypeError(
+            "filter_entities() is not supported on StateSequence, "
+            "consider using IntervalSequence instead."
+        )
