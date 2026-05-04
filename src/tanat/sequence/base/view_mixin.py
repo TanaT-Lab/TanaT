@@ -86,16 +86,9 @@ class SequenceViewMixin:
         Unlike :attr:`unique_ids`, preserves rich dtypes (e.g. ``Categorical``).
         Cached via ``CachableSettings``; invalidated by ``clear_cache()``.
         """
-        lf = self._store.get_id_lf(id_caster=self._casts.id_caster()).rename(
-            {self._store.seq_id_col: self.settings.id_column}
-        )
-        if hasattr(self, "_id_value"):
-            # Sequence path: filter to a single ID
-            return lf.filter(pl.col(self.settings.id_column) == self._id_value)
-        if self._id_mask is not None:
-            # Pool path: filter by ID mask
-            return lf.filter(pl.col(self.settings.id_column).is_in(list(self._id_mask)))
-        return lf
+        lf = self._store.get_id_lf(id_caster=self._casts.id_caster())
+        lf = self._apply_id_mask(lf)
+        return lf.rename({self._store.seq_id_col: self.settings.id_column})
 
     # ------------------------------------------------------------------
     # Metadata
@@ -173,6 +166,47 @@ class SequenceViewMixin:
         if features is not None:
             return self.settings.validate_features(features, is_static=is_static)
         return self.settings.available_features(is_static=is_static)
+
+    # ------------------------------------------------------------------
+    # Physical rank access
+    # ------------------------------------------------------------------
+
+    def _apply_entity_row_mask(self, lf: pl.LazyFrame) -> pl.LazyFrame:
+        """Apply the entity row mask to a store LazyFrame.
+
+        The mask is a positional boolean Series aligned on the full physical store.
+
+        Args:
+            lf: LazyFrame to apply the mask.
+
+        Returns:
+            Filtered :class:`~polars.LazyFrame`.
+        """
+        mask = getattr(self, "_entity_row_mask", None)
+        if mask is not None:
+            return lf.filter(pl.lit(mask))
+        return lf
+
+    def _apply_masks(self, lf: pl.LazyFrame, is_static: bool = False) -> pl.LazyFrame:
+        """Apply entity row mask then ID mask to a store LazyFrame.
+
+        Order is mandatory:
+
+        1. ``_entity_row_mask`` first: positional boolean :class:`~polars.Series`
+           aligned on the **full physical store**.  Must run before any row-count
+           change (including ID scoping).
+        2. ``_id_mask`` second: value-based filter, safe on any row count.
+
+        Args:
+            lf: LazyFrame to apply the mask.
+            is_static: whether lf come from static data.
+
+        Returns:
+            Filtered :class:`~polars.LazyFrame`.
+        """
+        if not is_static:
+            lf = self._apply_entity_row_mask(lf)
+        return self._apply_id_mask(lf)
 
     # ------------------------------------------------------------------
     # Lazy data access (no collect, for internal consumers)
