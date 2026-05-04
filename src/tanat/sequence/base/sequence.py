@@ -77,7 +77,8 @@ class Sequence(
         CachableSettings.__init__(self, settings=settings)
 
         self._parent_pool: SequencePool | None = None
-        self._own_row_mask: pl.Series | None = None
+        self._own_entity_row_mask: pl.Series | None = None
+        self._own_casts: SequenceCastRecipe | None = None
         self._fallback_t0_setter: T0Setter = T0Setter.default(
             is_event=self.get_registration_name() == "event"
         )
@@ -121,10 +122,13 @@ class Sequence(
         """Active cast recipe for this sequence.
 
         * **Pool path:** delegates to the parent pool's recipe.
+        * **Detached copy:** returns the snapshotted recipe from :meth:`copy`.
         * **Standalone path:** always empty (no casts).
         """
         if self._parent_pool is not None:
             return self._parent_pool._casts
+        if self._own_casts is not None:
+            return self._own_casts
         return SequenceCastRecipe()
 
     @property
@@ -138,28 +142,24 @@ class Sequence(
             return self._parent_pool._virtual_id
         return None
 
-    @Cachable.cached_property
-    def _row_mask(self) -> pl.Series | None:
-        """Composed row mask for this sequence.
+    @property
+    def _entity_row_mask(self) -> pl.Series | None:
+        """Active entity row mask for this sequence.
 
-        Combines the pool-level mask (sliced to this sequence's rows) with
-        the sequence's own ``_own_row_mask`` via logical AND.
-        Returns ``None`` when neither source is set.
+        Combines the parent pool's ``_entity_row_mask`` (if any) with
+        this sequence's own ``_own_entity_row_mask`` via logical AND.
+        Returns ``None`` when no mask is active.
         """
-        # Pool contribution: slice the flat pool mask to this sequence's rows.
-        pool_slice: pl.Series | None = None
-        if self._parent_pool is not None and self._parent_pool._row_mask is not None:
-            offset, length = self._parent_pool._store.get_slice(
-                self._id_value,
-                id_caster=self._parent_pool._casts.id_caster(),
-            )
-            pool_slice = self._parent_pool._row_mask.slice(offset, length)
-
-        own = self._own_row_mask  # None until a future filter() sets it
-
-        if pool_slice is not None and own is not None:
-            return pool_slice & own
-        return pool_slice if pool_slice is not None else own
+        pool_mask: pl.Series | None = (
+            self._parent_pool._entity_row_mask  # pylint: disable=protected-access
+            if self._parent_pool is not None
+            else None
+        )
+        if pool_mask is None:
+            return self._own_entity_row_mask
+        if self._own_entity_row_mask is None:
+            return pool_mask
+        return pool_mask & self._own_entity_row_mask
 
     # ------------------------------------------------------------------
     # Properties
