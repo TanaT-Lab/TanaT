@@ -419,10 +419,11 @@ class SpanplotVizBuilder(BaseSequenceVizBuilder, register_name="spanplot"):
     # Styling
     # ------------------------------------------------------------------
 
-    def _apply_styling(self, ax: Any) -> None:
-        """Apply common styling then set group-axis tick labels from ordered keys."""
-        super()._apply_styling(ax)
-
+    def _set_custom_ticks(self, ax: Any) -> None:
+        """Install ordered group ticks. Rotation is applied later by the base
+        via tick_params, so set_*ticklabels here intentionally does NOT pass
+        rotation. ``ha`` is passed only because it co-depends on rotation.
+        """
         group_by = self.settings.aesthetics.group_by
         horizontal = self.settings.aesthetics.orientation == "horizontal"
         tick_labels = self._id_order if group_by == "id" else self._label_order
@@ -435,10 +436,9 @@ class SpanplotVizBuilder(BaseSequenceVizBuilder, register_name="spanplot"):
             ax.set_yticks(positions)
             ax.set_yticklabels(tick_labels)
         else:
+            x_rot = self.settings.x_axis.tick_rotation
             ax.set_xticks(positions)
-            rotation = 45 if len(tick_labels) > 10 else 0
             ax.set_xticklabels(
                 tick_labels,
-                rotation=rotation,
-                ha="right" if rotation else "center",
+                ha="right" if x_rot else "center",
             )
