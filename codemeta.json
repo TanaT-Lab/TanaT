@@ -94,12 +94,6 @@
     },
     {
       "@type": "SoftwareApplication",
-      "identifier": "scikit-survival",
-      "name": "scikit-survival",
-      "runtimePlatform": "Python 3"
-    },
-    {
-      "@type": "SoftwareApplication",
       "identifier": "tanat_utils",
       "name": "tanat_utils",
       "runtimePlatform": "Python 3"

@@ -16,7 +16,6 @@ dependencies = [
     "polars",
     "pyarrow",
     "scikit-learn",
-    "scikit-survival",
     "tanat_utils",
 ]
 requires-python = ">=3.10"
@@ -37,6 +36,18 @@ authors = [
 [project.optional-dependencies]
 sql = [
     "connectorx",
+]
+tutorials = [
+    "scikit-survival",
+    "swotted",
+]
+doc = [
+    "myst-parser",
+    "sphinx",
+    "pydata-sphinx-theme",
+    "sphinxcontrib-mermaid",
+    "sphinx-gallery",
+    "matplotlib",
 ]
 test = [
     "pytest",
