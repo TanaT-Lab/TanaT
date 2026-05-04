@@ -23,11 +23,13 @@ from .entity import Entity
 from .cast import SequenceCastRecipe
 from .view_mixin import SequenceViewMixin
 from ...core.format import resolve_fmt, to_pandas
+from ...core.validation import ensure_criterion
 from ...zeroing import T0Setter, _T0, _T0_NEAREST_RANK, T0Value
 
 if TYPE_CHECKING:
     from ...store.sequence.store import SequenceStore
     from .pool import SequencePool
+    from ...criterion.base import Criterion
 
 LOGGER = logging.getLogger(__name__)
 
@@ -388,6 +390,44 @@ class Sequence(
         # back to the default fallback setter on first access).
         new_seq._fallback_t0_setter = self._t0_setter
         return new_seq
+
+    # ------------------------------------------------------------------
+    # Criterion API
+    # ------------------------------------------------------------------
+
+    def match(self, criterion: Criterion) -> bool:
+        """Return ``True`` if this sequence satisfies *criterion*.
+
+        Args:
+            criterion: A :class:`~tanat.criterion.base.Criterion` instance.
+
+        Raises:
+            TypeError: If *criterion* is not a Criterion object.
+            CriterionLevelError: If the criterion is incompatible with this sequence.
+        """
+        ensure_criterion(criterion)
+        return criterion.match(self)
+
+    def filter_entities(
+        self, criterion: Criterion, *, inplace: bool = False, verbose: bool = True
+    ) -> Sequence:
+        """Return a view with entities pruned by *criterion*.
+
+        Args:
+            criterion: A :class:`~tanat.criterion.base.Criterion` instance
+                supporting :attr:`~tanat.criterion.base.CriterionLevel.ENTITY`.
+            inplace: If ``True``, modify this sequence in place.
+            verbose: If ``True``, print a one-line report.
+
+        Returns:
+            Filtered sequence (or *self* when *inplace=True*).
+
+        Raises:
+            TypeError: If *criterion* is not a Criterion object.
+            CriterionLevelError: If the criterion does not support entity filtering.
+        """
+        ensure_criterion(criterion)
+        return criterion.filter_entities(self, inplace=inplace, verbose=verbose)
 
     # ------------------------------------------------------------------
     # Data access
