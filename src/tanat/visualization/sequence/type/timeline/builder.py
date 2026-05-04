@@ -313,10 +313,12 @@ class TimelineVizBuilder(BaseSequenceVizBuilder, register_name="timeline"):
     # Styling
     # ------------------------------------------------------------------
 
-    def _apply_styling(self, ax: Any) -> None:
-        """Apply common styling then set y-tick labels from the tick map."""
-        super()._apply_styling(ax)
+    def _set_custom_ticks(self, ax: Any) -> None:
+        """Install y-tick labels from the tick map.
 
+        Rotation is applied later by the base via tick_params; we don't pass
+        it here so the base remains the single source of truth.
+        """
         if self._y_tick_map:
             ax.set_yticks(list(self._y_tick_map.keys()))
             ax.set_yticklabels(list(self._y_tick_map.values()))
