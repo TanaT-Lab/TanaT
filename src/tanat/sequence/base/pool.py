@@ -635,27 +635,13 @@ class SequencePool(
             return list(ids)
         return [uid for uid in ids if uid in self._id_mask]
 
-    def _apply_masks(
+    def _apply_id_mask(
         self,
         lf: pl.LazyFrame,
-        *,
-        is_static: bool = False,
     ) -> pl.LazyFrame:
-        """
-        Applies ``_row_mask`` and ``_id_mask`` to a LazyFrame.
-
-        Row mask is applied **first** because it is aligned with the
-        physical store rows; ID filtering can then safely narrow further.
-        ``pl.lit()`` wraps the Series as a Polars expression.
-        """
-        # 1. Row mask first: aligned with physical rows
-        if not is_static and self._row_mask is not None:
-            lf = lf.filter(pl.lit(self._row_mask))
-
-        # 2. ID filter
+        """Apply ``_id_mask`` to a LazyFrame."""
         if self._id_mask is not None:
             lf = lf.filter(pl.col(self._store.seq_id_col).is_in(self._id_mask))
-
         return lf
 
     # ------------------------------------------------------------------
