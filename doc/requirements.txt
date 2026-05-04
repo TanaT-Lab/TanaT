@@ -4,3 +4,4 @@ pydata-sphinx-theme
 sphinxcontrib-mermaid
 sphinx-gallery
 matplotlib
+swotted
