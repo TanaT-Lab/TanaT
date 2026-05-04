@@ -73,25 +73,10 @@ class TrajectoryViewMixin:
 
     @Cachable.cached_property
     def _id_lf(self) -> pl.LazyFrame:
-        """Lazy frame of visible IDs with the correct dtype.
-
-        Renamed to ``settings.id_column``.  Filter depends on the concrete type:
-
-        - :class:`Trajectory`: single-ID filter on ``_id_value``.
-        - :class:`TrajectoryPool`: ID-mask filter when ``_id_mask`` is set.
-
-        Cached via ``CachableSettings``; invalidated by ``clear_cache()``.
-        """
-        lf = self._store.get_id_lf(id_caster=self._casts.id_caster()).rename(
-            {self._store.traj_id_col: self.settings.id_column}
-        )
-        if hasattr(self, "_id_value"):
-            # Trajectory path: filter to a single ID
-            return lf.filter(pl.col(self.settings.id_column) == self._id_value)
-        if self._id_mask is not None:
-            # Pool path: filter by ID mask
-            return lf.filter(pl.col(self.settings.id_column).is_in(list(self._id_mask)))
-        return lf
+        """Lazy frame of visible IDs with the correct dtype."""
+        lf = self._store.get_id_lf(id_caster=self._casts.id_caster())
+        lf = self._apply_id_mask(lf)
+        return lf.rename({self._store.traj_id_col: self.settings.id_column})
 
     # ------------------------------------------------------------------
     # Metadata
@@ -207,7 +192,7 @@ class TrajectoryViewMixin:
         if lf is None:
             return None
 
-        lf = self._apply_masks(lf)
+        lf = self._apply_id_mask(lf)
         lf = self._select_columns(lf, valid_features)
         return self._rename_columns(lf)
 
