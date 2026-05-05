@@ -86,7 +86,7 @@ class TestEntityCriterionMatch:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("pool_type", ["interval", "event", "state"])
+@pytest.mark.parametrize("pool_type", ["interval", "event"])
 class TestEntityCriterionFilterEntities:
     """filter_entities() keeps only rows satisfying the expression."""
 
@@ -127,3 +127,23 @@ class TestEntityCriterionFilterEntities:
             filtered.temporal_data(fmt="polars").height
             == pool.temporal_data(fmt="polars").height
         )
+
+
+# ---------------------------------------------------------------------------
+# filter_entities() guard on StateSequencePool
+# ---------------------------------------------------------------------------
+
+
+class TestEntityCriterionStateGuard:
+    """filter_entities() is not supported on StateSequencePool nor StateSequence."""
+
+    def test_filter_entities_raises_on_state_pool(self, pools_dict: dict) -> None:
+        """StateSequencePool.filter_entities() must raise TypeError."""
+        pool = pools_dict["state"]
+        with pytest.raises(TypeError, match="filter_entities"):
+            pool.filter_entities(EntityCriterion(query=pl.lit(True)))
+
+    def test_filter_entities_raises_on_state_sequence(self, state_seq) -> None:
+        """StateSequence.filter_entities() must raise TypeError."""
+        with pytest.raises(TypeError, match="filter_entities"):
+            state_seq.filter_entities(EntityCriterion(query=pl.lit(True)))

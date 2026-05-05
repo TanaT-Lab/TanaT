@@ -60,3 +60,9 @@ def seq_short(interval_pool):
 def seq_long(interval_pool):
     """A Sequence with more than 6 entity rows (id=1)."""
     return interval_pool[HAS_ERROR_ID]
+
+
+@pytest.fixture(scope="session")
+def state_seq(state_pool):
+    """A StateSequence extracted from the session-scoped state_pool (id=1)."""
+    return state_pool[HAS_ERROR_ID]

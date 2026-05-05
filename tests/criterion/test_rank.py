@@ -62,7 +62,7 @@ class TestRankCriterionValidation:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("pool_type", ["interval", "event", "state"])
+@pytest.mark.parametrize("pool_type", ["interval", "event"])
 class TestRankCriterionFilterEntities:
     """filter_entities() keeps only entity rows at the specified ranks."""
 
@@ -220,3 +220,23 @@ class TestRankCriterionLevelGuards:
         """which() on TrajectoryPool also raises CriterionLevelError."""
         with pytest.raises(CriterionLevelError):
             traj_pool.which(RankCriterion(first=2))
+
+
+# ---------------------------------------------------------------------------
+# filter_entities() guard on StateSequencePool
+# ---------------------------------------------------------------------------
+
+
+class TestRankCriterionStateGuard:
+    """filter_entities() is not supported on StateSequencePool nor StateSequence."""
+
+    def test_filter_entities_raises_on_state_pool(self, pools_dict: dict) -> None:
+        """StateSequencePool.filter_entities() must raise TypeError."""
+        pool = pools_dict["state"]
+        with pytest.raises(TypeError, match="filter_entities"):
+            pool.filter_entities(RankCriterion(first=1))
+
+    def test_filter_entities_raises_on_state_sequence(self, state_seq) -> None:
+        """StateSequence.filter_entities() must raise TypeError."""
+        with pytest.raises(TypeError, match="filter_entities"):
+            state_seq.filter_entities(RankCriterion(first=1))

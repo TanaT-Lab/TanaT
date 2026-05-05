@@ -142,7 +142,7 @@ class TestPatternCriterionMatch:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("pool_type", ["interval", "event", "state"])
+@pytest.mark.parametrize("pool_type", ["interval", "event"])
 class TestPatternCriterionFilterEntities:
     """filter_entities() keeps only the greedy-first-match witness rows."""
 
@@ -206,3 +206,25 @@ class TestPatternCriterionFilterEntities:
             )
         )
         assert filtered.temporal_data(fmt="polars").height == 0
+
+
+# ---------------------------------------------------------------------------
+# filter_entities() guard on StateSequencePool
+# ---------------------------------------------------------------------------
+
+
+class TestPatternCriterionStateGuard:
+    """filter_entities() is not supported on StateSequencePool nor StateSequence."""
+
+    def test_filter_entities_raises_on_state_pool(self, pools_dict: dict) -> None:
+        """StateSequencePool.filter_entities() must raise TypeError."""
+        pool = pools_dict["state"]
+        with pytest.raises(TypeError, match="filter_entities"):
+            pool.filter_entities(PatternCriterion(feature="status", pattern="error"))
+
+    def test_filter_entities_raises_on_state_sequence(self, state_seq) -> None:
+        """StateSequence.filter_entities() must raise TypeError."""
+        with pytest.raises(TypeError, match="filter_entities"):
+            state_seq.filter_entities(
+                PatternCriterion(feature="status", pattern="error")
+            )
