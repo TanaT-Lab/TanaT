@@ -1,27 +1,37 @@
 What is TanaT
 ==============
 
-*TanaT* (*Temporal ANalysis of Trajectories*) is an extensible Python library for temporal sequence analysis with a primary focus on patient care pathways.
+*TanaT* (*Temporal ANalysis of Trajectories*) is an extensible Python library for temporal sequence analysis. 
 
-The name also refers to a variety of wine grape that originates from south of France, taking continuity with the `TraMineR library <http://traminer.unige.ch/>`_ which widely inspired this work (Traminer is also a variety of wine grape).
+The name of the library refers to a variety of wine grape that originates from south of France, taking continuity with the `TraMineR library <http://traminer.unige.ch/>`_ which widely inspired this work (Traminer is also a variety of wine grape).
 
-What Makes TanaT Different?
----------------------------
+It has been thought to address analysis and modeling issues of patient care pathways. 
+This application guides the choices of the first features to be implemented.
+Nonetheless, our core data model fits the needs of multiple different contexts.
 
-Unlike traditional time series libraries, TanaT is designed for **irregularly sampled, symbolic event-based temporal data**.
+What Makes *TanaT* Different?
+----------------------------
+
+Unlike traditional time series libraries (more especially `aeon <https://www.aeon-toolkit.org>`_ or `sktime <https://www.sktime.net>`_ ), *TanaT* is 
+designed for **irregularly sampled, symbolic event-based temporal data**.
 In practice, this means:
 
 * Sequences in a pool can have different lengths (different numbers of observations per individual).
-* Observations carry symbolic labels (e.g. ``"GP"``, ``"EMERGENCY"``) rather than purely numeric values.
-* Classical data analysis methods do not apply directly. TanaT provides dedicated metrics and algorithms instead.
+* Observations carry complex features (e.g. symbolic labels ``"GP"``, ``"EMERGENCY"``) rather than purely numeric values.
+* Classical data analysis methods do not apply directly. *TanaT* provides dedicated metrics and algorithms instead.
 
-These characteristics are common in healthcare (patient pathways), web analytics
-(user journeys), and process mining (activity logs).
+These characteristics are common in multiple contexts such as healthcare (patient pathways), web analytics
+(user journeys), industry 4.0 (logs), tourism (human activities), etc.
+
+Compared to the few alternative libraries for sequence analysis (`TraMineR <http://traminer.unige.ch/>`_ or `Sequenzo <https://sequenzo.yuqi-liang.tech/en/>`_ ), *TanaT* proposes an 
+original and rich data model. The first fundamental difference lies in the way temporal information is represented: contrary to the above libraries, we do not discretize 
+time. This makes our representation lighter for most cases. The second core difference is the richness of event description.
+
 
 Core Framework Functionalities
 -------------------------------
 
-The TanaT framework provides a complete workflow for temporal sequence analysis, from data ingestion to advanced analytics and visualization.
+The *TanaT* framework provides a complete workflow for temporal sequence analysis, from data ingestion to advanced analytics and visualization.
 
 :doc:`../user-guide/auto_examples/container/index`
    Flexible representations for events, intervals, and states, at both individual and population levels.

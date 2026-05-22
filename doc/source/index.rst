@@ -4,12 +4,17 @@ TanaT Documentation
 *TanaT* is an extensible Python library for temporal sequence analysis with a primary focus on patient care pathways.
 
 It gathers a collection of tools for analysing timed sequences (also called *trajectories*):
-building pools of sequences from heterogeneous data sources, computing dedicated distance
-metrics, clustering, and producing publication-ready visualisations.
+building pools of sequences from heterogeneous data sources, manipulating sequence objects,
+computing dedicated distance, metrics, clustering, and producing publication-ready visualisations.
 Inspired by `TraMineR <http://traminer.unige.ch/>`_ (R) and time-series libraries like
 `aeon <https://www.aeon-toolkit.org/>`_ and `tslearn <https://tslearn.readthedocs.io/>`_,
 TanaT brings these capabilities to Python with first-class support for multi-sequence
 trajectories that combine three temporal data types: **events**, **intervals**, and **states**.
+
+
+More features will be implemented in the future and we also aim at creating a community of 
+developpers that would contribute to this project. If you are interested in being involved
+please reach out.
 
 .. toctree::
    :maxdepth: 2

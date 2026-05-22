@@ -2,8 +2,15 @@ Contributing
 ============
 
 First of all, thank you for considering contributing to *TanaT*.
-It is still an experimental toolkit, but it has received a warm welcome from various communities
+Yet it is still an experimental toolkit, it has received a warm welcome from various communities
 interested in its functionalities.
+
+We are sure that there are plenty of missing features that you would like to have in *TanaT*. 
+So why not implement them and share them with the community? 
+We would be eager to integrate new efficient useful features to analyse temporal sequences.
+We implemented first the features that are the most used for our application cases, and as we expect 
+that our library could be used in multiple contexts, there are certainly other must-have-it methods 
+in your community that could be integrated.
 
 
 Contributions are managed through GitHub Issues and Pull Requests.
@@ -69,3 +76,12 @@ Steps:
 
 (If any of the above seems unfamiliar, please look up the
 `Git documentation <https://git-scm.com/documentation>`_ on the web, or ask another contributor for help.)
+
+
+Contributing to the Research Project
+-------------------------------------
+
+*TanaT* is also a research project that investigates new methods and principles for exploring temporal sequences. 
+We expect it can be an asset for developping new ideas around temporal data analysis. 
+
+If you have research project related to *TanaT*, feel free to contact us by email.
