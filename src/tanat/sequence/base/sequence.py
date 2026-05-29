@@ -22,6 +22,7 @@ from tanat_utils.pretty_format import (
 from ...cast import SequenceCastRecipe
 from .entity import Entity, PrefetchedEntityData
 from .view_mixin import SequenceViewMixin
+from ...store.sequence.schema import StoreSchema as SCH
 from ...core.format import resolve_fmt, to_pandas
 from ...core.validation import ensure_criterion
 from ...zeroing import T0Setter, _T0, _T0_NEAREST_RANK, T0Value
@@ -212,13 +213,15 @@ class Sequence(
 
     def __len__(self) -> int:
         """Number of entities in this sequence."""
-        # Fast path: no row mask -> read length straight from the store index
+        # Fast path: no entity filter -> read length straight from the store index
         # without materialising the full per-rank DataFrame.
-        if self._entity_row_mask is None:
-            return self._store.get_sequence_length(
-                self._id_value, id_caster=self._casts.id_caster()
-            )
-        return len(self._entity_ranks_df)
+        if self._entity_filter_expr is None:
+            lf = self._store.sequence_index
+            lf = self._frames._rename(lf, is_static=True)
+            lf = self._casts.structural.apply(lf, id_col=self.settings.id_column)
+            lf = self._apply_id_mask(lf)
+            return int(lf.select(SCH.LENGTH).collect().item())
+        return len(self._store_index_df)
 
     def __iter__(self):
         """Iterate over entities in index order.
@@ -232,9 +235,16 @@ class Sequence(
             for entity in seq:
                 print(entity.rank, entity.temporal_extent, entity.data())
         """
-        for row in self._entity_ranks_df.iter_rows(named=True):
+        df = self._frames.temporal(with_store_index=True).collect()
+        t_cols = tuple(self.settings.get_time_columns())
+        f_cols = tuple(self.settings.entity_features)
+
+        for rank, row in enumerate(df.iter_rows(named=True)):
+            prefetched = PrefetchedEntityData(row, t_cols, f_cols)
             yield self._build_entity(
-                row["__phys_seq_rank__"], logical_rank=row["__logical_seq_rank__"]
+                rank=rank,
+                store_index=row[SCH.STORE_INDEX],
+                prefetched=prefetched,
             )
 
     def __repr__(self) -> str:
@@ -317,30 +327,31 @@ class Sequence(
                 f"Entity rank {rank} out of range for sequence of length {len(self)}"
             )
 
-        phys = self._entity_ranks_df["__phys_seq_rank__"][rank]
-        return self._build_entity(phys, logical_rank=rank)
+        store_index = int(self._store_index_df[SCH.STORE_INDEX][rank])
+        return self._build_entity(rank=rank, store_index=store_index)
 
     def _build_entity(
-        self, physical_rank: int, *, logical_rank: int | None = None
+        self,
+        *,
+        rank: int,
+        store_index: int,
+        prefetched=None,
     ) -> Entity:
-        """Build an Entity by physical store rank.
+        """Build an Entity flyweight for the given view position.
 
         Args:
-            physical_rank: 0-based physical row index in the store.
-            logical_rank: 0-based position within the (possibly
-                filtered) sequence view.  ``None`` → same as
-                *physical_rank* (no mask active).
+            rank: 0-based position within the (possibly filtered) sequence view.
+            store_index: Absolute physical row index (``SCH.STORE_INDEX``) for
+                efficient point access without offset arithmetic.
+            prefetched: Optional :class:`~tanat.sequence.base.entity.PrefetchedEntityData`
+                injected during iteration (``None`` for point access).
         """
         entity_cls = Entity.get_registered(self.get_registration_name())
-        return entity_cls(
-            id_value=self._id_value,
-            rank=physical_rank,
-            store=self._store,
-            features=self.settings.entity_features,
-            logical_rank=logical_rank,
-            cast_recipe=self._casts,
-            virtual_id=self._virtual_id,
-            parent_metadata=self.metadata,
+        return entity_cls.from_parent(
+            self,
+            rank=rank,
+            store_index=store_index,
+            prefetched=prefetched,
         )
 
     # ------------------------------------------------------------------
