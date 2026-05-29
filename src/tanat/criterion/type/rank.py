@@ -17,8 +17,6 @@ from tanat_utils import settings_dataclass as dataclass
 from ..base import Criterion, CriterionLevel
 from ...sequence.base.pool import SequencePool
 from ...sequence.base.sequence import Sequence
-from ...trajectory.pool import TrajectoryPool
-from ...trajectory.trajectory import Trajectory
 from ...zeroing import _T0_NEAREST_RANK, _T0
 
 # ---------------------------------------------------------------------------
@@ -38,7 +36,7 @@ class RankCriterionSettings:
         first: Keep the first N entities.
             - ``N > 0``: keep first N (like ``[:N]``).
             - ``N < 0``: keep all except last ``|N|`` (like ``[:-|N|]``).
-            - Cannot be ``0``. cd /home/aduvermy/Documents/Dev/TanaT-Lab/TanaT && source ../.venv/bin/activate && python -m pytest tests/criterion/
+            - Cannot be ``0``.
         last: Keep the last N entities.
             - ``N > 0``: keep last N (like ``[-N:]``).
             - ``N < 0``: keep all except first ``|N|`` (like ``[|N|:]``).
@@ -221,36 +219,25 @@ class RankCriterion(Criterion):
     # Impl hooks
     # ------------------------------------------------------------------
 
-    def _compute_entity_mask(
-        self,
-        target: Sequence | SequencePool,
-    ) -> pl.Series:
-        # Stamp __store_idx__ so we can reconstruct a store-space mask regardless
-        # of whether *target* has an active _id_mask (subset() view).
-        lf = target._id_time_index_lf(
-            with_store_index=True
-        )  # pylint: disable=protected-access
+    def _entity_filter_expr_impl(self, target: Sequence | SequencePool) -> pl.Expr:
+        """Return the rank predicate in the view schema.
 
-        if self._settings.relative:
+        Entity filter expressions are applied inside
+        ``SequenceViewMixin._apply_scopes`` after the columns have been renamed
+        to their public names. Pool-level rank windows therefore partition by
+        the public ID column; sequence-level expressions operate on a single ID
+        and need no window key.
+        """
+        if not self._settings.relative:
+            if isinstance(target, SequencePool):
+                return self._build_rank_expr(over_col=target.settings.id_column)
+            return self._build_rank_expr()
+
+        def kept_predicate(lf: pl.LazyFrame) -> pl.LazyFrame:
             kept_idx = self._kept_idx_relative(target, lf)
-        else:
-            kept_idx = self._kept_idx_absolute(target, lf)
+            return lf.filter(pl.col(self._store_index_col).is_in(kept_idx))
 
-        return self._build_store_space_mask(
-            target._store.n_entities, kept_idx
-        )  # pylint: disable=protected-access
-
-    def _kept_idx_absolute(
-        self,
-        target: Sequence | SequencePool,
-        lf: pl.LazyFrame,
-    ) -> pl.Series:
-        """Return the surviving ``__store_idx__`` rows in absolute-rank mode."""
-        return (
-            lf.filter(self._to_expr(target))
-            .select("__store_idx__")
-            .collect()["__store_idx__"]
-        )
+        return self._materialise_as_store_idx_expr(target, kept_predicate)
 
     def _kept_idx_relative(
         self,
@@ -289,19 +276,9 @@ class RankCriterion(Criterion):
 
         return (
             lf_with_nr.filter(no_t0 | expr)
-            .select("__store_idx__")
-            .collect()["__store_idx__"]
+            .select(self._store_index_col)
+            .collect()[self._store_index_col]
         )
-
-    def _to_expr(self, target: Sequence | SequencePool) -> pl.Expr:
-        """Return a boolean expression adapted to pool or sequence context.
-
-        Pool path uses ``.over(id_col)`` for per-sequence ranking;
-        sequence path uses bare ``pl.int_range``.
-        """
-        if isinstance(target, SequencePool):
-            return self._build_rank_expr(over_col=target.settings.id_column)
-        return self._build_rank_expr()
 
     # ------------------------------------------------------------------
     # Helpers
