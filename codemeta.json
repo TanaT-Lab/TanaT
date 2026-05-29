@@ -94,8 +94,8 @@
     },
     {
       "@type": "SoftwareApplication",
-      "identifier": "tanat_utils",
-      "name": "tanat_utils",
+      "identifier": "tanat-utils",
+      "name": "tanat-utils",
       "runtimePlatform": "Python 3"
     }
   ],
