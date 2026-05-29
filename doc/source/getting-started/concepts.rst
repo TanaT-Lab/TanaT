@@ -3,10 +3,10 @@
 Core Concepts
 =============
 
-This page introduces the fundamental concepts of TanaT's data model.
+This page introduces the fundamental concepts of *TanaT*'s data model.
 Understanding these concepts is essential for using the library effectively.
 
-TanaT organises temporal data in three nested levels: *entities*, *sequences*, and *trajectories*.
+*TanaT* organises temporal data in three nested levels: *entities*, *sequences*, and *trajectories*.
 
 For population-level analysis, TanaT groups sequences and trajectories into *pools*.
 
@@ -15,7 +15,7 @@ For population-level analysis, TanaT groups sequences and trajectories into *poo
 Entities, Sequences, and Trajectories
 -------------------------------------
 
-TanaT distinguishes three levels of temporal data structures:
+*TanaT* distinguishes three levels of temporal data structures:
 
 .. list-table::
    :header-rows: 1
@@ -39,19 +39,21 @@ Entity
 
 An :term:`entity` is the atomic unit of temporal data in a :term:`sequence <Sequence>` object. It has:
 
-- **Features**: One or more descriptive attributes (e.g., visit type, diagnosis code) 
+- **Features**: One or more descriptive attributes (e.g., visit type, diagnosis code)
 - **Temporal extent**: Either a single timestamp or a time interval
+
+The temporal extent nature and feature structure are formalized through :term:`metadata`.
 
 Sequence
 ~~~~~~~~
 
-A :term:`sequence` is a collection of entities for a single individual.
+A :term:`sequence` is a temporal arrangement of entities described by the same :term:`metadata`.
 All entities in a sequence share the same type (events, intervals, or states)
 and the same feature structure.
 See the :doc:`../user-guide/auto_examples/container/index` examples to build and explore each type.
 
 The diagram below shows a sequence with 4 event entities.
-Note that two events can share the same timestamp (Event A and Event B on Nov 8).
+Note that two events can share the same timestamp (Event `A` and Event `B` on *Nov 8*).
 
 .. mermaid::
 
@@ -69,7 +71,6 @@ Trajectory
 ~~~~~~~~~~
 
 A :term:`trajectory` combines multiple sequences of different types for the same individual.
-It can also include :term:`static features <static feature>` (attributes not tied to time, like birth date or gender).
 For a complete walkthrough, see the :doc:`../user-guide/auto_examples/container/trajectory` example.
 
 The diagram below shows a trajectory with three sequence types:
@@ -151,30 +152,21 @@ TanaT supports three types of temporal extent:
 Pools
 -----
 
-A :term:`pool` is a collection of sequences or trajectories from multiple individuals.
-All individuals in a pool share the same structure (same features, same temporal type).
+A :term:`pool` is a collection of sequences or trajectories for multiple individuals.
+All individual sequences of a pool share the same structure (same features, same temporal type).
 Pools are the primary data structure for analysis operations like computing distance matrices or clustering.
 
-Pools can be created with shortcut functions (``build_events``, ``build_intervals``,
-``build_states``) or via the lower-level builder pattern for multi-source ingestion.
-See :doc:`../reference/builder` for the full builder reference.
+Pools can be created with shortcut functions (:func:`~tanat.sequence.shortcuts.build_events`, :func:`~tanat.sequence.shortcuts.build_intervals`,
+:func:`~tanat.sequence.shortcuts.build_states`) or via the lower-level builder pattern for multi-source ingestion.
+See :doc:`first-steps` or :doc:`../reference/builder` for the full builder reference.
 
-.. code-block:: python
+Static Data
+-----
 
-   from tanat import build_events
+A sequence can be complemented by non-temporal features, so called :term:`static features <static feature>` (attributes like birth date or gender).
+Similarly to temporal features, static features are also described through the :term:`metadata`. More specifically, each static feature has a type. 
+Static features are the same for all sequences belonging to a pool.
 
-   pool = build_events(
-       temporal_data=data,
-       id_column="patient_id",
-       time_column="visit_date",
-   )
-
-   # Access individual sequences
-   patient_001 = pool["P001"]
-
-   # Iterate over all sequences
-   for seq in pool:
-       print(seq.id_value, len(seq))
 
 ----
 
