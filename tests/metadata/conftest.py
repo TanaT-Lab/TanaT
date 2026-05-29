@@ -74,10 +74,16 @@ def standalone_entities(stores_dict: dict, seq_type: str) -> dict:
     cls = _ENTITY_CLS[seq_type]
     return {
         "partial": cls(
-            id_value=_ID_PARTIAL, rank=_ENTITY_RANK, store=stores_dict[seq_type]
+            id_value=_ID_PARTIAL,
+            store=stores_dict[seq_type],
+            rank=_ENTITY_RANK,
+            store_index=0,
         ),
         "complete": cls(
-            id_value=_ID_COMPLETE, rank=_ENTITY_RANK, store=stores_dict[seq_type]
+            id_value=_ID_COMPLETE,
+            store=stores_dict[seq_type],
+            rank=_ENTITY_RANK,
+            store_index=0,
         ),
     }
 
