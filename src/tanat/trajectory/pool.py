@@ -36,7 +36,7 @@ from ..sequence.base._utils import merge_optional_frames, resolve_ids_to_add
 from ..core import registry as _registry
 from ..store.base.utils import normalise_to_lazyframe
 from ..zeroing import T0Setter, T0Value, _T0, _T0_NEAREST_RANK
-from .cast import TrajectoryCastRecipe
+from ..cast import TrajectoryCastRecipe
 from .settings import TrajectorySettings
 from .trajectory import Trajectory
 from .view_mixin import TrajectoryViewMixin
@@ -107,7 +107,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
 
         self._casts: TrajectoryCastRecipe = TrajectoryCastRecipe.coerce(cast_recipe)
         if not self._casts.is_empty():
-            self._casts.probe(self._store)
+            self._casts.probe(self)
 
         # -- GC safety --------------------------------------------------------
         # Registered at the very end: if __init__ raises (e.g. during probe()),
@@ -280,10 +280,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             return
         for pool in self._pools.values():
             # pylint: disable=protected-access
-            # Propagate id/time index casts - already validated at trajectory level.
-            pool._casts = pool._casts.replace(
-                id=self._casts.id, time_index=self._casts.time_index
-            )
+            pool._casts = pool._casts.replace(structural=self._casts.structural)
             pool.clear_cache()
 
     @Cachable.cached_method()
@@ -1336,7 +1333,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
 
         # Build new recipes and probe the full chain.
         new_recipe = self._casts.append(static=valid_schema)
-        new_recipe.probe(self._store)
+        new_recipe.features.probe(self)
         self._casts = new_recipe
         self.clear_cache()
 
@@ -1355,7 +1352,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             TypeError: If the cast is incompatible with the stored ID values.
         """
         new_recipe = self._casts.append(id=dtype)
-        new_recipe.probe(self._store)
+        new_recipe.structural.probe(self)
         self._casts = new_recipe
         self._sync_pool_casts()
         self.clear_cache()
@@ -1385,7 +1382,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
             )
         target_dtype = pl.Datetime(unit, time_zone)
         new_recipe = self._casts.append(time_index=target_dtype)
-        new_recipe.probe(self._store)  # one probe - all stores homogeneous
+        new_recipe.structural.probe(self)
         self._casts = new_recipe
         self._sync_pool_casts()
         self.clear_cache()
@@ -1417,7 +1414,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         ):
             raise TypeError("Conversion from Datetime to Timestep is not supported..")
         new_recipe = self._casts.append(time_index=dtype)
-        new_recipe.probe(self._store)  # one probe - all stores homogeneous
+        new_recipe.structural.probe(self)
         self._casts = new_recipe
         self._sync_pool_casts()
         self.clear_cache()

@@ -24,7 +24,7 @@ from ..core import registry as _registry
 from ..core.format import resolve_fmt, to_pandas
 from ..core.validation import ensure_criterion
 from ..zeroing import T0Setter, T0Value, _T0, _T0_NEAREST_RANK
-from .cast import TrajectoryCastRecipe
+from ..cast import TrajectoryCastRecipe
 from .settings import TrajectorySettings
 from .view_mixin import TrajectoryViewMixin
 
