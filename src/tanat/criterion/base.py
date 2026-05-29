@@ -8,9 +8,9 @@ from __future__ import annotations
 import enum
 import warnings
 from abc import ABC
+from collections.abc import Callable
 from typing import ClassVar, Literal
 
-import numpy as np
 import polars as pl
 from tqdm import tqdm
 from tanat_utils import Registrable, SettingsMixin
@@ -20,6 +20,7 @@ from ..sequence.base.sequence import Sequence
 from ..trajectory.pool import TrajectoryPool
 from ..trajectory.trajectory import Trajectory
 from ..exceptions import TanaTException
+from ..store.sequence.schema import StoreSchema as SCH
 
 # ---------------------------------------------------------------------------
 # Enum & Exceptions
@@ -140,11 +141,11 @@ class Criterion(SettingsMixin, Registrable, ABC):
         )
 
     @staticmethod
-    def _entity_row_mask_attr(target: Sequence | SequencePool) -> str:
-        """Return the attribute name of the mutable entity row mask for *target*."""
+    def _entity_filter_expr_attr(target: Sequence | SequencePool) -> str:
+        """Return the attribute name of the mutable entity filter expression."""
         if isinstance(target, SequencePool):
-            return "_entity_row_mask"
-        return "_own_entity_row_mask"
+            return "_entity_filter_expr"
+        return "_own_entity_filter_expr"
 
     # ------------------------------------------------------------------
     # Public API (template method)
@@ -204,39 +205,26 @@ class Criterion(SettingsMixin, Registrable, ABC):
         """
         self.ensure_compatible(self._check(target, "entities"))
 
-        # 1. Get current mask
-        attr_name = self._entity_row_mask_attr(target)
-        current_mask = getattr(target, attr_name, None)
+        attr_name = self._entity_filter_expr_attr(target)
+        current_expr = getattr(target, attr_name, None)
+        expr = self._entity_filter_expr_impl(target)
+        new_expr = expr if current_expr is None else (current_expr & expr)
 
-        # 2. Compute the new mask (without modifying *target* yet)
-        mask = self._compute_entity_mask(target)
-
-        # 3. Verbose report
         if verbose:
-            rows_before = current_mask.sum() if current_mask is not None else len(mask)
-            rows_after = mask.sum()
+            pre_lf = target._frames.temporal(  # pylint: disable=protected-access
+                with_store_index=True
+            )
+            post_lf = pre_lf.filter(expr)
+            rows_before = pre_lf.select(pl.len()).collect().item()
+            rows_after = post_lf.select(pl.len()).collect().item()
             pct = (rows_after / rows_before * 100) if rows_before else 0.0
 
+            suffix = ""
             if isinstance(target, SequencePool):
                 id_col = target.settings.id_column
-                # mask is store-space; align to view-space rows via __store_idx__
-                df = (
-                    target._id_time_index_lf(
-                        with_store_index=True
-                    )  # pylint: disable=protected-access
-                    .with_columns(
-                        pl.lit(mask).gather(pl.col("__store_idx__")).alias("mask")
-                    )
-                    .collect()
-                )
-                ids_before = df.select(pl.col(id_col).n_unique()).item()
-                ids_after = (
-                    df.filter(pl.col("mask")).select(pl.col(id_col).n_unique()).item()
-                )
-                ids_affected = ids_before - ids_after
-                suffix = f" · {ids_affected:,} IDs affected"
-            else:
-                suffix = ""
+                ids_before = pre_lf.select(pl.col(id_col).n_unique()).collect().item()
+                ids_after = post_lf.select(pl.col(id_col).n_unique()).collect().item()
+                suffix = f" · {ids_before - ids_after:,} IDs affected"
 
             tqdm.write(
                 f"[filter_entities] {type(self).__name__} "
@@ -256,9 +244,7 @@ class Criterion(SettingsMixin, Registrable, ABC):
                 )
             target = target.copy()
 
-        # 5. Apply the mask
-        new_mask = mask if current_mask is None else (current_mask & mask)
-        setattr(target, attr_name, new_mask)
+        setattr(target, attr_name, new_expr)
 
         target.clear_cache()
         return target
@@ -297,13 +283,18 @@ class Criterion(SettingsMixin, Registrable, ABC):
         """Level-specific single-item match. Called after compatibility check."""
         raise NotImplementedError
 
-    def _compute_entity_mask(self, target: Sequence | SequencePool) -> pl.Series:
-        """Level-specific entity mask computation (returns a Polars Series)."""
+    def _entity_filter_expr_impl(self, target: Sequence | SequencePool) -> pl.Expr:
+        """Return the entity-level predicate for *target*."""
         raise NotImplementedError
 
     # ------------------------------------------------------------------
     # Shared helpers for subclasses
     # ------------------------------------------------------------------
+
+    @property
+    def _store_index_col(self) -> str:
+        """Column name for the absolute physical row index."""
+        return SCH.STORE_INDEX
 
     @staticmethod
     def _probe_boolean(lf: pl.LazyFrame, expr: pl.Expr, *, kind: str) -> None:
@@ -321,18 +312,35 @@ class Criterion(SettingsMixin, Registrable, ABC):
                 f"got {schema['__probe__']} instead."
             )
 
-    @staticmethod
-    def _build_store_space_mask(n_store: int, kept_store_idx: pl.Series) -> pl.Series:
-        """Reconstruct a full store-space boolean mask from surviving row indices.
+    def _materialise_as_store_idx_expr(
+        self,
+        target: Sequence | SequencePool,
+        kept_predicate: Callable[[pl.LazyFrame], pl.LazyFrame],
+        *,
+        base_lf: pl.LazyFrame | None = None,
+    ) -> pl.Expr:
+        """Materialise once and return a stable store-index predicate.
+
+        Convention used by criteria whose logic cannot be expressed as a
+        cardinality-stable :class:`polars.Expr`. The criterion materialises
+        the rows it wants to keep, then returns the equivalent stable
+        expression ``pl.col(SCH.STORE_INDEX).is_in(kept)`` so the rest of
+        the view pipeline can apply it like any other filter.
 
         Args:
-            n_store: Total number of entity rows in the physical store.
-            kept_store_idx: ``__store_idx__`` values of rows that should be ``True``.
-
-        Returns:
-            A boolean :class:`~polars.Series` of length *n_store*.
+            target: The view used to build the base LazyFrame when
+                *base_lf* is not provided.
+            kept_predicate: Callable that consumes the base LazyFrame and
+                returns a filtered LazyFrame retaining the store index column.
+            base_lf: Optional custom base LazyFrame. Must contain
+                :attr:`_store_index_col`. Defaults to
+                ``target._frames.id_time_index(with_store_index=True)``, which is
+                enough for criteria that only need id/time columns.
         """
-        arr = np.zeros(n_store, dtype=bool)
-        if len(kept_store_idx) > 0:
-            arr[kept_store_idx.to_numpy()] = True
-        return pl.Series("", arr, dtype=pl.Boolean)
+        idx_col = self._store_index_col
+        if base_lf is None:
+            base_lf = target._frames.id_time_index(  # pylint: disable=protected-access
+                with_store_index=True
+            )
+        kept = kept_predicate(base_lf).select(idx_col).collect()[idx_col]
+        return pl.col(idx_col).is_in(kept)
