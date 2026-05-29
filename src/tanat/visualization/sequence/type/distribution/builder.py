@@ -210,7 +210,9 @@ class DistributionVizBuilder(BaseSequenceVizBuilder, register_name="distribution
         if facet_by and not is_static_facet:
             features.append(facet_by)
 
-        lf = sequence_or_pool._temporal_data_lf(features=features)
+        lf = sequence_or_pool._frames.temporal(  # pylint: disable=protected-access
+            features=features
+        )
         lf = rename_id_column(lf, id_col)
         lf = rename_time_index_columns(lf, time_cols)
         lf = handle_null_time_index(lf, self.settings.null_handling.na_time_index)
