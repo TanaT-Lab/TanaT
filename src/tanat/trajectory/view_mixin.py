@@ -9,6 +9,7 @@ Both ``TrajectoryPool`` and ``Trajectory`` are **scoped views** on a
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import polars as pl
 import pandas as pd
@@ -17,6 +18,79 @@ from tanat_utils import Cachable
 from ..core.path import resolve_path
 from ..metadata.trajectory import TrajectoryMetadata
 from ..store.trajectory.store import TrajectoryStore
+
+if TYPE_CHECKING:
+    from ..trajectory.pool import TrajectoryPool
+    from ..trajectory.trajectory import Trajectory
+
+
+class TrajectoryFrameAssembler:
+    """Assembles view-schema LazyFrames from the store for one trajectory view."""
+
+    def __init__(self, view: Trajectory | TrajectoryPool) -> None:
+        self._view = view
+
+    def static(
+        self,
+        features: list[str] | str | None = None,
+    ) -> pl.LazyFrame | None:
+        """Return static data in view schema with scopes and casts applied."""
+        view = self._view
+        valid_features = view._resolve_valid_features(features)
+        if not valid_features:
+            return None
+
+        lf = self._fetch()
+        if lf is None:
+            return None
+
+        lf = self._rename(lf)
+        lf = view._casts.structural.apply(lf, id_col=view.settings.id_column)
+        lf = view._apply_id_mask(lf)
+        lf = view._casts.features.apply(lf)
+        return self.select(lf, valid_features)
+
+    def static_for_store(
+        self,
+        features: list[str] | str | None = None,
+    ) -> pl.LazyFrame | None:
+        """Return static data in store schema after view scopes and casts."""
+        view = self._view
+        valid_features = view._resolve_valid_features(features)
+        if not valid_features:
+            return None
+
+        lf = self.static(valid_features)
+        if lf is None:
+            return None
+        return self._to_store(lf).select([view._store.main_id_col] + valid_features)
+
+    def ids(self) -> pl.LazyFrame:
+        """Return visible IDs with the view ID dtype and schema."""
+        view = self._view
+        lf = view._store.get_id_lf()
+        lf = self._rename(lf)
+        lf = view._casts.structural.apply(lf, id_col=view.settings.id_column)
+        return view._apply_id_mask(lf)
+
+    def select(self, lf: pl.LazyFrame, feature_names: list[str]) -> pl.LazyFrame:
+        """Select the trajectory ID column plus *feature_names*."""
+        return lf.select([self._view.settings.id_column] + feature_names)
+
+    def _fetch(self) -> pl.LazyFrame | None:
+        """Fetch raw trajectory static data from the store (no view casts)."""
+        view = self._view
+        return view._store.get_static_data(virtual_id=view._virtual_id)
+
+    def _rename(self, lf: pl.LazyFrame) -> pl.LazyFrame:
+        """Rename store-internal columns to user-facing view names."""
+        return lf.rename(self._view.settings.get_column_rename_map(), strict=False)
+
+    def _to_store(self, lf: pl.LazyFrame) -> pl.LazyFrame:
+        """Rename view columns back to internal store names."""
+        full_map = self._view.settings.get_column_rename_map()
+        inverse = {dst: src for src, dst in full_map.items()}
+        return lf.rename(inverse, strict=False)
 
 
 class TrajectoryViewMixin:
