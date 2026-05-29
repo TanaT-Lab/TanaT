@@ -101,7 +101,7 @@ class LengthCriterion(Criterion):
         """Vectorized: group-count via the time-index lazy frame."""
         id_col = pool.settings.id_column
         counts = (
-            pool._id_time_index_lf()  # pylint: disable=protected-access
+            pool._frames.id_time_index()  # pylint: disable=protected-access
             .select(id_col)
             .group_by(id_col)
             .agg(pl.len().alias("__len__"))
