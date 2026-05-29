@@ -9,14 +9,275 @@ Both ``SequencePool`` and ``Sequence`` are **scoped views** on a
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import polars as pl
 from tanat_utils import Cachable
 
 from ...metadata.sequence import SequenceMetadata
 from ...store.sequence.store import SequenceStore
+from ...store.sequence.schema import StoreSchema as SCH
 from ...zeroing import _T0, _T0_NEAREST_RANK
-from ._utils import resolve_store
+from ._utils import merge_optional_frames, resolve_store
+
+if TYPE_CHECKING:
+    from .pool import SequencePool
+    from .sequence import Sequence
+
+
+class SequenceFrameAssembler:
+    """Assembles view-schema LazyFrames from the store for Sequence/SequencePool view"""
+
+    def __init__(self, view: Sequence | SequencePool) -> None:
+        self._view = view
+
+    def temporal(
+        self,
+        features: list[str] | str | None = None,
+        *,
+        with_store_index: bool = False,
+    ) -> pl.LazyFrame:
+        """Return temporal data in view schema with scopes and casts applied."""
+        view = self._view
+        # pylint: disable=protected-access
+        valid_features = view._resolve_valid_features(features, is_static=False)
+        lf = self._fetch(is_static=False, with_store_index=True)
+        lf = self._rename(lf, is_static=False)
+        lf = view._casts.structural.apply(
+            lf,
+            id_col=view.settings.id_column,
+            time_cols=view.settings.get_time_columns(),
+        )
+        lf = view._apply_scopes(lf, is_static=False)
+        lf = view._casts.features.apply(lf, is_static=False)
+        return lf.select(self._projection(valid_features, with_store_index))
+
+    def temporal_for_store(
+        self,
+        features: list[str] | str | None = None,
+    ) -> pl.LazyFrame:
+        """Return temporal data in store schema after view scopes and casts."""
+        view = self._view
+        # pylint: disable=protected-access
+        valid_features = view._resolve_valid_features(features, is_static=False)
+        lf = self._fetch(is_static=False, with_store_index=True)
+        lf = self._rename(lf, is_static=False)
+        lf = view._casts.structural.apply(
+            lf,
+            id_col=view.settings.id_column,
+            time_cols=view.settings.get_time_columns(),
+        )
+        lf = view._apply_scopes(lf, is_static=False)
+        lf = view._casts.features.apply(lf, is_static=False)
+        lf = self._to_store(lf, is_static=False)
+        structural_cols = view._store.structural_columns(
+            is_static=False, virtual_id=view._virtual_id
+        )
+        return lf.select(structural_cols + valid_features)
+
+    def id_time_index(self, *, with_store_index: bool = False) -> pl.LazyFrame:
+        """Return id + time-index columns with view scopes applied."""
+        view = self._view
+        # pylint: disable=protected-access
+        if view.has_entity_filter_expr:
+            return self.temporal(features=[], with_store_index=with_store_index)
+
+        lf = view._store.get_id_time_index(
+            virtual_id=view._virtual_id,
+            with_store_index=True,
+        )
+        lf = self._rename(lf, is_static=False)
+        lf = view._casts.structural.apply(
+            lf,
+            id_col=view.settings.id_column,
+            time_cols=view.settings.get_time_columns(),
+        )
+        lf = view._apply_scopes(lf, is_static=False)
+        if not with_store_index:
+            lf = lf.drop(SCH.STORE_INDEX)
+        return lf
+
+    def static(
+        self,
+        features: list[str] | str | None = None,
+    ) -> pl.LazyFrame | None:
+        """Return static data in view schema with scopes and casts applied."""
+        view = self._view
+        # pylint: disable=protected-access
+        valid_features = view._resolve_valid_features(features, is_static=True)
+        if not valid_features:
+            return None
+        lf = self._fetch(is_static=True)
+        if lf is None:
+            return None
+        lf = self._rename(lf, is_static=True)
+        lf = view._casts.structural.apply(lf, id_col=view.settings.id_column)
+        lf = view._apply_scopes(lf, is_static=True)
+        lf = view._casts.features.apply(lf, is_static=True)
+        id_col = view.settings.id_column
+        return lf.select([id_col] + valid_features)
+
+    def static_for_store(
+        self,
+        features: list[str] | str | None = None,
+    ) -> pl.LazyFrame | None:
+        """Return static data in store schema after view scopes and casts."""
+        view = self._view
+        # pylint: disable=protected-access
+        valid_features = view._resolve_valid_features(features, is_static=True)
+        if not valid_features:
+            return None
+        lf = self._fetch(is_static=True)
+        if lf is None:
+            return None
+        lf = self._rename(lf, is_static=True)
+        lf = view._casts.structural.apply(lf, id_col=view.settings.id_column)
+        lf = view._apply_scopes(lf, is_static=True)
+        lf = view._casts.features.apply(lf, is_static=True)
+        lf = self._to_store(lf, is_static=True)
+        structural_cols = view._store.structural_columns(
+            is_static=True, virtual_id=view._virtual_id
+        )
+        return lf.select(structural_cols + valid_features)
+
+    def ids(self) -> pl.LazyFrame:
+        """Return visible IDs with the view ID dtype and schema."""
+        view = self._view
+        # pylint: disable=protected-access
+        lf = view._store.get_id_lf()
+        lf = self._rename(lf)
+        lf = view._casts.structural.apply(lf, id_col=view.settings.id_column)
+        return view._apply_id_mask(lf)
+
+    def select(
+        self,
+        lf: pl.LazyFrame,
+        feature_names: list[str],
+        is_static: bool = False,
+    ) -> pl.LazyFrame:
+        """Select store structural columns plus *feature_names*."""
+        view = self._view
+        # pylint: disable=protected-access
+        structural = view._store.structural_columns(
+            is_static, virtual_id=view._virtual_id
+        )
+        return lf.select(structural + feature_names)
+
+    def _fetch(
+        self,
+        *,
+        is_static: bool = False,
+        with_store_index: bool = False,
+    ) -> pl.LazyFrame | None:
+        """Fetch raw data from the store."""
+        view = self._view
+        # pylint: disable=protected-access
+        if is_static:
+            return view._store.get_static_data(virtual_id=view._virtual_id)
+        return view._store.get_temporal_data(
+            virtual_id=view._virtual_id,
+            with_store_index=with_store_index,
+        )
+
+    def _rename(
+        self,
+        lf: pl.LazyFrame,
+        is_static: bool = False,
+    ) -> pl.LazyFrame:
+        """Rename store-internal columns to user-facing view names."""
+        full_map = self._view.settings.get_column_rename_map(is_static=is_static)
+        return lf.rename(full_map, strict=False)
+
+    def _to_store(
+        self,
+        lf: pl.LazyFrame,
+        is_static: bool = False,
+    ) -> pl.LazyFrame:
+        """Rename view columns back to internal store names."""
+        full_map = self._view.settings.get_column_rename_map(is_static=is_static)
+        inverse = {dst: src for src, dst in full_map.items()}
+        return lf.rename(inverse, strict=False)
+
+    def merged_for_extend(
+        self,
+        other: SequencePool,
+        other_ids_to_add: list,
+    ) -> tuple[pl.LazyFrame, pl.LazyFrame | None]:
+        """Build merged entity and static LazyFrames for a cross-store extend.
+
+        Reads both sides (``self._view`` and *other*), applies view scopes,
+        projects to ``self._view``'s entity feature set, and concatenates.
+        Returned frames are lazy (no I/O until collected by the builder).
+
+        Args:
+            other: The pool to merge from.
+            other_ids_to_add: IDs from *other* to include (duplicates already
+                resolved by the caller).
+
+        Returns:
+            ``(merged_entity, merged_static)`` — second element is ``None``
+            when neither side has static features.
+        """
+        view = self._view
+        # pylint: disable=protected-access
+
+        # --- self side ---
+        entity_lf_self = self._fetch(is_static=False)
+        entity_lf_self = self._rename(entity_lf_self, is_static=False)
+        entity_lf_self = view._apply_scopes(entity_lf_self, is_static=False)
+        entity_lf_self = self._to_store(entity_lf_self, is_static=False)
+        entity_lf_self = self.select(
+            entity_lf_self, view.settings.entity_features, is_static=False
+        )
+
+        # --- other side ---
+        other_frames = SequenceFrameAssembler(other)
+        entity_lf_other = other_frames._fetch(is_static=False)
+        entity_lf_other = other_frames._rename(entity_lf_other, is_static=False)
+        entity_lf_other = other._apply_scopes(entity_lf_other, is_static=False)
+        entity_lf_other = entity_lf_other.filter(
+            pl.col(other.settings.id_column).is_in(other_ids_to_add)
+        )
+        entity_lf_other = other_frames._to_store(entity_lf_other, is_static=False)
+        entity_lf_other = other_frames.select(
+            entity_lf_other, view.settings.entity_features, is_static=False
+        )
+
+        # --- static self ---
+        static_lf_self = self._fetch(is_static=True)
+        if static_lf_self is not None:
+            static_lf_self = self._rename(static_lf_self, is_static=True)
+            static_lf_self = view._apply_scopes(static_lf_self, is_static=True)
+            static_lf_self = self._to_store(static_lf_self, is_static=True)
+
+        # --- static other ---
+        static_lf_other = other_frames._fetch(is_static=True)
+        if static_lf_other is not None:
+            static_lf_other = other_frames._rename(static_lf_other, is_static=True)
+            static_lf_other = other._apply_scopes(static_lf_other, is_static=True)
+            static_lf_other = static_lf_other.filter(
+                pl.col(other.settings.id_column).is_in(other_ids_to_add)
+            )
+            static_lf_other = other_frames._to_store(static_lf_other, is_static=True)
+
+        return (
+            pl.concat([entity_lf_self, entity_lf_other]),
+            merge_optional_frames(static_lf_self, static_lf_other),
+        )
+
+    def _projection(
+        self,
+        features: list[str],
+        with_store_index: bool,
+    ) -> list[str]:
+        """Return temporal view-schema projection columns."""
+        view = self._view
+        columns = (
+            [view.settings.id_column] + view.settings.get_time_columns() + features
+        )
+        if with_store_index:
+            columns.append(SCH.STORE_INDEX)
+        return columns
 
 
 class SequenceViewMixin:
