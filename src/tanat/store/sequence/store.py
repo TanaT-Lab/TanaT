@@ -22,7 +22,6 @@ from ..base.utils import (
     drop_columns_from_file,
     hconcat_physical_virtual,
     normalise_to_lazyframe,
-    probe_cast_recipe,
 )
 from .schema import StoreSchema as SCH
 
@@ -107,7 +106,12 @@ class SequenceStore(BaseStore):
         """Navigation index (seq_id, offset, length) - physical, no cast overlay."""
         return pl.scan_ipc(self._root_path / SCH.Files.SEQUENCE_INDEX)
 
-    def time_index(self, virtual_id: str | None = None) -> pl.LazyFrame:
+    def time_index(
+        self,
+        virtual_id: str | None = None,
+        *,
+        with_store_index: bool = False,
+    ) -> pl.LazyFrame:
         """Time-index rows (``_t_event`` or ``_t_start`` / ``_t_end``), with optional virtual override.
 
         When *virtual_id* is given and ``tmp/<virtual_id>/time_index.arrow``
@@ -120,16 +124,24 @@ class SequenceStore(BaseStore):
 
         Args:
             virtual_id: Optional virtual context identifier.
+            with_store_index: When ``True``, prepends ``SCH.STORE_INDEX`` (the
+                absolute physical row position) to the result.
 
         Returns:
             A :class:`polars.LazyFrame` of the time-index rows.
         """
         if virtual_id is None:
-            return pl.scan_ipc(self._root_path / SCH.Files.TIME_INDEX)
-        virtual_ti = self._virtual.time_index(virtual_id)
-        if virtual_ti is not None:
-            return virtual_ti
-        return pl.scan_ipc(self._root_path / SCH.Files.TIME_INDEX)
+            lf = pl.scan_ipc(self._root_path / SCH.Files.TIME_INDEX)
+        else:
+            virtual_ti = self._virtual.time_index(virtual_id)
+            lf = (
+                virtual_ti
+                if virtual_ti is not None
+                else pl.scan_ipc(self._root_path / SCH.Files.TIME_INDEX)
+            )
+        if with_store_index:
+            lf = lf.with_row_index(SCH.STORE_INDEX)
+        return lf
 
     def write_virtual_time_index(
         self,
@@ -157,30 +169,24 @@ class SequenceStore(BaseStore):
 
     def get_id_lf(
         self,
-        id_caster: Callable[[pl.Expr], pl.Expr] | None = None,
         *,
         explode: bool = False,
-        with_seq_rank: bool = False,
-        **_kw,
+        with_store_index: bool = False,
     ) -> pl.LazyFrame:
-        """Sequence IDs as a single-column lazy frame, with optional cast recipe applied.
+        """Sequence IDs as a single-column lazy frame.
 
         Args:
-            id_caster: If set, applied to the ID column as a column-agnostic
-                ``Callable[[pl.Expr], pl.Expr]`` (e.g. from
-                :meth:`SequenceCastRecipe.id_caster`).
             explode: When ``False`` (default), returns one row per sequence
                 (unique IDs).  When ``True``, expands each ID by its entity
                 count so the result is row-aligned with :meth:`entity` and
                 :meth:`get_time_index`.
-            with_seq_rank: When ``True`` (and *explode* is ``True``), appends a
-                ``__phys_seq_rank__`` column: the 0-based per-sequence rank
-                computed from the store structure, **before any view-level mask**.
-                Ignored when *explode* is ``False``.
+            with_store_index: When ``True``, prepend a ``SCH.STORE_INDEX``
+                column with the absolute physical row index.  Only meaningful
+                when ``explode=True``.
 
         Returns:
             A :class:`polars.LazyFrame` with a single column of sequence IDs
-            (plus ``__phys_seq_rank__`` when requested).
+            (and optionally a leading ``SCH.STORE_INDEX`` column).
         """
         if explode:
             lf = (
@@ -188,58 +194,10 @@ class SequenceStore(BaseStore):
                 .filter(pl.col(SCH.LENGTH) > 0)
                 .select(pl.col(SCH.SEQ_ID).repeat_by(pl.col(SCH.LENGTH)).explode())
             )
-            if with_seq_rank:
-                lf = lf.with_columns(
-                    pl.int_range(pl.len())
-                    .over(SCH.SEQ_ID)
-                    .cast(pl.UInt32)
-                    .alias("__phys_seq_rank__")
-                )
-        else:
-            lf = self.sequence_index.select(SCH.SEQ_ID)
-        if id_caster is not None:
-            lf = lf.with_columns(id_caster(pl.col(SCH.SEQ_ID)))
-        return lf
-
-    def get_slice(
-        self,
-        id_value,
-        id_caster: Callable[[pl.Expr], pl.Expr] | None = None,
-    ) -> tuple[int, int]:
-        """Returns ``(offset, length)`` for slicing a pool-level row mask.
-
-        *id_caster* is the user-facing cast recipe for *id_value* - when set,
-        the store applies it to its own column before filtering.
-        """
-        idx = self.sequence_index
-        if id_caster is not None:
-            idx = idx.with_columns(id_caster(pl.col(SCH.SEQ_ID)))
-        row = (
-            idx.filter(pl.col(SCH.SEQ_ID) == id_value)
-            .select(SCH.OFFSET, SCH.LENGTH)
-            .collect()
-        )
-        return int(row[SCH.OFFSET][0]), int(row[SCH.LENGTH][0])
-
-    def get_sequence_length(
-        self,
-        id_value,
-        id_caster: Callable[[pl.Expr], pl.Expr] | None = None,
-    ) -> int:
-        """Returns the number of entity rows for a given sequence ID.
-
-        *id_caster* is the user-facing cast recipe for *id_value*; the store
-        applies it to its own column before filtering.
-        """
-        idx = self.sequence_index
-        if id_caster is not None:
-            idx = idx.with_columns(id_caster(pl.col(SCH.SEQ_ID)))
-        return int(
-            idx.filter(pl.col(SCH.SEQ_ID) == id_value)
-            .select(SCH.LENGTH)
-            .collect()
-            .item()
-        )
+            if with_store_index:
+                lf = lf.with_row_index(SCH.STORE_INDEX)
+            return lf
+        return self.sequence_index.select(SCH.SEQ_ID)
 
     @property
     def seq_id_col(self) -> str:
@@ -260,26 +218,6 @@ class SequenceStore(BaseStore):
         return int(
             self.sequence_index.select(pl.col(SCH.LENGTH).sum()).collect().item()
         )
-
-    # ------------------------------------------------------------------
-    # Cast probes (fast validation on a small sample before accepting a cast)
-    # ------------------------------------------------------------------
-
-    def probe_time_cast_recipe(
-        self, recipe: list[pl.DataType], n_rows: int = 10
-    ) -> None:
-        """Validate the time-index cast recipe on a small sample."""
-        t_lf = self.time_index()
-        t_names = SCH.time_index_columns()
-        present = [c for c in t_lf.collect_schema().names() if c in t_names]
-        if present:
-            probe_cast_recipe(t_lf, {c: recipe for c in present}, n_rows)
-
-    def probe_entity_cast_recipe(
-        self, entity: dict[str, list[pl.DataType]], n_rows: int = 10
-    ) -> None:
-        """Validate entity-feature cast recipes on a small sample."""
-        probe_cast_recipe(self.entity(), entity, n_rows)
 
     def structural_columns(
         self, is_static: bool = False, virtual_id: str | None = None
@@ -313,17 +251,26 @@ class SequenceStore(BaseStore):
             )
         return self._phys_entity_names
 
-    def entity(self, virtual_id: str | None = None) -> pl.LazyFrame:
+    def entity(
+        self, virtual_id: str | None = None, *, with_store_index: bool = False
+    ) -> pl.LazyFrame:
         """Entity feature rows (physical + virtual), without seq_id.
 
         Virtual features take precedence: any physical column whose name is
         also present in the virtual context is silently shadowed, so the
         virtual value is always returned.
+
+        Args:
+            with_store_index: When ``True``, prepends ``SCH.STORE_INDEX`` (the
+                absolute physical row position) to the result.
         """
-        return hconcat_physical_virtual(
+        lf = hconcat_physical_virtual(
             pl.scan_ipc(self._root_path / SCH.Files.ENTITY_FEATURES),
             self._virtual.features(virtual_id, is_static=False) if virtual_id else None,
         )
+        if with_store_index:
+            lf = lf.with_row_index(SCH.STORE_INDEX)
+        return lf
 
     # ------------------------------------------------------------------
     # Metadata
@@ -370,165 +317,76 @@ class SequenceStore(BaseStore):
         self,
         virtual_id: str | None = None,
         *,
-        id_caster: Callable[[pl.Expr], pl.Expr] | None = None,
-        time_index_caster: Callable[[pl.Expr], pl.Expr] | None = None,
-        feature_exprs: list[pl.Expr] | None = None,
         with_store_index: bool = False,
     ) -> pl.LazyFrame:
         """Returns the full temporal data: seq_id + time index + entity features.
 
-        Cast recipes are applied after assembly - physical store is never touched.
-
         Args:
-            with_store_index: When ``True``, prepends ``__store_idx__`` (the
+            with_store_index: When ``True``, prepends ``SCH.STORE_INDEX`` (the
                 absolute physical row position in the store) to the result.
         """
         lf = pl.concat(
             [
-                self.get_id_lf(id_caster=id_caster, explode=True),
+                self.get_id_lf(explode=True),
                 self.get_time_index(
                     virtual_id,
-                    time_index_caster=time_index_caster,
                     with_store_index=with_store_index,
                 ),
                 self.entity(virtual_id),
             ],
             how="horizontal",
         )
-        if feature_exprs:
-            lf = apply_cast_exprs(lf, feature_exprs)
         return lf
 
     def get_time_index(
         self,
         virtual_id: str | None = None,
         *,
-        time_index_caster: Callable[[pl.Expr], pl.Expr] | None = None,
         with_store_index: bool = False,
     ) -> pl.LazyFrame:
-        """Returns time-index columns only, with optional cast recipe applied.
+        """Returns time-index columns only.
 
         Cheaper than :meth:`get_id_time_index` when the sequence ID
         column is not needed.
 
         Args:
             virtual_id: Optional virtual context identifier.
-            time_index_caster: If set, applied to each time column as a
-                column-agnostic ``Callable[[pl.Expr], pl.Expr]``.
-            with_store_index: When ``True``, appends ``__store_idx__`` (the
-                0-based absolute row position in the physical store) stamped
-                **after** any cast is applied.
+            with_store_index: When ``True``, appends ``SCH.STORE_INDEX`` (the
+                0-based absolute row position in the physical store).
 
         Returns:
             A :class:`polars.LazyFrame` of the time-index columns (plus
-            ``__store_idx__`` when requested).
+            ``SCH.STORE_INDEX`` when requested).
         """
         lf = self.time_index(virtual_id)
-        if time_index_caster is not None:
-            cols = lf.collect_schema().names()
-            lf = lf.with_columns([time_index_caster(pl.col(c)) for c in cols])
         if with_store_index:
-            lf = lf.with_row_index("__store_idx__")
+            lf = lf.with_row_index(SCH.STORE_INDEX)
         return lf
 
     def get_id_time_index(
         self,
         virtual_id: str | None = None,
         *,
-        id_caster: Callable[[pl.Expr], pl.Expr] | None = None,
-        time_index_caster: Callable[[pl.Expr], pl.Expr] | None = None,
         with_store_index: bool = False,
     ) -> pl.LazyFrame:
         """Returns seq_id + time-index columns only (no entity features).
 
         Cheaper than :meth:`get_temporal_data` when entity features are not needed.
-        Cast recipes are applied after assembly.
 
         Args:
-            with_store_index: When ``True``, prepends ``__store_idx__`` (the
+            with_store_index: When ``True``, prepends ``SCH.STORE_INDEX`` (the
                 absolute physical row position in the store) to the result.
         """
         return pl.concat(
             [
-                self.get_id_lf(id_caster=id_caster, explode=True),
+                self.get_id_lf(explode=True),
                 self.get_time_index(
                     virtual_id,
-                    time_index_caster=time_index_caster,
                     with_store_index=with_store_index,
                 ),
             ],
             how="horizontal",
         )
-
-    def get_entity_row(
-        self,
-        id_value,
-        rank: int,
-        virtual_id: str | None = None,
-        *,
-        feature_exprs: list[pl.Expr] | None = None,
-        id_caster: Callable[[pl.Expr], pl.Expr] | None = None,
-    ) -> dict:
-        """
-        Returns the feature values for the entity at *rank* within *id_value*.
-
-        Only feature columns are returned - ``_seq_id``, time and
-        transient columns are stripped internally.  Column selection is
-        the responsibility of the caller (Entity).
-
-        Args:
-            id_value: The sequence identifier (user-facing type).
-            rank: 0-based row index within that sequence.
-            virtual_id: Optional virtual feature context.
-            feature_exprs: Pre-built cast expressions applied before collecting.
-            id_caster: User-facing cast recipe for *id_value*; the store
-                applies it to its own column before the slice lookup.
-
-        Returns:
-            ``dict`` mapping feature name → scalar value.
-        """
-        lf = self.entity(virtual_id)
-        offset, _ = self.get_slice(id_value, id_caster=id_caster)
-        physical_rank = offset + rank
-        row = (
-            lf.with_row_index(SCH.ROW_IDX)
-            .filter(pl.col(SCH.ROW_IDX) == physical_rank)
-            .drop(SCH.ROW_IDX)
-        )
-        if not feature_exprs:
-            return row.collect().row(0, named=True)
-        return apply_cast_exprs(row, feature_exprs).collect().row(0, named=True)
-
-    def get_time_at(
-        self,
-        id_value,
-        rank: int,
-        *,
-        time_index_caster: Callable[[pl.Expr], pl.Expr] | None = None,
-        id_caster: Callable[[pl.Expr], pl.Expr] | None = None,
-    ):
-        """
-        Returns the time-index value(s) for the entity at *rank* within *id_value*.
-
-        Returns a single scalar for event sequences, or a two-element
-        list ``[start, end]`` for interval sequences.
-
-        *id_caster* is the user-facing cast recipe for *id_value*.
-        """
-        offset, _ = self.get_slice(id_value, id_caster=id_caster)
-        physical_rank = offset + rank
-        lf = (
-            self.time_index()
-            .with_row_index(SCH.ROW_IDX)
-            .filter(pl.col(SCH.ROW_IDX) == physical_rank)
-            .drop(SCH.ROW_IDX)
-        )
-        if time_index_caster is not None:
-            cols = lf.collect_schema().names()
-            lf = lf.with_columns([time_index_caster(pl.col(c)) for c in cols])
-        row = lf.collect().row(0, named=True)
-        values = list(row.values())
-        return values[0] if len(values) == 1 else values
 
     # ------------------------------------------------------------------
     # Mutations
