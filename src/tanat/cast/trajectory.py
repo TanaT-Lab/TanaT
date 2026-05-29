@@ -69,6 +69,11 @@ class TrajectoryCastRecipe(BaseCastRecipe):
     # Functional builder
     # ------------------------------------------------------------------
 
+    def probe(self, view) -> None:
+        """Validate structural and static feature casts against *view*."""
+        self.structural.probe(view)
+        self.features.probe(view)
+
     def append(
         self,
         *,

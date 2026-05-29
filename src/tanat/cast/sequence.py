@@ -80,6 +80,12 @@ class SequenceCastRecipe(BaseCastRecipe):
     # Functional builder
     # ------------------------------------------------------------------
 
+    def probe(self, view) -> None:
+        """Validate structural and all feature casts against *view*."""
+        self.structural.probe(view)
+        self.features.probe(view, is_static=False)
+        self.features.probe(view, is_static=True)
+
     def append(
         self,
         *,
