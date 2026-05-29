@@ -163,7 +163,7 @@ See :doc:`first-steps` or :doc:`../reference/builder` for the full builder refer
 Static Data
 -----
 
-A sequence can be complemented by non-temporal features, so called :term:`static features <static feature>` (attributes like birth date or gender).
+A sequence can be complemented by non-temporal features, so-called :term:`static features <static feature>` (attributes like birth date or gender).
 Similarly to temporal features, static features are also described through the :term:`metadata`. More specifically, each static feature has a type. 
 Static features are the same for all sequences belonging to a pool.
 
