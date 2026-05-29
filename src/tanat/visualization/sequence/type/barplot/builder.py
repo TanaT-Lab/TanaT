@@ -191,7 +191,9 @@ class BarplotVizBuilder(BaseSequenceVizBuilder, register_name="barplot"):
             features.append(facet_by)
 
         # Fetch sequence data as LazyFrame
-        lf = sequence_or_pool._temporal_data_lf(features=features)
+        lf = sequence_or_pool._frames.temporal(  # pylint: disable=protected-access
+            features=features
+        )
 
         # Rename ID column (needed for static-facet join; harmless otherwise)
         id_col = sequence_or_pool.settings.id_column
