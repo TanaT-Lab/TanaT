@@ -19,8 +19,8 @@ from tanat_utils.pretty_format import (
     format_feature_section,
 )
 
-from .entity import Entity
-from .cast import SequenceCastRecipe
+from ...cast import SequenceCastRecipe
+from .entity import Entity, PrefetchedEntityData
 from .view_mixin import SequenceViewMixin
 from ...core.format import resolve_fmt, to_pandas
 from ...core.validation import ensure_criterion

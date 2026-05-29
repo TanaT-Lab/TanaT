@@ -34,7 +34,7 @@ from ...core.validation import ensure_criterion
 from ...core import registry as _registry
 from ...store.base.utils import normalise_to_lazyframe, check_no_reserved_names
 from ...store.sequence.builder.base import SequenceStoreBuilder
-from .cast import SequenceCastRecipe
+from ...cast import SequenceCastRecipe
 from .sequence import Sequence
 from ._utils import merge_optional_frames, resolve_ids_to_add
 from .view_mixin import SequenceViewMixin
@@ -96,7 +96,7 @@ class SequencePool(
         self._has_soft_drops: bool = False
         self._casts: SequenceCastRecipe = SequenceCastRecipe.coerce(cast_recipe)
         if not self._casts.is_empty():
-            self._casts.probe(self._store)
+            self._casts.probe(self)
         self._fallback_t0_setter: T0Setter = T0Setter.default(
             is_event=self.get_registration_name() == "event"
         )
@@ -1358,7 +1358,7 @@ class SequencePool(
         new_recipe = self._casts.append(
             **({"static": valid_schema} if is_static else {"entity": valid_schema})
         )
-        new_recipe.probe(self._store)
+        new_recipe.features.probe(self, is_static=is_static)
         self._casts = new_recipe
         self.clear_cache()
 
@@ -1371,7 +1371,7 @@ class SequencePool(
         """
         self._check_not_locked("cast_id")
         new_recipe = self._casts.append(id=dtype)
-        new_recipe.probe(self._store)
+        new_recipe.structural.probe(self)
         self._casts = new_recipe
         self.clear_cache()
 
@@ -1391,7 +1391,7 @@ class SequencePool(
             )
         target_dtype = pl.Datetime(unit, time_zone)
         new_recipe = self._casts.append(time_index=target_dtype)
-        new_recipe.probe(self._store)
+        new_recipe.structural.probe(self)
         self._casts = new_recipe
         self.clear_cache()
 
@@ -1414,7 +1414,7 @@ class SequencePool(
         if self.metadata.time_index.is_datetime:
             raise TypeError("Conversion from Datetime to Timestep is not supported.")
         new_recipe = self._casts.append(time_index=dtype)
-        new_recipe.probe(self._store)
+        new_recipe.structural.probe(self)
         self._casts = new_recipe
         self.clear_cache()
 
