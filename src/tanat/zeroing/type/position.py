@@ -54,7 +54,7 @@ class PositionT0Setter(T0Setter, register_name="position"):
             self.settings.anchor, cols, target.metadata.time_index.is_datetime
         )
         # pylint: disable=protected-access
-        lf = target._id_time_index_lf().select(id_col, t_expr.alias(_T0))
+        lf = target._frames.id_time_index().select(id_col, t_expr.alias(_T0))
         # Negative indexing: -1 → last row.
         target_rn = pl.len().over(id_col) + pos if pos < 0 else pos
         return lf.filter(pl.int_range(pl.len()).over(id_col) == target_rn)
