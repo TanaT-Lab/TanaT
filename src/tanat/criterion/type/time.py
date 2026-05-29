@@ -197,19 +197,10 @@ class TimeCriterion(Criterion):
     # Impl hooks
     # ------------------------------------------------------------------
 
-    def _compute_entity_mask(self, target: Sequence | SequencePool) -> pl.Series:
+    def _entity_filter_expr_impl(self, target: Sequence | SequencePool) -> pl.Expr:
         self._settings.validate_against(target.metadata.time_index)
         start_col, end_col = self._resolve_time_cols(target)
-        filter_expr = self._build_entity_filter_expr(start_col, end_col)
-        lf = target._id_time_index_lf(
-            with_store_index=True
-        )  # pylint: disable=protected-access
-        kept_idx = (
-            lf.filter(filter_expr).select("__store_idx__").collect()["__store_idx__"]
-        )
-        return self._build_store_space_mask(
-            target._store.n_entities, kept_idx
-        )  # pylint: disable=protected-access
+        return self._build_entity_filter_expr(start_col, end_col)
 
     def _which_ids_impl(
         self,
@@ -218,7 +209,7 @@ class TimeCriterion(Criterion):
         self._settings.validate_against(pool.metadata.time_index)
         id_col = pool.settings.id_column
         start_col, end_col = self._resolve_time_cols(pool)
-        lf = pool._id_time_index_lf()  # pylint: disable=protected-access
+        lf = pool._frames.id_time_index()  # pylint: disable=protected-access
         filter_expr = self._build_entity_filter_expr(start_col, end_col)
 
         if not self._settings.all_entities:
@@ -245,7 +236,7 @@ class TimeCriterion(Criterion):
         """
         self._settings.validate_against(target.metadata.time_index)
         start_col, end_col = self._resolve_time_cols(target)
-        lf = target._id_time_index_lf()  # pylint: disable=protected-access
+        lf = target._frames.id_time_index()  # pylint: disable=protected-access
         filter_expr = self._build_entity_filter_expr(start_col, end_col)
 
         if not self._settings.all_entities:
