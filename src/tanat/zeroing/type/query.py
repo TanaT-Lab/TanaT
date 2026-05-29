@@ -70,7 +70,7 @@ class QueryT0Setter(T0Setter, register_name="query"):
         # Full temporal data (time cols + entity features), masks applied.
         # Row numbers are stable within each sequence (physical order preserved).
         # pylint: disable=protected-access
-        lf = target._temporal_data_lf().with_columns(
+        lf = target._frames.temporal().with_columns(
             pl.int_range(pl.len()).over(id_col).alias("__rn__"),
         )
         matched = lf.filter(self.settings.query)
