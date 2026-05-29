@@ -22,7 +22,7 @@ import logging
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 import polars as pl
 
 from ..base.store import BaseStore
@@ -31,7 +31,7 @@ from ..sequence.store import SequenceStore
 from .schema import TrajectorySchema as TSCH
 
 if TYPE_CHECKING:
-    from ...trajectory.cast import TrajectoryCastRecipe
+    from ...cast import TrajectoryCastRecipe
 
 LOGGER = logging.getLogger(__name__)
 
@@ -105,19 +105,12 @@ class TrajectoryStore(BaseStore):
             return pl.scan_ipc(path)
         return pl.DataFrame({TSCH.TRAJ_ID: []}).lazy()
 
-    def get_id_lf(
-        self,
-        id_caster: Callable[[pl.Expr], pl.Expr] | None = None,
-        **_kw,
-    ) -> pl.LazyFrame:
-        """All trajectory IDs as a single-column lazy frame, with optional cast recipe applied.
+    def get_id_lf(self) -> pl.LazyFrame:
+        """All trajectory IDs as a single-column lazy frame.
 
         Preserves the physical dtype — stays lazy until collected.
         """
-        lf = self.trajectory_index.select(TSCH.TRAJ_ID)
-        if id_caster is not None:
-            lf = lf.with_columns(id_caster(pl.col(TSCH.TRAJ_ID)))
-        return lf
+        return self.trajectory_index.select(TSCH.TRAJ_ID)
 
     @property
     def traj_id_col(self) -> str:
@@ -128,27 +121,6 @@ class TrajectoryStore(BaseStore):
     def traj_id_dtype(self) -> pl.DataType:
         """Physical dtype of the trajectory ID column (IPC header read, no data scan)."""
         return self.trajectory_index.collect_schema()[TSCH.TRAJ_ID]
-
-    # ------------------------------------------------------------------
-    # Cast probes (fast validation on a small sample before accepting a cast)
-    # ------------------------------------------------------------------
-
-    def probe_time_cast_recipe(
-        self, recipe: list[pl.DataType], n_rows: int = 10
-    ) -> None:
-        """Validate the time-index cast recipe against the first linked store.
-
-        Raises:
-            RuntimeError: If no sequence stores are linked.
-            TypeError: If any step is incompatible with the data.
-        """
-        stores = self.sequence_stores
-        if not stores:
-            raise RuntimeError(
-                "No sequence stores linked - cannot probe time index cast recipe."
-            )
-        first_store = next(iter(stores.values()))
-        first_store.probe_time_cast_recipe(recipe, n_rows)
 
     def _filter_by_id(self, lf: pl.LazyFrame, id_value) -> pl.LazyFrame:
         """Filters a LazyFrame to rows belonging to *id_value* (physical type)."""
@@ -174,7 +146,7 @@ class TrajectoryStore(BaseStore):
 
         Args:
             id_mask: Optional set of trajectory IDs to keep (``None`` = all).
-            cast_recipe: :class:`~tanat.trajectory.cast.TrajectoryCastRecipe`
+            cast_recipe: :class:`~tanat.cast.TrajectoryCastRecipe`
                 whose ``id`` and ``static`` fields are applied.
             virtual_id: Virtual context UUID for merged static features
                 (``None`` if no virtual features).
