@@ -91,7 +91,7 @@ class StaticCriterion(Criterion):
     @staticmethod
     def _require_static_lf(obj) -> pl.LazyFrame:
         """Return the static-data LazyFrame or raise if unavailable."""
-        lf = obj._static_data_lf()  # pylint: disable=protected-access
+        lf = obj._frames.static()  # pylint: disable=protected-access
         if lf is None:
             raise ValueError(
                 "StaticCriterion requires static features, but none are available."
