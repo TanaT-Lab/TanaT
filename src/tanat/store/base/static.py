@@ -17,19 +17,17 @@ relies on attributes provided by :class:`BaseStore` (``_root_path``,
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable, Final
+from typing import Final
 
 import pandas as pd
 import polars as pl
 
 from ..sequence.schema import StoreSchema as SCH
 from .utils import (
-    apply_cast_exprs,
     check_no_reserved_names,
     drop_columns_from_file,
     hconcat_physical_virtual,
     normalise_to_lazyframe,
-    probe_cast_recipe,
 )
 
 
@@ -83,19 +81,14 @@ class StaticStoreMixin:
     def get_static_data(
         self,
         virtual_id: str | None = None,
-        *,
-        id_caster: Callable[[pl.Expr], pl.Expr] | None = None,
-        feature_exprs: list[pl.Expr] | None = None,
     ) -> pl.LazyFrame | None:
-        """Static features with id column prepended, and optional cast overlays."""
+        """Static features with the ID column prepended."""
         features_lf = self.static(virtual_id)
         if features_lf is None:
             return None
         id_lf = self.main_index.select(self.main_id_col)
-        if id_caster is not None:
-            id_lf = id_lf.with_columns(id_caster(pl.col(self.main_id_col)))
         lf = pl.concat([id_lf, features_lf], how="horizontal")
-        return apply_cast_exprs(lf, feature_exprs) if feature_exprs else lf
+        return lf
 
     # ------------------------------------------------------------------
     # Mutations
@@ -159,20 +152,6 @@ class StaticStoreMixin:
             self._clear_static_cache()
         if virtual_id:
             self._virtual.drop_features(virtual_id, features, is_static=True)
-
-    def probe_static_cast_recipe(
-        self, schema: dict[str, list[pl.DataType]], n_rows: int = 10
-    ) -> None:
-        """Validate static-feature cast recipes on a small sample.
-
-        No-op when the store has no static features.
-
-        Raises:
-            TypeError: If any step is incompatible with the data.
-        """
-        static = self.static()
-        if static is not None:
-            probe_cast_recipe(static, schema, n_rows)
 
     # ------------------------------------------------------------------
     # Cache
