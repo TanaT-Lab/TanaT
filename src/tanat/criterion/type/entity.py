@@ -74,35 +74,23 @@ class EntityCriterion(Criterion):
         """IDs that have at least one entity row matching the query."""
         s = pool.settings
         id_col = s.id_column
-        lf = pool._temporal_data_lf(
+        lf = pool._frames.temporal(  # pylint: disable=protected-access
             features=s.entity_features
-        )  # pylint: disable=protected-access
+        )
         result = lf.filter(self._settings.query).select(id_col).unique().collect()
         return set(result[id_col].to_list())
 
-    def _compute_entity_mask(self, target: Sequence | SequencePool) -> pl.Series:
-        s = target.settings
-        lf = target._temporal_data_lf(  # pylint: disable=protected-access
-            features=s.entity_features, with_store_index=True
+    def _entity_filter_expr_impl(self, target: Sequence | SequencePool) -> pl.Expr:
+        lf = target._frames.temporal(  # pylint: disable=protected-access
+            features=target.settings.entity_features
         )
-
         self._probe_boolean(lf, self._settings.query, kind="Entity")
-
-        kept_idx = (
-            lf.filter(self._settings.query)
-            .select("__store_idx__")
-            .collect()["__store_idx__"]
-        )
-        return self._build_store_space_mask(
-            # pylint: disable=protected-access
-            target._store.n_entities,
-            kept_idx,
-        )
+        return self._settings.query
 
     def _match_impl(self, target: Sequence | Trajectory) -> bool:
         """True if at least one entity row satisfies the query."""
         s = target.settings
-        lf = target._temporal_data_lf(
+        lf = target._frames.temporal(  # pylint: disable=protected-access
             features=s.entity_features
-        )  # pylint: disable=protected-access
+        )
         return lf.filter(self._settings.query).limit(1).collect().height > 0
