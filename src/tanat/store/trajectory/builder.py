@@ -300,7 +300,10 @@ class TrajectoryStoreBuilder(DisplayMixin):
                         r
                         for r, cond in [
                             ("id_mask", pool._id_mask is not None),
-                            ("entity_row_mask", pool._entity_row_mask is not None),
+                            (
+                                "entity_filter_expr",
+                                pool._entity_filter_expr is not None,
+                            ),
                             ("virtual features", pool._virtual_id is not None),
                             ("cast overrides", not pool._casts.is_empty()),
                             ("soft drops", pool._has_soft_drops),
