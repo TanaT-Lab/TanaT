@@ -144,10 +144,11 @@ class TestEntity:
 
 @pytest.fixture(params=["interval", "event", "state"])
 def masked_pool(request: pytest.FixtureRequest, pools_dict: dict) -> SequencePool:
-    """A copy of each pool type with a row mask keeping every other row."""
+    """A copy of each pool type keeping every other row per sequence."""
     pool = pools_dict[request.param].copy()
-    n_rows = pool.temporal_data(fmt="polars").height
-    pool._entity_row_mask = pl.Series([i % 2 == 0 for i in range(n_rows)])
+    pool._entity_filter_expr = (
+        pl.int_range(pl.len()).over(pool.settings.id_column) % 2 == 0
+    )
     pool.clear_cache()
     return pool
 
@@ -172,15 +173,23 @@ class TestEntityRankWithMask:
         seq = masked_pool[masked_pool.unique_ids[0]]
         assert seq[-1].rank == len(seq) - 1
 
-    def test_physical_rank_follows_mask(self, masked_pool: SequencePool) -> None:
-        """_physical_rank matches the even-only positions from the row mask."""
+    def test_store_index_follows_mask(self, masked_pool: SequencePool) -> None:
+        """The even-row mask skips one row between each kept entity.
+
+        With consecutive store_index values, each step must equal 2 (one row kept,
+        one skipped) — regardless of the absolute offset of the sequence in the store.
+        """
         seq = masked_pool[masked_pool.unique_ids[0]]
-        physical_ranks = [e._physical_rank for e in seq]
-        # Mask keeps even rows: physical ranks must all be even
-        assert all(r % 2 == 0 for r in physical_ranks)
-        # Physical ranks must be strictly increasing
-        assert physical_ranks == sorted(physical_ranks)
-        assert len(physical_ranks) == len(set(physical_ranks))
+        store_indexes = [e._store_index for e in seq]
+        # store_indexes must be strictly increasing
+        assert store_indexes == sorted(store_indexes)
+        assert len(store_indexes) == len(set(store_indexes))
+        # Each consecutive pair must differ by exactly 2 (even rows only)
+        steps = [
+            store_indexes[i + 1] - store_indexes[i]
+            for i in range(len(store_indexes) - 1)
+        ]
+        assert all(s == 2 for s in steps)
 
 
 # ---------------------------------------------------------------------------
