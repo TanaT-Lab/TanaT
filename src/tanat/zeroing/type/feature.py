@@ -57,9 +57,7 @@ class FeatureT0Setter(T0Setter, register_name="feature"):
             )
 
         # pylint: disable=protected-access
-        return target._static_data_lf(feature).select(
-            id_col, pl.col(feature).alias(_T0)
-        )
+        return target._frames.static(feature).select(id_col, pl.col(feature).alias(_T0))
 
     def compute_from_trajectory(
         self,
