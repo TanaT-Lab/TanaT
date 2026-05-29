@@ -322,7 +322,7 @@ class BaseSequenceVizBuilder(ABC, CachableSettings, Registrable):
         """
         f = self.settings.facet
         if f.is_static:
-            facet_lf = pool._static_data_lf([f.by])
+            facet_lf = pool._frames.static([f.by])  # pylint: disable=protected-access
             if facet_lf is None:
                 raise ValueError(
                     f"Feature '{f.by}' not found in static data. "
