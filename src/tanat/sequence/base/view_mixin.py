@@ -335,6 +335,11 @@ class SequenceViewMixin:
     # Properties
     # ------------------------------------------------------------------
 
+    @property
+    def _frames(self) -> SequenceFrameAssembler:
+        """The frame assembler bound to this view."""
+        return SequenceFrameAssembler(self)
+
     @Cachable.cached_property
     def _id_lf(self) -> pl.LazyFrame:
         """Lazy frame of visible IDs with the correct dtype.
@@ -347,9 +352,7 @@ class SequenceViewMixin:
         Unlike :attr:`unique_ids`, preserves rich dtypes (e.g. ``Categorical``).
         Cached via ``CachableSettings``; invalidated by ``clear_cache()``.
         """
-        lf = self._store.get_id_lf(id_caster=self._casts.id_caster())
-        lf = self._apply_id_mask(lf)
-        return lf.rename({self._store.seq_id_col: self.settings.id_column})
+        return self._frames.ids()
 
     # ------------------------------------------------------------------
     # Metadata
@@ -388,10 +391,12 @@ class SequenceViewMixin:
         seq_id_dtype = self._casts.id_dtype or self._store.seq_id_dtype
         id_col = self.settings.id_column
 
-        time_index = self._id_time_index_lf().select(self.settings.get_time_columns())
-        entity_lf = self._temporal_data_lf().select(self.settings.entity_features)
+        time_index = self._frames.id_time_index().select(
+            self.settings.get_time_columns()
+        )
+        entity_lf = self._frames.temporal().select(self.settings.entity_features)
 
-        static_lf = self._static_data_lf()
+        static_lf = self._frames.static()
         static_infos = (
             SequenceMetadata.infer_static_features(static_lf.drop(id_col))
             if static_lf is not None
@@ -456,24 +461,20 @@ class SequenceViewMixin:
         return lf
 
     @Cachable.cached_property
-    def _entity_ranks_df(self) -> pl.DataFrame:
-        """Per-sequence rank indices for all visible entities.
+    def _store_index_df(self) -> pl.DataFrame:
+        """Ordered store indices for all visible entities.
 
-        Columns: ``[id_col, "__phys_seq_rank__", "__logical_seq_rank__"]``.
+        Columns: ``[id_col, SCH.STORE_INDEX]``.
 
-        * ``"__phys_seq_rank__"``    : 0-based rank within the sequence in the store,
-          computed **before any view-level mask**.  Stable identifier used by
-          :class:`~tanat.sequence.base.entity.Entity` to locate its store row.
-        * ``"__logical_seq_rank__"`` : 0-based rank within the sequence in **this
-          view**, re-indexed after all masks are applied.
+        Rows are in sequence order: position ``i`` corresponds to rank ``i``
+        within its sequence, so ``df[SCH.STORE_INDEX][rank]`` gives the
+        absolute physical row index without needing an explicit rank column.
 
         Three resolution paths, in order of cost:
 
         1. **Pool-managed sequence**: filter parent pool's cached DataFrame (zero I/O).
-        2. **No entity mask** (fast path): ``__logical_seq_rank__`` is a copy of
-           ``__phys_seq_rank__`` (no rows were removed).
-        3. **Entity mask active** (slow path): ``__logical_seq_rank__`` is
-           re-computed after both masks.
+        2. **Entity filter active**: compute physical indices on feature-aware data.
+        3. **No entity filter**: logical order matches physical order.
         """
         # Pool-managed sequence: delegate to parent, then slice.
         if (
@@ -482,44 +483,35 @@ class SequenceViewMixin:
         ):
             id_col = self.settings.id_column
             # pylint: disable=protected-access
-            return self._parent_pool._entity_ranks_df.filter(
+            return self._parent_pool._store_index_df.filter(
                 pl.col(id_col) == self._id_value
             )
 
         id_col = self.settings.id_column
 
-        # __phys_seq_rank__ is stamped by the store on the full N_STORE rows,
-        # so _apply_entity_row_mask (positional on N_STORE) must come first.
-        lf = self._store.get_id_lf(
-            id_caster=self._casts.id_caster(),
-            explode=True,
-            with_seq_rank=True,
-        )
-        lf = self._apply_masks(lf)
-        lf = lf.rename({self._store.seq_id_col: id_col})
+        if self.has_entity_filter_expr:
+            lf = self._frames._fetch(is_static=False, with_store_index=True)
+            lf = self._frames._rename(lf)
+            lf = self._casts.structural.apply(
+                lf, id_col=id_col, time_cols=self.settings.get_time_columns()
+            )
+            lf = self._apply_scopes(lf)
+            return lf.select([id_col, SCH.STORE_INDEX]).collect()
 
-        # Fast path: no entity mask, __logical_seq_rank__ == __phys_seq_rank__.
-        if self._entity_row_mask is None:
-            return lf.with_columns(
-                pl.col("__phys_seq_rank__").alias("__logical_seq_rank__")
-            ).collect()
-
-        # Slow path: compute logical rank after mask.
-        return lf.with_columns(
-            pl.int_range(pl.len())
-            .over(id_col)
-            .cast(pl.UInt32)
-            .alias("__logical_seq_rank__")
-        ).collect()
+        lf = self._store.get_id_lf(explode=True, with_store_index=True)
+        lf = self._frames._rename(lf)
+        lf = self._casts.structural.apply(lf, id_col=id_col)
+        lf = self._apply_scopes(lf)
+        return lf.select([id_col, SCH.STORE_INDEX]).collect()
 
     def _compute_raw_t0_df(self) -> pl.DataFrame:
         """Raw T0 DataFrame ``[id_col, _T0_]`` for this view, no nearest rank.
 
         Safe to call from within the entity-criteria pipeline (e.g.
         :class:`~tanat.criterion.type.rank.RankCriterion`) because it never
-        triggers :meth:`_temporal_data_lf` / :meth:`_apply_masks`.
+        triggers temporal frame assembly / :meth:`_apply_scopes`.
 
-        Three resolution paths, mirroring :attr:`_entity_ranks_df`:
+        Three resolution paths, mirroring :attr:`_store_index_df`:
 
         1. **Pool-managed sequence**: filter parent pool's cached raw result.
         2. **Managed pool** (owned by a :class:`~tanat.trajectory.pool.TrajectoryPool`):
@@ -581,82 +573,6 @@ class SequenceViewMixin:
         return self._resolve_nearest_rank(self._compute_raw_t0_df())
 
     # ------------------------------------------------------------------
-    # Lazy data access (no collect, for internal consumers)
-    # ------------------------------------------------------------------
-
-    def _temporal_data_lf(
-        self,
-        features: list[str] | str | None = None,
-        with_store_index: bool = False,
-    ) -> pl.LazyFrame:
-        """Return temporal data as a :class:`~polars.LazyFrame` without collecting.
-
-        Pipeline (in order):
-        1. Fetch all columns from store (optionally with ``__store_idx__``).
-        2. Apply masks (entity row mask first, then ID mask).
-        3. Rename store columns to user-facing names.
-        4. Select structural (id + time) + requested feature columns.
-
-        Args:
-            features: Feature names to include (``None`` → all visible).
-            with_store_index: When ``True``, prepends ``__store_idx__`` (the
-                absolute physical row position in the store) to the result.
-                Useful for consumers that need to map view-space rows back to
-                store-space positions (e.g. :class:`~tanat.criterion.type.rank.RankCriterion`).
-        """
-        valid_features = self._resolve_valid_features(features, is_static=False)
-        lf = self._get_data_from_store(
-            is_static=False, with_store_index=with_store_index
-        )
-        lf = self._apply_masks(lf, is_static=False)
-        lf = self._rename_columns(lf, is_static=False)
-        # Select structural (id + time) + requested feature columns.
-        id_col = self.settings.id_column
-        time_cols = self.settings.get_time_columns()
-        select_cols = [id_col] + time_cols + valid_features
-        if with_store_index:
-            select_cols = select_cols + ["__store_idx__"]
-        return lf.select(select_cols)
-
-    def _id_time_index_lf(self, with_store_index: bool = False) -> pl.LazyFrame:
-        """Return ``id + time index`` columns as a :class:`~polars.LazyFrame`, masks applied.
-
-        Cheaper than :meth:`_temporal_data_lf` when entity features are not needed.
-        Works regardless of the temporal type (datetime, integer timestep, etc.).
-
-        Args:
-            with_store_index: When ``True``, prepends ``__store_idx__`` (the
-                absolute physical row position in the store) to the result.
-        """
-        lf = self._store.get_id_time_index(
-            virtual_id=self._virtual_id,
-            id_caster=self._casts.id_caster(),
-            time_index_caster=self._casts.time_index_caster(),
-            with_store_index=with_store_index,
-        )
-        lf = self._apply_masks(lf, is_static=False)
-        return self._rename_columns(lf, is_static=False)
-
-    def _static_data_lf(
-        self,
-        features: list[str] | str | None = None,
-    ) -> pl.LazyFrame | None:
-        """Return static data as a :class:`~polars.LazyFrame` without collecting.
-
-        Returns ``None`` when no static features are visible.
-        """
-        valid_features = self._resolve_valid_features(features, is_static=True)
-        if not valid_features:
-            return None
-        lf = self._get_data_from_store(is_static=True)
-        if lf is None:
-            return None
-        lf = self._apply_id_mask(lf)
-        lf = self._rename_columns(lf, is_static=True)
-        id_col = self.settings.id_column
-        return lf.select([id_col] + valid_features)
-
-    # ------------------------------------------------------------------
     # Collected data (cached)
     # ------------------------------------------------------------------
 
@@ -667,11 +583,11 @@ class SequenceViewMixin:
     ) -> pl.DataFrame:
         """Collect and cache temporal data as a Polars DataFrame.
 
-        Wraps :meth:`_temporal_data_lf` with a final ``.collect()`` and
-        caches the result.  Use :meth:`_temporal_data_lf` when further
+        Wraps ``_frames.temporal`` with a final ``.collect()`` and
+        caches the result.  Use ``_frames.temporal`` when further
         lazy operations are needed (e.g. in the visualization layer).
         """
-        return self._temporal_data_lf(features).collect()
+        return self._frames.temporal(features).collect()
 
     @Cachable.cached_method()
     def _static_data_df(
@@ -680,83 +596,12 @@ class SequenceViewMixin:
     ) -> pl.DataFrame | None:
         """Collect and cache static data as a Polars DataFrame.
 
-        Wraps :meth:`_static_data_lf` with a final ``.collect()`` and
+        Wraps ``_frames.static`` with a final ``.collect()`` and
         caches the result.  Returns ``None`` when no static features are
         visible.
         """
-        lf = self._static_data_lf(features)
+        lf = self._frames.static(features)
         return lf.collect() if lf is not None else None
-
-    # ------------------------------------------------------------------
-    # Column renaming
-    # ------------------------------------------------------------------
-
-    def _rename_columns(
-        self,
-        lf: pl.LazyFrame,
-        is_static: bool = False,
-    ) -> pl.LazyFrame:
-        """
-        Renames store internal columns to user-facing names.
-
-        The mapping is provided by ``settings.get_column_rename_map()``.
-        """
-        full_map = self.settings.get_column_rename_map(is_static=is_static)
-        return lf.rename(full_map)
-
-    # ------------------------------------------------------------------
-    # Column selection
-    # ------------------------------------------------------------------
-
-    def _select_columns(
-        self,
-        lf: pl.LazyFrame,
-        feature_names: list[str],
-        is_static: bool = False,
-    ) -> pl.LazyFrame:
-        """
-        Selects structural columns (ID + temporal) plus the validated
-        feature columns from a store LazyFrame.
-
-        This is the **view-level** column filter.  The store always
-        returns all columns; the view picks what it needs.
-        """
-        structural = self._store.structural_columns(
-            is_static, virtual_id=self._virtual_id
-        )
-        return lf.select(structural + feature_names)
-
-    def _get_data_from_store(
-        self,
-        is_static: bool = False,
-        with_store_index: bool = False,
-    ) -> pl.LazyFrame | None:
-        """
-        Fetches all features from the store, merges virtual layer, and applies
-        view-level cast recipes.
-
-        Args:
-            is_static: When ``True``, returns static features; otherwise temporal.
-            with_store_index: When ``True``, prepends ``__store_idx__`` (absolute
-                physical row position in the store) to the returned LazyFrame.
-                Only meaningful for temporal data (ignored when *is_static* is
-                ``True``).
-
-        Returns ``None`` when ``is_static=True`` and no static features exist.
-        """
-        if is_static:
-            return self._store.get_static_data(
-                virtual_id=self._virtual_id,
-                id_caster=self._casts.id_caster(),
-                feature_exprs=self._casts.feature_exprs(is_static=True),
-            )
-        return self._store.get_temporal_data(
-            virtual_id=self._virtual_id,
-            id_caster=self._casts.id_caster(),
-            time_index_caster=self._casts.time_index_caster(),
-            feature_exprs=self._casts.feature_exprs(is_static=False),
-            with_store_index=with_store_index,
-        )
 
     # ------------------------------------------------------------------
     # T0 / Zeroing
@@ -780,13 +625,13 @@ class SequenceViewMixin:
         """
         id_col = self.settings.id_column
         t_col = self.settings.get_time_columns()[0]
-        temporal_lf = (
-            self._id_time_index_lf()
+        lf = (
+            self._frames.id_time_index()
             .select([id_col, t_col])
             .with_columns(pl.int_range(pl.len()).over(id_col).alias("__rn__"))
         )
         return (
-            temporal_lf.join(t0_lf.select([id_col, _T0]), on=id_col)
+            lf.join(t0_lf.select([id_col, _T0]), on=id_col)
             .filter(pl.col(t_col) <= pl.col(_T0))
             .group_by(id_col)
             .agg(pl.col("__rn__").max().alias(_T0_NEAREST_RANK))

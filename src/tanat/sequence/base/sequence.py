@@ -249,7 +249,7 @@ class Sequence(
 
         # Temporal range for this specific sequence
         # avoid using metadata propagated from parent pool.
-        df = self._id_time_index_lf().select(t_cols).collect()
+        df = self._frames.id_time_index().select(t_cols).collect()
         if len(t_cols) == 1:
             t_min = df[t_cols[0]].min()
             t_max = df[t_cols[0]].max()
@@ -549,14 +549,11 @@ class Sequence(
         if isinstance(exprs, pl.Expr):
             exprs = [exprs]
 
-        lf = self._get_data_from_store(is_static=is_static)
+        lf = self._frames.static() if is_static else self._frames.temporal()
         if lf is None:
             raise ValueError(
                 f"No data found for sequence '{self._id_value}' (is_static={is_static})"
             )
-
-        lf = self._apply_masks(lf, is_static=is_static)
-        lf = self._rename_columns(lf, is_static=is_static)
         lf = lf.select(exprs)
 
         if fmt == "polars":

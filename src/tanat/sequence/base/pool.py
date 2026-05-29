@@ -36,7 +36,7 @@ from ...store.base.utils import normalise_to_lazyframe, check_no_reserved_names
 from ...store.sequence.builder.base import SequenceStoreBuilder
 from ...cast import SequenceCastRecipe
 from .sequence import Sequence
-from ._utils import merge_optional_frames, resolve_ids_to_add
+from ._utils import resolve_ids_to_add
 from .view_mixin import SequenceViewMixin
 from ...zeroing import T0Setter, _T0
 
@@ -962,11 +962,9 @@ class SequencePool(
                 "Static features already have one row per id."
             )
 
-        lf = self._get_data_from_store(is_static=is_static)
+        lf = self._frames.static() if is_static else self._frames.temporal()
         if lf is None:
             raise ValueError(f"No data found (is_static={is_static})")
-        lf = self._apply_masks(lf, is_static=is_static)
-        lf = self._rename_columns(lf, is_static=is_static)
 
         if by_id:
             id_col = self.settings.id_column
@@ -1579,7 +1577,7 @@ class SequencePool(
         self.settings.validate_features(cols_to_read, is_static=True)
 
         # 2. Read static columns via existing pipeline
-        static_lf = self._static_data_lf(features=cols_to_read)
+        static_lf = self._frames.static(features=cols_to_read)
         if static_lf is None:
             raise RuntimeError(
                 "No static features available in this pool. "
@@ -1598,7 +1596,7 @@ class SequencePool(
         if censure_time is None:
             censor_col = self.settings.get_time_columns()[-1]
             default_censor_lf = (
-                self._temporal_data_lf()
+                self._frames.temporal()
                 .group_by(id_col)
                 .agg(pl.col(censor_col).max().alias("__censor__"))
             )
@@ -1750,10 +1748,7 @@ class SequencePool(
                 c for c in frame.columns if c != id_col and c not in temporal_set
             ]
         else:
-            lf = self._get_data_from_store(is_static=False)
-            lf = self._apply_masks(lf, is_static=False)
-            lf = self._select_columns(lf, features, is_static=False)
-            lf = self._rename_columns(lf, is_static=False)
+            lf = self._frames.temporal(features=features)
             frame = lf.collect()
             feat_cols = features
         return frame, feat_cols
@@ -2247,7 +2242,7 @@ class SequencePool(
             )
 
         # ── Prepare + write ───────────────────────────────────────────────────────
-        merged_entity, merged_static = self._prepare_extend_frames(
+        merged_entity, merged_static = self._frames.merged_for_extend(
             other, other_ids_to_add
         )
 
@@ -2282,53 +2277,6 @@ class SequencePool(
         # may contain extra features due to the merge self x other.
         settings_dict["static_features"] = None
         return self.__class__(dest_path, **settings_dict)
-
-    def _prepare_extend_frames(
-        self,
-        other: SequencePool | Sequence,
-        other_ids_to_add: list,
-    ) -> tuple[pl.LazyFrame, pl.LazyFrame | None]:
-        """Build merged entity and static LazyFrames for a cross-store extend.
-
-        Reads both sides, applies view masks, projects to *self*'s entity
-        feature set, and concatenates.  Returned frames are lazy (no I/O
-        until collected by the builder).
-
-        Returns:
-            ``(merged_entity, merged_static)`` - second element is ``None``
-            when neither side has static features.
-        """
-        # pylint: disable=protected-access
-        entity_lf_self = self._get_data_from_store(is_static=False)
-        entity_lf_self = self._apply_masks(entity_lf_self, is_static=False)
-        entity_lf_self = self._select_columns(
-            entity_lf_self, self.settings.entity_features, is_static=False
-        )
-
-        entity_lf_other = other._get_data_from_store(is_static=False)
-        entity_lf_other = other._apply_masks(entity_lf_other, is_static=False)
-        entity_lf_other = entity_lf_other.filter(
-            pl.col(other._store.seq_id_col).is_in(other_ids_to_add)
-        )
-        entity_lf_other = other._select_columns(
-            entity_lf_other, self.settings.entity_features, is_static=False
-        )
-
-        static_lf_self = self._get_data_from_store(is_static=True)
-        if static_lf_self is not None:
-            static_lf_self = self._apply_masks(static_lf_self, is_static=True)
-
-        static_lf_other = other._get_data_from_store(is_static=True)
-        if static_lf_other is not None:
-            static_lf_other = other._apply_masks(static_lf_other, is_static=True)
-            static_lf_other = static_lf_other.filter(
-                pl.col(other._store.seq_id_col).is_in(other_ids_to_add)
-            )
-
-        return (
-            pl.concat([entity_lf_self, entity_lf_other]),
-            merge_optional_frames(static_lf_self, static_lf_other),
-        )
 
     # ------------------------------------------------------------------
     # Save
@@ -2395,21 +2343,9 @@ class SequencePool(
                 "Use save(overwrite=True) to confirm, "
                 "or save(destination) to create a copy and keep the original."
             )
-
-        # --- Prepare frames (virtual merged, casts applied, masks filtered) ---
-        entity_lf = self._get_data_from_store(is_static=False)
-        entity_lf = self._apply_masks(entity_lf, is_static=False)
-        static_lf = self._get_data_from_store(is_static=True)
-        if static_lf is not None:
-            static_lf = self._apply_masks(static_lf, is_static=True)
-            static_lf = self._select_columns(
-                static_lf, self.settings.static_features, is_static=True
-            )
-
-        # Select features
-        entity_lf = self._select_columns(
-            entity_lf, self.settings.entity_features, is_static=False
-        )
+        # --- Prepare frames through the same scopes/casts as the user-visible pipeline ---
+        entity_lf = self._frames.temporal_for_store()
+        static_lf = self._frames.static_for_store()
 
         builder = self.__class__._make_builder()
 
