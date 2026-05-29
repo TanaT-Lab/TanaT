@@ -49,7 +49,9 @@ def _histogram_agg_lf(
     id_col = sequence.settings.id_column
     # pylint: disable=protected-access
     return (
-        sequence._temporal_data_lf(features=[feature])
+        sequence._frames.temporal(  # pylint: disable=protected-access
+            features=[feature]
+        )
         .with_columns(
             pl.col(feature).cast(pl.Utf8).alias(feature),
             _histogram_weight_expr(sequence).alias("__weight__"),
