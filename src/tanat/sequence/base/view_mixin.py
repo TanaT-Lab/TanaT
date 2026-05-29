@@ -432,42 +432,28 @@ class SequenceViewMixin:
     # Physical rank access
     # ------------------------------------------------------------------
 
-    def _apply_entity_row_mask(self, lf: pl.LazyFrame) -> pl.LazyFrame:
-        """Apply the entity row mask to a store LazyFrame.
-
-        The mask is a positional boolean Series aligned on the full physical store.
-
-        Args:
-            lf: LazyFrame to apply the mask.
-
-        Returns:
-            Filtered :class:`~polars.LazyFrame`.
-        """
-        mask = getattr(self, "_entity_row_mask", None)
-        if mask is not None:
-            return lf.filter(pl.lit(mask))
+    def _apply_entity_filter_expr(self, lf: pl.LazyFrame) -> pl.LazyFrame:
+        """Apply the entity filter expression to a view LazyFrame when present."""
+        expr = self._entity_filter_expr
+        if expr is not None:
+            return lf.filter(expr)
         return lf
 
-    def _apply_masks(self, lf: pl.LazyFrame, is_static: bool = False) -> pl.LazyFrame:
-        """Apply entity row mask then ID mask to a store LazyFrame.
+    @property
+    def has_entity_filter_expr(self) -> bool:
+        """Whether this view has an expression-based entity filter."""
+        return self._entity_filter_expr is not None
 
-        Order is mandatory:
-
-        1. ``_entity_row_mask`` first: positional boolean :class:`~polars.Series`
-           aligned on the **full physical store**.  Must run before any row-count
-           change (including ID scoping).
-        2. ``_id_mask`` second: value-based filter, safe on any row count.
-
-        Args:
-            lf: LazyFrame to apply the mask.
-            is_static: whether lf come from static data.
-
-        Returns:
-            Filtered :class:`~polars.LazyFrame`.
-        """
+    def _apply_scopes(
+        self,
+        lf: pl.LazyFrame,
+        is_static: bool = False,
+    ) -> pl.LazyFrame:
+        """Apply view scopes in the stable order: ID mask then entity expression."""
+        lf = self._apply_id_mask(lf)
         if not is_static:
-            lf = self._apply_entity_row_mask(lf)
-        return self._apply_id_mask(lf)
+            lf = self._apply_entity_filter_expr(lf)
+        return lf
 
     @Cachable.cached_property
     def _entity_ranks_df(self) -> pl.DataFrame:

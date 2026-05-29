@@ -92,7 +92,7 @@ class SequencePool(
         self._virtual_id: str | None = None
 
         self._id_mask: set | None = None
-        self._entity_row_mask: pl.Series | None = None
+        self._entity_filter_expr: pl.Expr | None = None
         self._has_soft_drops: bool = False
         self._casts: SequenceCastRecipe = SequenceCastRecipe.coerce(cast_recipe)
         if not self._casts.is_empty():
@@ -230,7 +230,7 @@ class SequencePool(
         2. Redirects ``self._store`` to the freshly written store at
            *dest_path* (skipped when saving in-place, since the store
            object already points to the right directory).
-        3. Resets masks, soft-drop flag and cast recipe (all are now
+        3. Resets scopes, soft-drop flag and cast recipe (all are now
            baked into the written files).
         4. Invalidates the settings cache.
         """
@@ -240,7 +240,7 @@ class SequencePool(
             self._store = self._resolve_store(dest_path)
             self._gc_state[0] = self._store
         self._id_mask = None
-        self._entity_row_mask = None
+        self._entity_filter_expr = None
         self._has_soft_drops = False
         self._casts = SequenceCastRecipe()  # baked into the written store
         self.clear_cache()
@@ -254,7 +254,7 @@ class SequencePool(
         cast_recipe: SequenceCastRecipe,
         virtual_id: str | None,
         id_mask: set | None,
-        entity_row_mask: pl.Series | None,
+        entity_filter_expr: pl.Expr | None,
         has_soft_drops: bool,
         t0_setter: T0Setter,
         parent_pool: TrajectoryPool | None = None,
@@ -270,8 +270,7 @@ class SequencePool(
             cast_recipe: Already-probed :class:`SequenceCastRecipe`.
             virtual_id: Forked virtual context UUID (or ``None``).
             id_mask: Set of sequence IDs to expose (or ``None`` for all).
-            entity_row_mask: Boolean :class:`~polars.Series` aligned on the physical
-                store (``None`` when no entity filter is active).
+            entity_filter_expr: Entity predicate applied in view space.
             has_soft_drops: Whether soft-dropped sequences exist.
             t0_setter: T0 strategy (own setter; ignored for managed pools).
             parent_pool: Owning
@@ -288,7 +287,7 @@ class SequencePool(
         weakref.finalize(pool, SequencePool._finalize_cleanup, pool._gc_state)
         pool._virtual_id = virtual_id
         pool._id_mask = id_mask
-        pool._entity_row_mask = entity_row_mask
+        pool._entity_filter_expr = entity_filter_expr
         pool._has_soft_drops = has_soft_drops
         pool._parent_pool = parent_pool
         return pool
@@ -367,14 +366,14 @@ class SequencePool(
     def is_dirty(self) -> bool:
         """``True`` if the pool has state not yet written to disk.
 
-        Covers virtual features, view masks (ID or row), type casts,
+        Covers virtual features, view scopes, type casts,
         and soft feature drops.  A dirty pool needs :meth:`save` to
         materialise its current view.
         """
         return (
             self._virtual_id is not None
             or self._id_mask is not None
-            or self._entity_row_mask is not None
+            or self._entity_filter_expr is not None
             or not self._casts.is_empty()
             or self._has_soft_drops
         )
@@ -773,13 +772,13 @@ class SequencePool(
 
         Raises:
             RuntimeError: If the pool has an active ``_id_mask`` or
-                ``_entity_row_mask`` (filtered view).  Call ``pool.save()`` first
+                entity filter expression.  Call ``pool.save()`` first
                 and then add features to the resulting unfiltered pool.
             ValueError: If the number of rows in *df* does not match the
                 number of entity rows in the store.
         """
         # Guard: positional alignment requires the full unfiltered store.
-        if self._id_mask is not None or self._entity_row_mask is not None:
+        if self._id_mask is not None or self._entity_filter_expr is not None:
             raise RuntimeError(
                 "Cannot add entity features on a filtered view. "
                 "Save the current view first with pool.save(), "
@@ -1167,11 +1166,7 @@ class SequencePool(
             cast_recipe=self._casts,
             virtual_id=self._store.fork_virtual_context(self._virtual_id),
             id_mask=set(self._id_mask) if self._id_mask is not None else None,
-            entity_row_mask=(
-                self._entity_row_mask.clone()
-                if self._entity_row_mask is not None
-                else None
-            ),
+            entity_filter_expr=self._entity_filter_expr,
             has_soft_drops=self._has_soft_drops,
             t0_setter=self._t0_setter,
             parent_pool=self._parent_pool,
@@ -2477,7 +2472,7 @@ class SequencePool(
             cast_recipe=cast_for_new,
             virtual_id=virtual_id,
             id_mask=self._id_mask,
-            entity_row_mask=self._entity_row_mask,
+            entity_filter_expr=self._entity_filter_expr,
             has_soft_drops=self._has_soft_drops,
             t0_setter=self._t0_setter,
         )
@@ -2535,7 +2530,7 @@ class SequencePool(
             cast_recipe=SequenceCastRecipe(),
             virtual_id=None,
             id_mask=None,
-            entity_row_mask=None,
+            entity_filter_expr=None,
             has_soft_drops=False,
             t0_setter=self._t0_setter,
         )

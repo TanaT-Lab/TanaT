@@ -79,7 +79,7 @@ class Sequence(
         CachableSettings.__init__(self, settings=settings)
 
         self._parent_pool: SequencePool | None = None
-        self._own_entity_row_mask: pl.Series | None = None
+        self._own_entity_filter_expr: pl.Expr | None = None
         self._own_casts: SequenceCastRecipe | None = None
         self._fallback_t0_setter: T0Setter = T0Setter.default(
             is_event=self.get_registration_name() == "event"
@@ -98,7 +98,7 @@ class Sequence(
 
         Bypasses store resolution, feature resolution, and cast probe: all
         already performed by the pool.  Every piece of pool context
-        (casts, row mask, virtual ID, T0) is read lazily from *parent_pool*
+        (casts, filters, virtual ID, T0) is read lazily from *parent_pool*
         via the corresponding cached properties.
 
         Args:
@@ -145,23 +145,18 @@ class Sequence(
         return None
 
     @property
-    def _entity_row_mask(self) -> pl.Series | None:
-        """Active entity row mask for this sequence.
-
-        Combines the parent pool's ``_entity_row_mask`` (if any) with
-        this sequence's own ``_own_entity_row_mask`` via logical AND.
-        Returns ``None`` when no mask is active.
-        """
-        pool_mask: pl.Series | None = (
-            self._parent_pool._entity_row_mask  # pylint: disable=protected-access
+    def _entity_filter_expr(self) -> pl.Expr | None:
+        """Active expression-based entity filter for this sequence."""
+        pool_expr = (
+            self._parent_pool._entity_filter_expr  # pylint: disable=protected-access
             if self._parent_pool is not None
             else None
         )
-        if pool_mask is None:
-            return self._own_entity_row_mask
-        if self._own_entity_row_mask is None:
-            return pool_mask
-        return pool_mask & self._own_entity_row_mask
+        if pool_expr is None:
+            return self._own_entity_filter_expr
+        if self._own_entity_filter_expr is None:
+            return pool_expr
+        return pool_expr & self._own_entity_filter_expr
 
     # ------------------------------------------------------------------
     # Properties
@@ -377,11 +372,10 @@ class Sequence(
         """
         new_seq = object.__new__(type(self))
         Sequence.__init__(new_seq, self._id_value, self._store, self.settings)
-        # Snapshot the combined entity row mask so the detached copy
-        # preserves the full filter state without depending on the parent pool.
+        # Snapshot the combined entity filter expression so the detached copy
+        # preserves the full filter predicate without depending on the parent pool.
         # pylint: disable=protected-access
-        mask = self._entity_row_mask
-        new_seq._own_entity_row_mask = mask.clone() if mask is not None else None
+        new_seq._own_entity_filter_expr = self._entity_filter_expr
         # Snapshot the cast recipe so the copy keeps type conversions
         # even after being detached from the parent pool.
         new_seq._own_casts = self._casts
