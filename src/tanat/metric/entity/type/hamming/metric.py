@@ -139,7 +139,9 @@ class HammingEntityMetric(EntityMetric, register_name="hamming"):
             ``(lazy_frame, id_column)``
         """
         id_col = pool.settings.id_column
-        lf = pool._temporal_data_lf(features=[feature])
+        lf = pool._frames.temporal(  # pylint: disable=protected-access
+            features=[feature]
+        )
         return lf.group_by(id_col).agg(pl.col(feature)), id_col
 
     @staticmethod
