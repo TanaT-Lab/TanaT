@@ -104,9 +104,6 @@ print("Top codes:", top_codes[:10], "...")
 # :class:`~tanat.criterion.EntityCriterion` prunes every event row whose
 # ``icd_code`` is not in ``top_codes``.
 #
-# :meth:`~tanat.sequence.base.pool.SequencePool.save` then materialises the
-# mask to a new store on disk: only the 30 selected codes are written.
-# After saving, the pool is redirected to the clean store.
 
 # %%
 pool.filter_entities(
@@ -114,11 +111,10 @@ pool.filter_entities(
     inplace=True,
 )
 
-# %%
-pool.save("procedures_top30_store", overwrite=True)
-# pl.Categorical
-pool.cast_features({"icd_code": pl.Categorical})
-# Pool saved and casted in-place
+# pl.Enum fixes the vocabulary to exactly TOP_K codes: OHE will produce one
+# column per code, named after the code itself (e.g. "icd_code_02HV33Z").
+pool.cast_features({"icd_code": pl.Enum(top_codes)})
+
 print(pool)
 
 # %% [markdown]
