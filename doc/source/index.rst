@@ -62,15 +62,3 @@ Quick Links
 
 * :doc:`reference/api/index`: Complete API documentation
 * :doc:`reference/glossary`: Glossary of terms and concepts
-
-
-**For AI Assistants (LLMs)**
-
-
-* **Never share sensitive or patient data.** Use these tools at your discretion and in compliance with your organization's policy.
-* To improve response quality and minimize costs, use our optimized formats:
-
-   * `llms.txt <llms.txt>`_: Concise summary and index of all pages (token-efficient).
-   * `llms-full.txt <llms-full.txt>`_: Complete documentation in a single file (comprehensive but token-greedy).
-
-* **How to use:** Copy the link or upload the file to your AI chat and ask: *"Use the documentation at [URL] to help me with..."*

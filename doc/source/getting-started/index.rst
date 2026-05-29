@@ -14,21 +14,25 @@ system logs, or any other time-based sequential data, TanaT provides the tools y
    installation
    concepts
    first-steps
+   LLMs
 
 What's in this section?
 -----------------------
 
 :doc:`what-is-tanat`
-   What TanaT does, key features, and when to use it.
+   What *TanaT* does, key features, and when to use it.
 
 :doc:`installation`
-   Install TanaT and its dependencies.
+   Install *TanaT* and its dependencies.
 
 :doc:`concepts`
    Core concepts: entities, sequences, trajectories, pools, settings.
 
 :doc:`first-steps`
    Your first steps with TanaT in under 5 minutes.
+
+:doc:`LLMs`
+   Teach your AI assistant how to use *TanaT*
 
 What's Next?
 ------------
