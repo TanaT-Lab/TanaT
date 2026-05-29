@@ -23,8 +23,8 @@ class StoreSchema:
     T_END: Final[str] = "_t_end"
     T_EVENT: Final[str] = "_t_event"
 
-    # --- Transient columns (never persisted) ---
-    ROW_IDX: Final[str] = "__row_idx__"
+    # --- Transient / internal index columns ---
+    STORE_INDEX: Final[str] = "__store_idx__"  # absolute physical row index
 
     # --- File layout ---
 
@@ -48,4 +48,4 @@ class StoreSchema:
     @classmethod
     def internal_columns(cls) -> frozenset[str]:
         """All internal (non-feature) column names."""
-        return frozenset({cls.SEQ_ID, cls.ROW_IDX, *cls.time_index_columns()})
+        return frozenset({cls.SEQ_ID, cls.STORE_INDEX, *cls.time_index_columns()})
