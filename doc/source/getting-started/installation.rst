@@ -24,7 +24,7 @@ To get TanaT's latest development version directly from GitHub:
 Dependencies
 ------------
 
-*TanaT* relies on several foundational libraries from the scientific Python ecosystem, including:
+*TanaT* relies on several foundational libraries from the data science Python ecosystem, including:
 
 - ``pandas`` for convenient tabular data handling
 - ``polars`` and ``pyarrow`` for high-performance columnar data processing
