@@ -288,7 +288,7 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
 
     def _apply_id_mask(self, lf: pl.LazyFrame, **_) -> pl.LazyFrame:
         """Scopes a LazyFrame to this trajectory's ID."""
-        return lf.filter(pl.col(self._store.traj_id_col) == self._id_value)
+        return lf.filter(pl.col(self.settings.id_column) == self._id_value)
 
     # ------------------------------------------------------------------
     # Criterion API

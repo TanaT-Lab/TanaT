@@ -660,7 +660,7 @@ class SequencePool(
     ) -> pl.LazyFrame:
         """Apply ``_id_mask`` to a LazyFrame."""
         if self._id_mask is not None:
-            lf = lf.filter(pl.col(self._store.seq_id_col).is_in(self._id_mask))
+            lf = lf.filter(pl.col(self.settings.id_column).is_in(self._id_mask))
         return lf
 
     # ------------------------------------------------------------------

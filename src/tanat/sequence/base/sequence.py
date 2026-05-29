@@ -352,7 +352,7 @@ class Sequence(
         lf: pl.LazyFrame,
     ) -> pl.LazyFrame:
         """Scope a LazyFrame to this sequence's ID."""
-        return lf.filter(pl.col(self._store.seq_id_col) == self._id_value)
+        return lf.filter(pl.col(self.settings.id_column) == self._id_value)
 
     # -------------------------------------------------------------------
     # Mutation
