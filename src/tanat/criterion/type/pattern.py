@@ -286,7 +286,7 @@ class PatternCriterion(Criterion):
     ) -> set:
         s = self._settings
         id_col = pool.settings.id_column
-        lf = pool._temporal_data_lf(  # pylint: disable=protected-access
+        lf = pool._frames.temporal(  # pylint: disable=protected-access
             features=[s.feature]
         )
         result = (
@@ -308,21 +308,21 @@ class PatternCriterion(Criterion):
         )
         return set(result[id_col].to_list())
 
-    def _compute_entity_mask(
+    def _kept_rows_lf(
         self,
         target: Sequence | SequencePool,
-    ) -> pl.Series:
-        """Keep only the witness rows of the greedy first pattern match per sequence."""
+        lf: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """Filter *lf* down to the rows kept by the pattern witness logic.
+
+        *lf* must contain the feature column and ``__store_idx__`` — typically
+        ``target._frames.temporal(features=[feature], with_store_index=True)``.
+        """
         s = self._settings
         id_col = target.settings.id_column
-        # Collect is unavoidable: ordered subsequence detection is stateful per group.
-        df = (
-            target._temporal_data_lf(  # pylint: disable=protected-access
-                features=[s.feature], with_store_index=True
-            )
-            .with_columns(pl.int_range(pl.len()).over(id_col).alias("__rank__"))
-            .collect()
-        )
+        df = lf.with_columns(
+            pl.int_range(pl.len()).over(id_col).alias("__rank__")
+        ).collect()
 
         matched_lists = (
             df.group_by(id_col, maintain_order=True)
@@ -353,18 +353,23 @@ class PatternCriterion(Criterion):
         if not s.present:
             row_matches = ~row_matches
 
-        kept_idx = df.filter(row_matches)["__store_idx__"]
-        return self._build_store_space_mask(
-            # pylint: disable=protected-access
-            target._store.n_entities,
-            kept_idx,
+        return df.filter(row_matches).lazy()
+
+    def _entity_filter_expr_impl(self, target: Sequence | SequencePool) -> pl.Expr:
+        base_lf = target._frames.temporal(  # pylint: disable=protected-access
+            features=[self._settings.feature], with_store_index=True
+        )
+        return self._materialise_as_store_idx_expr(
+            target,
+            lambda lf: self._kept_rows_lf(target, lf),
+            base_lf=base_lf,
         )
 
     def _match_impl(self, target: Sequence | Trajectory) -> bool:
         """True if the sequence contains the ordered pattern (respecting ``present``)."""
         s = self._settings
         vals = (
-            target._temporal_data_lf(  # pylint: disable=protected-access
+            target._frames.temporal(  # pylint: disable=protected-access
                 features=[s.feature]
             )
             .collect()[s.feature]
