@@ -19,30 +19,21 @@ Each example is self-contained and can be adapted to your own data.
 Data Containers
 ---------------
 
-Build and explore TanaT's core data structures: event, interval and state sequences,
+Build and explore *TanaT*'s core data structures: event, interval and state sequences,
 as well as trajectories that combine multiple sequence types for a single individual.
 
 .. raw:: html
 
     <div class="tanat-gallery">
-        <a href="container/event.html" class="tanat-gallery-card">
-            <p><strong>Event Sequences</strong><br>
-            Build an EventSequencePool and explore its contents.</p>
+        <a href="container/sequence.html" class="tanat-gallery-card">
+            <p><strong>The Three Types of Sequences</strong><br>
+            Build a SequencePool and explore its contents (event, interval, and state sequences).</p>
         </a>
 
-        <a href="container/state.html" class="tanat-gallery-card">
-            <p><strong>State Sequences</strong><br>
-            Build a StateSequencePool and explore contiguous states.</p>
-        </a>
-
-        <a href="container/interval.html" class="tanat-gallery-card">
-            <p><strong>Interval Sequences</strong><br>
-            Build an IntervalSequencePool and explore overlapping and gapped intervals.</p>
-        </a>
 
         <a href="container/trajectory.html" class="tanat-gallery-card">
             <p><strong>Trajectories</strong><br>
-            Combine multiple sequence types into Trajectory and TrajectoryPool.</p>
+            Combine several sequences into Trajectory and TrajectoryPool.</p>
         </a>
     </div>
 
