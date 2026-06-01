@@ -87,9 +87,7 @@ class _ExampleOrder:
 
     _ORDER = {
         # container: simple → composite
-        "event.py": 0,
-        "state.py": 1,
-        "interval.py": 2,
+        "sequence.py": 0,
         "trajectory.py": 3,
         # visualization: overview → specific
         "timeline.py": 0,
@@ -115,6 +113,7 @@ class _ExampleOrder:
         "softdtw.py": 4,
         "chi2.py": 5,
         "aggregation.py": 0,
+        "custom.py": 99,  # always in last position
         # clustering: one per algorithm
         "hierarchical.py": 0,
         "pam.py": 1,
