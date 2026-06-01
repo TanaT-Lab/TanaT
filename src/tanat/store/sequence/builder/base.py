@@ -344,9 +344,16 @@ class SequenceStoreBuilder(ABC, Registrable, DisplayMixin):
         master_ids: pl.LazyFrame,
     ) -> tuple[pl.LazyFrame, pl.LazyFrame, pl.LazyFrame | None]:
         """Sink time index, entity (and optional static) feature files to *store_path*."""
-        # Entity files: already sorted, never collected as a whole
-        time_index = entity_lf.select(time_cols)
+         # entity_lf comes from get_temporal_data(): a horizontal concat of three
+        # lazy branches (SEQ_ID repeat_by/explode, time index scan, entity scan +
+        # optional virtual hconcat).  The Polars ≥1.38.1 streaming engine panics
+        # with SchemaMismatch when sink_ipc encounters that nested plan structure.
+        # SEQ_ID is not written to any output file, so we materialise only the
+        # columns that will actually land on disk (time_cols + entity_cols), then
+        # derive both sinks from that single in-memory frame.
+        entity_lf = entity_lf.select(time_cols + entity_cols).collect().lazy()
         entity_feature_lf = entity_lf.select(entity_cols)
+        time_index = entity_lf.select(time_cols)
         time_index.sink_ipc(store_path / SCH.Files.TIME_INDEX)
         entity_feature_lf.sink_ipc(store_path / SCH.Files.ENTITY_FEATURES)
         if static_lf is not None:
