@@ -11,6 +11,7 @@ practical examples.
    building_pools
    mimic/index
    mooc/index
+   aeon/index
 
 Building & Ingesting Data
 --------------------------
@@ -44,6 +45,13 @@ End-to-end workflows on real datasets:
 
 * :doc:`Exploring learner activity sequences <mooc/explore_sessions>`: load, inspect, visualise, train/test split
 * :doc:`Clustering sessions by action patterns <mooc/cluster_sessions>`: criteria, T0 anchor, relative window
+
+----
+
+Time Series to Sequences
+------------------------
+
+* :doc:`Discretizing time series into sequences <aeon/discretize>`: apply Aeon segmentation/quantization methods to raw time series and ingest the result as a TanaT sequence pool
 
 ----
 

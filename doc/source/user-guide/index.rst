@@ -58,6 +58,13 @@ Learn how different TanaT components work together to solve real-world problems.
 
 ----
 
+**Time Series to Sequences**
+
+   | :doc:`Discretizing time series into sequences <auto_tutorials/aeon/discretize>`
+   | *Apply Aeon segmentation/quantization to raw time series and ingest the result as a TanaT sequence pool*
+
+----
+
 Getting Help
 ------------
 
