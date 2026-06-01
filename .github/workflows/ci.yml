@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, test-ci]
+    branches: [main, test-ci, docs]
     tags: ['v*']
   pull_request:
     branches: [main]
@@ -14,19 +14,17 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    if: github.ref != 'refs/heads/docs'
     strategy:
       matrix:
         python-version: ['3.10', '3.13']
       fail-fast: false  # Continue other versions if one fails
-    
     steps:
       - uses: actions/checkout@v4
-      
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      
       - name: Run tests
         run: bash scripts/test.sh
 
@@ -34,18 +32,14 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     if: startsWith(github.ref, 'refs/tags/v')
-    
     steps:
       - uses: actions/checkout@v4
-      
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      
       - name: Run tests with coverage
         run: bash scripts/test.sh
-      
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
@@ -56,22 +50,17 @@ jobs:
     runs-on: ubuntu-latest
     needs: [test, coverage]
     if: startsWith(github.ref, 'refs/tags/v')
-    environment: pypi  # Optional: adds manual approval gate
-    
+    environment: pypi
     steps:
       - uses: actions/checkout@v4
-      
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      
       - name: Install build tools
         run: pip install build twine
-      
       - name: Build package
         run: python -m build
-      
       - name: Publish to PyPI
         env:
           TWINE_USERNAME: __token__
@@ -83,22 +72,55 @@ jobs:
     needs: publish
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
-      contents: write  # Required to create releases
-    
+      contents: write
     steps:
       - uses: actions/checkout@v4
-      
       - name: Extract changelog
         id: changelog
         run: |
           NOTES=$(bash scripts/extract_changelog.sh)
-          # Use GitHub's multiline output format
           echo "notes<<EOF" >> $GITHUB_OUTPUT
           echo "$NOTES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-      
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           body: ${{ steps.changelog.outputs.notes }}
           generate_release_notes: false
+
+  docs:
+    runs-on: ubuntu-latest
+    # On docs branch: test is skipped (result = 'skipped') → run directly.
+    # On v* tag:      test must have succeeded.
+    needs: [test]
+    if: |
+      always() && (
+        (github.ref == 'refs/heads/docs' && needs.test.result == 'skipped') ||
+        (startsWith(github.ref, 'refs/tags/v') && needs.test.result == 'success')
+      )
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Build documentation
+        run: bash scripts/build_documentation.sh -n
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
