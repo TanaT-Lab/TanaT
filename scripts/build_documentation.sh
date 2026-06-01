@@ -11,9 +11,13 @@ function show_help()
   cat << HELP
 USAGE
 
-  ${0##*/} [-h]
+  ${0##*/} [-h] [-n]
 
 OPTIONS
+
+  -n
+    Skip virtual-environment creation and activation (useful in CI where
+    the Python environment is already set up by the runner).
 
   -h
     Show this help message and exit.
@@ -22,19 +26,24 @@ HELP
   exit "$1"
 }
 
-while getopts "h" opt
+NO_VENV=0
+
+while getopts "hn" opt
 do
   case "$opt" in
     h) show_help 0 ;;
+    n) NO_VENV=1 ;;
     *) show_help 1 ;;
   esac
 done
 
-if [[ ! -e venv ]]; then
-  python3 -m venv venv
-  venv/bin/pip install -U pip
+if [[ $NO_VENV -eq 0 ]]; then
+  if [[ ! -e venv ]]; then
+    python3 -m venv venv
+    venv/bin/pip install -U pip
+  fi
+  source venv/bin/activate
 fi
-source venv/bin/activate
 
 pip install -e '.[sql,tutorials,doc]' # install tanat with all doc-build dependencies
 rm -rf public   # clean stale output files
