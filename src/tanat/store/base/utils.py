@@ -214,14 +214,3 @@ def drop_columns_from_file(path: Path, columns: list[str]) -> bool:
     else:
         atomic_write(remaining, path)
     return True
-
-
-def apply_cast_exprs(
-    lf: pl.LazyFrame,
-    exprs: list[pl.Expr],
-) -> pl.LazyFrame:
-    """Apply pre-built cast expressions to *lf*.
-
-    Returns *lf* unchanged when *exprs* is empty.
-    """
-    return lf.with_columns(exprs) if exprs else lf

@@ -13,6 +13,17 @@ import polars as pl
 # ---------------------------------------------------------------------------
 
 
+def apply_cast_exprs(
+    lf: pl.LazyFrame,
+    exprs: list[pl.Expr],
+) -> pl.LazyFrame:
+    """Apply pre-built cast expressions to *lf*.
+
+    Returns *lf* unchanged when *exprs* is empty.
+    """
+    return lf.with_columns(exprs) if exprs else lf
+
+
 def build_caster(recipe: list[pl.DataType]) -> Callable[[pl.Expr], pl.Expr]:
     """Build an expression caster from an ordered dtype recipe."""
 
