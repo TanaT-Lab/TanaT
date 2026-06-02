@@ -16,7 +16,7 @@ this_path = pathlib.Path(__file__).resolve()
 sys.path.insert(0, str((this_path.parent / source_code).resolve()))
 
 author = "Arnaud Duvermy, Thomas Guyet"
-copyright = "2024-2025, Inria"
+copyright = "2024-2026, Inria"
 project = "TanaT"
 html_theme = "pydata_sphinx_theme"
 html_logo = "static/logo.png"
