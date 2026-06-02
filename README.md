@@ -1,5 +1,9 @@
 # TanaT
-**Temporal Analysis of Trajectories** 
+**Temporal Analysis of Trajectories**
+
+[![PyPI version](https://badge.fury.io/py/tanat.svg)](https://pypi.org/project/tanat/)
+[![CI](https://github.com/tanat-lab/tanat/actions/workflows/ci.yml/badge.svg)](https://github.com/tanat-lab/tanat/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/tanat-lab/tanat/graph/badge.svg)](https://codecov.io/gh/tanat-lab/tanat)
 
 *TanaT* is a powerful Python library designed for advanced temporal sequence analysis, with specialized focus on patient care pathways and complex temporal data structures (trajectories).
 
