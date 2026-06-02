@@ -13,7 +13,7 @@ dependencies = [
     "matplotlib",
     "numba",
     "pandas",
-    "polars<=1.38.0",
+    "polars",
     "pyarrow",
     "scikit-learn",
     "tanat-utils",
