@@ -2,6 +2,16 @@
 
 This page contains the complete changelog for TanaT, documenting all notable changes, new features, bug fixes, and improvements across versions.
 
+## [v0.10.1] - June 2026
+**Package structure cleanup**
+
+### Changed
+- Subtype registration now relies on explicit `__init__.py` imports 
+- `type/__init__.py` files own their subtype imports consistently across all modules
+
+### Dependencies
+- Requires `tanat-utils >= 0.0.6`
+
 ## [v0.10.0] - June 2026
 **Polars Engine & Arrow Store** - Full rewrite of the data layer for scalable, lazy sequence and trajectory manipulation
 
