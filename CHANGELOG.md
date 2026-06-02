@@ -2,8 +2,31 @@
 
 This page contains the complete changelog for TanaT, documenting all notable changes, new features, bug fixes, and improvements across versions.
 
---- 
-*For historical versions bellow, please refer to the [Inria GitLab archive](https://gitlab.inria.fr/tanat/core/tanat).*
+## [v0.10.0] - June 2026
+**Polars Engine & Arrow Store** - Full rewrite of the data layer for scalable, lazy sequence and trajectory manipulation
+
+### Migration
+- **Repository moved to GitHub**: TanaT is now hosted at [Github](https://github.com/tanat/tanat).
+  The [Inria GitLab repository](gitlab.inria.fr/tanat/core/tanat) remains archived for historical versions up to v0.9.0.
+
+### Added
+- **Polars-based data engine**: all internal data frames are now `polars.LazyFrame`, enabling lazy evaluation, predicate pushdown, and significant memory savings on large datasets
+- **Arrow file store**: sequences and trajectories are persisted as Apache Arrow files (`SequenceStore`, `TrajectoryStore`), replacing the previous in-memory/pandas approach
+- **Virtual context layer** (`VirtualStore`): lightweight copy-on-write mechanism for type conversions and derived views without materialising intermediate data
+- **Ingestion sources**: unified `AbstractSource` interface with `DataFrameSource`, `CsvSource`, `ParquetSource`, and `SqlSource` for SQL query ingestion
+- **Cast recipe system** (`tanat.cast`): structured type-cast overrides (`SequenceCastRecipe`, `TrajectoryCastRecipe`) applied lazily at view time, with validation (`probe()`) before execution
+- **Frame assembler layer** (`SequenceFrameAssembler`, `TrajectoryFrameAssembler`): centralises construction of view-schema LazyFrames, decoupling store layout from user-facing columns
+
+### Changed
+- **Breaking**: API redesign, v0.10.0 is not fully backward-compatible with v0.9.x
+
+### Notes
+- **Compatibility**: Python ≥3.10 and <3.14
+- Python 3.14 not recommended due to dependency wheel compatibility issues
+- Python 3.9 is no longer supported (Polars requires ≥3.10)
+
+---
+*For historical versions below, please refer to the [Inria GitLab archive](https://gitlab.inria.fr/tanat/core/tanat).*
 
 ## [v0.9.0] - December 2025
 **Performance & Scalability** - JIT parallel computing and memory-mapped storage
