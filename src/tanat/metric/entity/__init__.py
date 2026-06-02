@@ -4,7 +4,7 @@ Entity metric sub-package.
 """
 
 from .base import EntityMetric
-from .type.hamming.metric import HammingEntityMetric, HammingSettings
+from .type import HammingEntityMetric, HammingSettings
 
 __all__ = [
     "EntityMetric",
