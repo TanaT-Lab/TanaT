@@ -10,14 +10,14 @@ from datetime import datetime, timedelta, timezone
 import logging
 import shutil
 from pathlib import Path
-from typing import Callable
 import pandas as pd
 import polars as pl
 
+from ...cast import apply_cast_exprs
+from ...cast.sequence import _ForkCasts
 from ...metadata.sequence import SequenceMetadata
 from ..base.store import BaseStore
 from ..base.utils import (
-    apply_cast_exprs,
     check_no_reserved_names,
     drop_columns_from_file,
     hconcat_physical_virtual,
@@ -457,8 +457,7 @@ class SequenceStore(BaseStore):
         self,
         virtual_id: str | None,
         duration: timedelta | int | float | str,
-        feature_caster: Callable[[pl.Expr], pl.Expr] | None = None,
-        time_index_caster: Callable[[pl.Expr], pl.Expr] | None = None,
+        casts: _ForkCasts | None = None,
     ) -> str:
         """Fork a virtual context with ``(_t_start, _t_end)`` computed from an event index.
 
@@ -470,10 +469,8 @@ class SequenceStore(BaseStore):
         Args:
             virtual_id: Active virtual context to inherit from (``None`` → physical only).
             duration: Scalar offset or entity feature column name.
-            feature_caster: Callable applying the full cast recipe to the duration
-                column (``str`` case only), or ``None``.
-            time_index_caster: Callable applying the full cast recipe to the time
-                column, or ``None``.
+            casts: Precompiled cast bundle from :meth:`SequenceCastRecipe.fork_casts`,
+                or ``None`` when no casts are registered.
 
         Returns:
             UUID of the new forked context.
@@ -482,16 +479,14 @@ class SequenceStore(BaseStore):
             "Fork event -> interval (virtual_id=%r, duration=%r)", virtual_id, duration
         )
         active_ti = self.time_index(virtual_id)
-        if time_index_caster is not None:
+        if casts and casts.time_index:
             active_ti = apply_cast_exprs(
-                active_ti, [time_index_caster(pl.col(SCH.T_EVENT))]
+                active_ti, [casts.time_index(pl.col(SCH.T_EVENT))]
             )
         if isinstance(duration, str):
             entity_col = self.entity(virtual_id).select(pl.col(duration))
-            if feature_caster is not None:
-                entity_col = apply_cast_exprs(
-                    entity_col, [feature_caster(pl.col(duration))]
-                )
+            if casts and casts.feature:
+                entity_col = apply_cast_exprs(entity_col, casts.feature)
             combined = pl.concat(
                 [
                     self.get_id_lf(explode=True),
@@ -517,8 +512,7 @@ class SequenceStore(BaseStore):
         self,
         virtual_id: str | None,
         end_value: datetime | int | float | str | None,
-        time_index_caster: Callable[[pl.Expr], pl.Expr] | None = None,
-        static_caster: Callable[[pl.Expr], pl.Expr] | None = None,
+        casts: _ForkCasts | None = None,
     ) -> str:
         """Fork a virtual context with ``(_t_start, _t_end)`` where ``_t_end`` is the next event start.
 
@@ -530,10 +524,8 @@ class SequenceStore(BaseStore):
             virtual_id: Active virtual context to inherit from (``None`` → physical only).
             end_value: Fill value for the last row's ``_t_end``, or ``None``.
                 A ``str`` names a static feature column whose per-sequence value is used.
-            time_index_caster: Callable applying the full cast recipe to the time
-                column, or ``None``.
-            static_caster: Callable applying the full cast recipe to the static
-                end_value column (``str`` case only), or ``None``.
+            casts: Precompiled cast bundle from :meth:`SequenceCastRecipe.fork_casts`,
+                or ``None`` when no casts are registered.
 
         Returns:
             UUID of the new forked context.
@@ -542,9 +534,9 @@ class SequenceStore(BaseStore):
             "Fork event -> state (virtual_id=%r, end_value=%r)", virtual_id, end_value
         )
         active_ti = self.time_index(virtual_id)
-        if time_index_caster is not None:
+        if casts and casts.time_index:
             active_ti = apply_cast_exprs(
-                active_ti, [time_index_caster(pl.col(SCH.T_EVENT))]
+                active_ti, [casts.time_index(pl.col(SCH.T_EVENT))]
             )
         combined = pl.concat(
             [self.get_id_lf(explode=True), active_ti], how="horizontal"
@@ -556,10 +548,8 @@ class SequenceStore(BaseStore):
             static_col = self.get_static_data(virtual_id).select(
                 [SCH.SEQ_ID, end_value]
             )
-            if static_caster is not None:
-                static_col = apply_cast_exprs(
-                    static_col, [static_caster(pl.col(end_value))]
-                )
+            if casts and casts.static:
+                static_col = apply_cast_exprs(static_col, casts.static)
             new_ti = (
                 combined.join(static_col, on=SCH.SEQ_ID, how="left")
                 .select(
@@ -598,8 +588,7 @@ class SequenceStore(BaseStore):
         self,
         virtual_id: str | None,
         anchor: str,
-        time_index_caster: Callable[[pl.Expr], pl.Expr] | None = None,
-        time_index_dtype: pl.DataType | None = None,
+        casts: _ForkCasts | None = None,
     ) -> str:
         """Fork a virtual context with ``_t_event`` projected from a period time index.
 
@@ -611,10 +600,8 @@ class SequenceStore(BaseStore):
         Args:
             virtual_id: Active virtual context to inherit from (``None`` → physical only).
             anchor: One of ``'start'``, ``'end'``, ``'middle'``.
-            time_index_caster: Callable applying the full cast recipe to the time
-                columns, or ``None``.
-            time_index_dtype: Final dtype after the cast recipe.  When provided,
-                avoids a ``collect_schema`` call on the middle-anchor path.
+            casts: Precompiled cast bundle from :meth:`SequenceCastRecipe.fork_casts`,
+                or ``None`` when no casts are registered.
 
         Returns:
             UUID of the new forked context.
@@ -623,12 +610,12 @@ class SequenceStore(BaseStore):
             "Fork period -> event (virtual_id=%r, anchor=%r)", virtual_id, anchor
         )
         active_ti = self.time_index(virtual_id)
-        if time_index_caster is not None:
+        if casts and casts.time_index:
             active_ti = apply_cast_exprs(
                 active_ti,
                 [
-                    time_index_caster(pl.col(SCH.T_START)),
-                    time_index_caster(pl.col(SCH.T_END)),
+                    casts.time_index(pl.col(SCH.T_START)),
+                    casts.time_index(pl.col(SCH.T_END)),
                 ],
             )
         if anchor == "start":
@@ -637,7 +624,9 @@ class SequenceStore(BaseStore):
             new_ti = active_ti.select(pl.col(SCH.T_END).alias(SCH.T_EVENT))
         else:  # middle
             # Resolve the effective dtype without a lazy-plan collect when possible.
-            col_type = time_index_dtype or active_ti.collect_schema()[SCH.T_START]
+            col_type = (
+                casts.time_index_dtype if casts else None
+            ) or active_ti.collect_schema()[SCH.T_START]
             if isinstance(col_type, (pl.Datetime, pl.Date)):
                 # Polars forbids adding two absolute timestamps (`start + end`),
                 # so the midpoint must be expressed as `start + (end - start) / 2`

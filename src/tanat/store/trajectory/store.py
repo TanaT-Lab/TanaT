@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from ..base.store import BaseStore
-from ..base.utils import apply_cast_exprs
+from ...cast import apply_cast_exprs
 from ..sequence.store import SequenceStore
 from .schema import TrajectorySchema as TSCH
 

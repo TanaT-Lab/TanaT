@@ -2493,8 +2493,7 @@ class SequencePool(
         new_uuid = self._store._fork_period_to_event(
             self._virtual_id,
             anchor,
-            time_index_caster=self._casts.time_index_caster(),
-            time_index_dtype=self._casts.time_index_dtype,
+            casts=self._casts.fork_casts(),
         )
         new_settings = {
             "id_column": self.settings.id_column,

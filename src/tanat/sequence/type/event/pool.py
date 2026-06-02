@@ -262,12 +262,9 @@ class EventSequencePool(SequencePool, register_name="event"):
         new_uuid = self._store._fork_event_to_interval(
             self._virtual_id,
             duration,
-            feature_caster=(
-                self._casts.entity_caster(duration)
-                if isinstance(duration, str)
-                else None
+            casts=self._casts.fork_casts(
+                feature_col=duration if isinstance(duration, str) else None,
             ),
-            time_index_caster=self._casts.time_index_caster(),
         )
         new_settings = {
             "id_column": self.settings.id_column,
@@ -295,11 +292,8 @@ class EventSequencePool(SequencePool, register_name="event"):
         new_uuid = self._store._fork_event_to_state(
             self._virtual_id,
             end_value,
-            time_index_caster=self._casts.time_index_caster(),
-            static_caster=(
-                self._casts.static_caster(end_value)
-                if isinstance(end_value, str)
-                else None
+            casts=self._casts.fork_casts(
+                static_col=end_value if isinstance(end_value, str) else None,
             ),
         )
         new_settings = {
