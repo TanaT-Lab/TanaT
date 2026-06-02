@@ -16,7 +16,7 @@ dependencies = [
     "polars",
     "pyarrow",
     "scikit-learn",
-    "tanat-utils",
+    "tanat-utils>= 0.0.6",
 ]
 requires-python = ">=3.10"
 classifiers = [
