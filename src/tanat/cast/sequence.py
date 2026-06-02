@@ -4,11 +4,29 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import Callable, ClassVar
+from typing import Callable, ClassVar, NamedTuple
 
 import polars as pl
 
 from .base import BaseCastRecipe, ColumnMapCast, StructuralCasts
+
+
+class _ForkCasts(NamedTuple):
+    """Precompiled casts for a fork operation. Internal use only."""
+
+    time_index: Callable[[pl.Expr], pl.Expr] | None
+    # Callable: the store applies it to its own SCH columns.
+    # None = no time-index cast registered.
+
+    feature: list[pl.Expr]
+    # Pre-built expressions for the entity feature column (e.g. duration).
+    # Empty = no cast or scalar duration.
+
+    static: list[pl.Expr]
+    # Pre-built expressions for the static feature column (e.g. end_value).
+    # Empty = no cast or scalar end_value.
+
+    time_index_dtype: pl.DataType | None
 
 
 @dataclass(frozen=True)
@@ -71,6 +89,22 @@ class SequenceCastRecipe(BaseCastRecipe):
     def entity_caster(self, col: str) -> Callable[[pl.Expr], pl.Expr] | None:
         """Return the compiled caster for entity feature *col*, or ``None``."""
         return self.features.entity.caster(col)
+
+    def fork_casts(
+        self,
+        *,
+        feature_col: str | None = None,
+        static_col: str | None = None,
+    ) -> _ForkCasts:
+        """Return precompiled casts for a fork operation."""
+        fc = self.entity_caster(feature_col) if feature_col else None
+        sc = self.static_caster(static_col) if static_col else None
+        return _ForkCasts(
+            time_index=self.time_index_caster(),
+            feature=[fc(pl.col(feature_col))] if fc else [],
+            static=[sc(pl.col(static_col))] if sc else [],
+            time_index_dtype=self.time_index_dtype,
+        )
 
     def feature_exprs(self, is_static: bool = False) -> list[pl.Expr]:
         """Return the ``with_columns`` expressions for entity or static features."""
