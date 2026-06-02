@@ -311,7 +311,7 @@ class SequenceStoreBuilder(ABC, Registrable, DisplayMixin):
         # Skipped when presorted=True (frames come from an existing store).
         if not presorted:
             entity_lf = self._prepare_entity(entity_lf)
-        schema_names = set(entity_lf.collect_schema().names())
+        schema_names = entity_lf.collect_schema().names()
         time_cols = [c for c in SCH.time_index_columns() if c in schema_names]
         entity_cols = [c for c in schema_names if c not in SCH.internal_columns()]
         # Master seq_id list: sorted union of every ID present across all sources.
@@ -344,7 +344,7 @@ class SequenceStoreBuilder(ABC, Registrable, DisplayMixin):
         master_ids: pl.LazyFrame,
     ) -> tuple[pl.LazyFrame, pl.LazyFrame, pl.LazyFrame | None]:
         """Sink time index, entity (and optional static) feature files to *store_path*."""
-         # entity_lf comes from get_temporal_data(): a horizontal concat of three
+        # entity_lf comes from get_temporal_data(): a horizontal concat of three
         # lazy branches (SEQ_ID repeat_by/explode, time index scan, entity scan +
         # optional virtual hconcat).  The Polars ≥1.38.1 streaming engine panics
         # with SchemaMismatch when sink_ipc encounters that nested plan structure.
