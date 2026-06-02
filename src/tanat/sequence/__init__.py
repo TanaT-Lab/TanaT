@@ -4,28 +4,38 @@
 from .base.pool import SequencePool
 from .base.sequence import Sequence
 
-from .type.event.pool import EventSequencePool
-from .type.event.sequence import EventSequence
-
-from .type.state.pool import StateSequencePool
-from .type.state.sequence import StateSequence
-from .type.state.settings import StateSequenceSettings
-
-from .type.interval.pool import IntervalSequencePool
-from .type.interval.sequence import IntervalSequence
+from .type import (
+    EventEntity,
+    EventSequence,
+    EventSequencePool,
+    EventSequenceSettings,
+    IntervalEntity,
+    IntervalSequence,
+    IntervalSequencePool,
+    IntervalSequenceSettings,
+    StateEntity,
+    StateSequence,
+    StateSequencePool,
+    StateSequenceSettings,
+)
 
 from .shortcuts import build_events, build_intervals, build_states
 
 __all__ = [
     "SequencePool",
     "Sequence",
+    "EventEntity",
     "EventSequencePool",
     "EventSequence",
+    "EventSequenceSettings",
+    "StateEntity",
     "StateSequencePool",
     "StateSequence",
     "StateSequenceSettings",
+    "IntervalEntity",
     "IntervalSequencePool",
     "IntervalSequence",
+    "IntervalSequenceSettings",
     "build_events",
     "build_intervals",
     "build_states",
