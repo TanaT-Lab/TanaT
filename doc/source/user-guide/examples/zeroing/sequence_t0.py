@@ -130,14 +130,15 @@ pool.t0_data().head(6)
 # matches the pool's temporal dtype (``Datetime[us]``).
 
 # %%
-# Build a per-id index_date column (already Datetime[us] in pandas)
+# Build a per-id index_date column (Datetime[us] to match the pool's time index)
 n = len(pool)
 index_dates = pd.DataFrame(
     {
         "id": pool.unique_ids,
-        "index_date": [
-            datetime(2020, 1, 1) + timedelta(days=int(i * 7)) for i in range(n)
-        ],
+        "index_date": pd.array(
+            [datetime(2020, 1, 1) + timedelta(days=int(i * 7)) for i in range(n)],
+            dtype="datetime64[us]",
+        ),
     }
 )
 pool.add_static_features(index_dates)
