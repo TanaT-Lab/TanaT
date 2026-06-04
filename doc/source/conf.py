@@ -45,7 +45,7 @@ html_theme_options = {
         },
         {
             "name": "LLMs context (llms.txt)",
-            "url": "https://tanat.gitlabpages.inria.fr/core/tanat/llms.txt",
+            "url": "https://tanat-lab.github.io/TanaT/llms.txt",
             "icon": "fa-solid fa-file-lines",
             "type": "fontawesome",
         },
