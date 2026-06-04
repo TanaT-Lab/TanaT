@@ -245,21 +245,29 @@ anchor_pools = {
     for anchor in ("start", "end", "middle")
 }
 
+# %% [markdown]
+#
+# .. note::
+#   ``anchor`` changes the order of entity rows within the same sequence.
+#   The same patient can therefore be represented differently depending on
+#   the chosen anchor.
+
 # %%
 
 # sort_anchor = "start"
-pid = admissions.unique_ids[0]
+pid = "a12"
 anchor_pools["start"][pid].temporal_data()
+
+# %%
+
+# sort_anchor = "middle"
+anchor_pools["middle"][pid].temporal_data()
 
 # %%
 
 # sort_anchor = "end"
 anchor_pools["end"][pid].temporal_data()
 
-# %%
-
-# sort_anchor = "middle"
-anchor_pools["middle"][pid].temporal_data()
 
 # %% [markdown]
 # Build a procedures pool
