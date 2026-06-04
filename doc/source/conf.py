@@ -108,10 +108,11 @@ class _ExampleOrder:
         "hamming.py": 0,
         "linear_pairwise.py": 0,
         "edit.py": 1,
-        "lcs.py": 2,
-        "dtw.py": 3,
-        "softdtw.py": 4,
-        "chi2.py": 5,
+        "lcp.py": 2,
+        "lcs.py": 3,
+        "dtw.py": 4,
+        "softdtw.py": 5,
+        "chi2.py": 6,
         "aggregation.py": 0,
         "custom.py": 99,  # always in last position
         # clustering: one per algorithm

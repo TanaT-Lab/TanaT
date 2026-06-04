@@ -41,6 +41,8 @@ Sequence metrics operate on entire sequences, leveraging an EntityMetric as a fo
      - Position-wise alignment with configurable aggregation (mean, max, sum)
    * - :class:`~tanat.metric.sequence.EditSequenceMetric`
      - Needleman-Wunsch edit distance; insertions, deletions, substitutions
+   * - :class:`~tanat.metric.sequence.LCPSequenceMetric`
+     - Longest Common Prefix distance between sequences
    * - :class:`~tanat.metric.sequence.LCSSequenceMetric`
      - Longest Common Subsequence distance
    * - :class:`~tanat.metric.sequence.DTWSequenceMetric`

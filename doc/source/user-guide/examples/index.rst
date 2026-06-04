@@ -164,6 +164,11 @@ Distance metrics for entire temporal sequences.
             Needleman-Wunsch alignment with insertions/deletions.</p>
         </a>
 
+        <a href="metric_sequence/lcp.html" class="tanat-gallery-card">
+            <p><strong>LCP</strong><br>
+            Longest Common Prefix distance between sequences.</p>
+        </a>
+
         <a href="metric_sequence/lcs.html" class="tanat-gallery-card">
             <p><strong>LCS</strong><br>
             Longest Common Subsequence distance.</p>
