@@ -12,6 +12,26 @@ individual sequences, trajectories, and entities.
 
 ----
 
+Navigation
+==========
+
+Look up a single item by ID or row index; the return type depends on the container.
+
+.. code-block:: python
+
+   # SequencePool: lookup a sequence by ID
+   seq = pool["patient_001"]
+
+   # TrajectoryPool: lookup a trajectory by ID
+   traj = tpool["patient_001"]
+
+   # Sequence: lookup an entity by position
+   entity = seq[0]
+   entity = seq[-1]  # last entity
+
+
+----
+
 Iteration
 =========
 
@@ -52,75 +72,6 @@ All containers implement the standard Python iteration protocol.
 
     for entity in seq:                  # S  → Entity
         print(entity.temporal_extent, entity.data())
-
-----
-
-Navigation
-==========
-
-Sequential access
------------------
-
-Return a contiguous window of sequences or entities, available on all container types.
-
-.. list-table::
-   :header-rows: 1
-   :widths: 60 5 5 5 5
-
-   * - Method → Returns
-     - SP
-     - S
-     - TP
-     - T
-   * - ``head(n)`` → first *n* entities
-     - :green:`✓`
-     - :green:`✓`
-     - :green:`✓`
-     - :green:`✓`
-   * - ``tail(n)`` → last *n* entities
-     - :green:`✓`
-     - :green:`✓`
-     - :green:`✓`
-     - :green:`✓`
-   * - ``slice(start, end, step)`` → positional slice (Python slice semantics)
-     - :green:`✓`
-     - :green:`✓`
-     - :green:`✓`
-     - :green:`✓`
-
-*SP: SequencePool · TP: TrajectoryPool · S: Sequence · T: Trajectory*
-
-Direct lookup
--------------
-
-Look up a single item by ID or row index; the return type depends on the container.
-
-.. list-table::
-   :header-rows: 1
-   :widths: 60 5 5 5 5
-
-   * - Method → Returns
-     - SP
-     - S
-     - TP
-     - T
-   * - ``pool[id]`` → Sequence / Trajectory
-     - :green:`✓`
-     - :red:`✗`
-     - :green:`✓`
-     - :red:`✗`
-   * - ``seq[i]`` → Entity (negative indices supported)
-     - :red:`✗`
-     - :green:`✓`
-     - :red:`✗`
-     - :red:`✗`
-   * - ``seq[i:j]`` → Sequence view
-     - :red:`✗`
-     - :green:`✓`
-     - :red:`✗`
-     - :red:`✗`
-
-*SP: SequencePool · TP: TrajectoryPool · S: Sequence · T: Trajectory*
 
 ----
 
