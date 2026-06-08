@@ -89,6 +89,27 @@ def probe_cast_recipe(
         ) from exc
 
 
+def _require_single_field(fields: dict[str, object]) -> None:
+    """Raise ``ValueError`` unless exactly one entry in *fields* is not ``None``.
+
+    Intended for ``append()`` methods that accept several mutually-exclusive
+    keyword arguments and must receive exactly one at a time.
+
+    Args:
+        fields: Mapping of argument name → value as passed to ``append()``.
+
+    Raises:
+        ValueError: If zero or more than one value is not ``None``.
+    """
+    provided = [name for name, val in fields.items() if val is not None]
+    if len(provided) != 1:
+        names = ", ".join(fields)
+        raise ValueError(
+            f"append() requires exactly one field at a time ({names}); "
+            f"got: {provided if provided else 'none'}."
+        )
+
+
 @dataclass(frozen=True)
 class ScalarCast:
     """Ordered cast recipe for a single, well-known column."""
