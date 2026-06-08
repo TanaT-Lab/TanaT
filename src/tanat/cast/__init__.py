@@ -2,6 +2,7 @@
 """Cast recipes and reusable cast primitives."""
 
 from .base import (
+    CastStep,
     ScalarCast,
     ColumnMapCast,
     StructuralCasts,
@@ -13,6 +14,7 @@ from .trajectory import TrajectoryFeatureCasts, TrajectoryCastRecipe
 
 __all__ = [
     "apply_cast_exprs",
+    "CastStep",
     "ScalarCast",
     "ColumnMapCast",
     "StructuralCasts",
