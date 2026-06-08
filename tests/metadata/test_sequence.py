@@ -6,6 +6,7 @@ from __future__ import annotations
 import pytest
 import polars as pl
 
+from tanat.cast.base import CastStep
 from tanat.metadata.feature import (
     ArrayInfo,
     BooleanInfo,
@@ -179,7 +180,7 @@ class TestSequencePoolCast:
         pool.cast_features({"value": pl.Float32})
         pool.cast_features({"value": pl.Float64})
         recipe = pool._casts.entity["value"]  # pylint: disable=protected-access
-        assert recipe == [pl.Float32, pl.Float64]
+        assert recipe == [CastStep(pl.Float32), CastStep(pl.Float64)]
 
     def test_cast_chained_metadata_reflects_final_step(
         self, pools_dict: dict, pool_type: str
