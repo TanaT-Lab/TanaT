@@ -8,7 +8,7 @@ from typing import Callable, ClassVar, NamedTuple
 
 import polars as pl
 
-from .base import BaseCastRecipe, ColumnMapCast, StructuralCasts
+from .base import BaseCastRecipe, ColumnMapCast, StructuralCasts, _require_single_field
 
 
 class _ForkCasts(NamedTuple):
@@ -127,8 +127,26 @@ class SequenceCastRecipe(BaseCastRecipe):
         time_index: pl.DataType | None = None,
         entity: dict[str, pl.DataType] | None = None,
         static: dict[str, pl.DataType] | None = None,
+        strict: bool = True,
     ) -> SequenceCastRecipe:
-        """Return a new recipe extended with the given structural and feature casts."""
+        """Return a new recipe extended with **one** structural or feature cast.
+
+        Exactly one of *id*, *time_index*, *entity*, or *static* must be
+        provided per call.  Bundling multiple fields in a single call is
+        intentionally rejected to keep each recipe step traceable.
+
+        Args:
+            strict: Forwarded to :meth:`ColumnMapCast.append` for feature
+                buckets only (``entity`` and ``static``).  Structural columns
+                (``id``, ``time_index``) are always cast strictly.
+
+        Raises:
+            ValueError: If zero or more than one field argument is provided.
+        """
+        _require_single_field(
+            {"id": id, "time_index": time_index, "entity": entity, "static": static}
+        )
+
         structural = self.structural
         if id is not None:
             structural = structural.append_id(id)
@@ -137,7 +155,7 @@ class SequenceCastRecipe(BaseCastRecipe):
 
         features = self.features
         if entity:
-            features = replace(features, entity=features.entity.append(entity))
+            features = replace(features, entity=features.entity.append(entity, strict))
         if static:
-            features = replace(features, static=features.static.append(static))
+            features = replace(features, static=features.static.append(static, strict))
         return replace(self, structural=structural, features=features)
