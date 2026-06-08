@@ -1322,7 +1322,10 @@ class SequencePool(
         return self.subset(train_ids), self.subset(test_ids)
 
     def cast_features(
-        self, schema: dict[str, pl.DataType | type], is_static: bool = False
+        self,
+        schema: dict[str, pl.DataType | type],
+        is_static: bool = False,
+        strict: bool = True,
     ) -> None:
         """
         Casts feature columns to new types, scoped to **this Pool only**.
@@ -1336,6 +1339,9 @@ class SequencePool(
         Args:
             schema: Dictionary mapping feature names to target Polars DataTypes.
             is_static: Whether these are static features (True) or entity features (False).
+            strict: When ``True`` (default), non-convertible values raise a
+                ``TypeError`` during probing.  When ``False``, non-convertible
+                values silently become ``null``.
 
         Raises:
             TypeError: If *schema* is not a dict.
@@ -1354,7 +1360,8 @@ class SequencePool(
 
         # Build new recipes (existing + new step) and probe the full chain.
         new_recipe = self._casts.append(
-            **({"static": valid_schema} if is_static else {"entity": valid_schema})
+            **({"static": valid_schema} if is_static else {"entity": valid_schema}),
+            strict=strict,
         )
         new_recipe.features.probe(self, is_static=is_static)
         self._casts = new_recipe
