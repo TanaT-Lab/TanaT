@@ -55,6 +55,26 @@ class TestEntityCriterionWhich:
         assert ids_any_error & ids_no_error == set()
         assert ids_any_error | ids_no_error == _temporal_ids(pool)
 
+    def test_which_after_casted_feature(self, pools_dict: dict, pool_type: str) -> None:
+        """which() works when a string-backed numeric feature is cast before querying."""
+        pool = pools_dict[pool_type].copy()
+        rows = pool.temporal_data(fmt="polars").height
+        status_num = ["1" if i % 2 == 0 else "2" for i in range(rows)]
+        pool.add_entity_features(pl.DataFrame({"status_num": status_num}))
+        pool.cast_features({"status_num": pl.Int64})
+
+        result = pool.which(EntityCriterion(query=pl.col("status_num") == 1))
+
+        id_col = pool.settings.id_column
+        ids_with_1 = (
+            pool.temporal_data(fmt="polars")
+            .filter(pl.col("status_num") == 1)
+            .select(id_col)
+            .unique()[id_col]
+            .to_list()
+        )
+        assert result == set(ids_with_1)
+
 
 # ---------------------------------------------------------------------------
 # match(): single-sequence evaluation
@@ -80,6 +100,20 @@ class TestEntityCriterionMatch:
         assert seq_with_error.match(criterion) is True  # has other statuses too
         assert seq_without_error.match(criterion) is True
 
+    def test_match_after_casted_feature(self, pools_dict: dict) -> None:
+        """match() works when a string-backed numeric feature is cast before evaluation."""
+        pool = pools_dict["interval"].copy()
+        rows = pool.temporal_data(fmt="polars").height
+        status_num = ["1" if i % 2 == 0 else "2" for i in range(rows)]
+        pool.add_entity_features(pl.DataFrame({"status_num": status_num}))
+        pool.cast_features({"status_num": pl.Int64})
+
+        seq = pool[pool.unique_ids[0]]
+        expected = seq.temporal_data(fmt="polars")["status_num"].to_list().count(1) > 0
+        result = seq.match(EntityCriterion(query=pl.col("status_num") == 1))
+
+        assert result is expected
+
 
 # ---------------------------------------------------------------------------
 # filter_entities(): entity-level row pruning
@@ -99,6 +133,24 @@ class TestEntityCriterionFilterEntities:
             EntityCriterion(query=pl.col("status") == "error")
         )
         assert snapshot == filtered.temporal_data(fmt="polars")
+
+    def test_filter_after_casted_text_feature(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """filter_entities() works when a string-backed numeric feature is cast before filtering."""
+        pool = pools_dict[pool_type].copy()
+        rows = pool.temporal_data(fmt="polars").height
+        status_num = ["1" if i % 2 == 0 else "2" for i in range(rows)]
+        pool.add_entity_features(pl.DataFrame({"status_num": status_num}))
+        pool.cast_features({"status_num": pl.Int64})
+
+        filtered = pool.filter_entities(
+            EntityCriterion(query=pl.col("status_num") == 1)
+        )
+        values = filtered.temporal_data(fmt="polars")["status_num"].to_list()
+
+        assert values
+        assert all(value == 1 for value in values)
 
     def test_filter_does_not_mutate_original(
         self, pools_dict: dict, pool_type: str
@@ -147,3 +199,56 @@ class TestEntityCriterionStateGuard:
         """StateSequence.filter_entities() must raise TypeError."""
         with pytest.raises(TypeError, match="filter_entities"):
             state_seq.filter_entities(EntityCriterion(query=pl.lit(True)))
+
+
+# ---------------------------------------------------------------------------
+# _store_index_df path: entity filter + feature cast
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("pool_type", ["interval", "event"])
+class TestEntityCriterionStoreIndexPath:
+    """len(seq) and rank-based access go through _store_index_df, a separate
+    pipeline from temporal(). This class ensures that pipeline also applies
+    feature casts before evaluating the entity filter expression.
+    """
+
+    def test_len_sequence_from_filtered_pool_with_casted_feature(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """len(seq) does not crash when the entity filter depends on a cast feature."""
+        pool = pools_dict[pool_type].copy()
+        rows = pool.temporal_data(fmt="polars").height
+        status_num = ["1" if i % 2 == 0 else "2" for i in range(rows)]
+        pool.add_entity_features(pl.DataFrame({"status_num": status_num}))
+        pool.cast_features({"status_num": pl.Int64})
+
+        filtered = pool.filter_entities(
+            EntityCriterion(query=pl.col("status_num") == 1)
+        )
+        seq_id = filtered.unique_ids[0]
+        seq = filtered[seq_id]
+
+        # len(seq) triggers _store_index_df on filtered (has_entity_filter_expr=True)
+        n = len(seq)
+        assert n > 0
+
+    def test_all_rows_in_filtered_sequence_match_cast_value(
+        self, pools_dict: dict, pool_type: str
+    ) -> None:
+        """Rank resolution is correct: every returned row satisfies the cast-based filter."""
+        pool = pools_dict[pool_type].copy()
+        rows = pool.temporal_data(fmt="polars").height
+        status_num = ["1" if i % 2 == 0 else "2" for i in range(rows)]
+        pool.add_entity_features(pl.DataFrame({"status_num": status_num}))
+        pool.cast_features({"status_num": pl.Int64})
+
+        filtered = pool.filter_entities(
+            EntityCriterion(query=pl.col("status_num") == 1)
+        )
+        seq_id = filtered.unique_ids[0]
+        seq = filtered[seq_id]
+
+        values = seq.temporal_data(fmt="polars")["status_num"].to_list()
+        assert values
+        assert all(v == 1 for v in values)
