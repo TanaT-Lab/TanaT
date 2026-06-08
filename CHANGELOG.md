@@ -2,6 +2,15 @@
 
 This page contains the complete changelog for TanaT, documenting all notable changes, new features, bug fixes, and improvements across versions.
 
+## [v0.10.2] - June 2026
+**Polars casting and filtering fixes**
+
+### Added
+- Added a `strict` parameter (defaulting to `True`) to `cast_features()`, allowing lenient casting (`strict=False`) where non-convertible values are nullified instead of crashing the Polars engine.
+
+### Fixed
+- Fixed an evaluation order bug where entity filtering (`filter_entities`) was applied before feature casts, causing a Polars `ComputeError` when a scope expression depended on a newly cast type.
+
 ## [v0.10.1] - June 2026
 **Package structure cleanup**
 
