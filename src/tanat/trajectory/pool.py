@@ -1307,6 +1307,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
     def cast_static_features(
         self,
         schema: dict[str, pl.DataType | type],
+        strict: bool = True,
     ) -> None:
         """
         Casts trajectory-level static-feature columns to new types.
@@ -1318,6 +1319,9 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         Args:
             schema: Dictionary mapping feature names to target Polars
                 DataTypes (e.g. ``{"group": pl.Categorical}``).
+            strict: When ``True`` (default), non-convertible values raise a
+                ``TypeError`` during probing.  When ``False``, non-convertible
+                values silently become ``null``.
 
         Raises:
             TypeError: If *schema* is not a dict.
@@ -1332,7 +1336,7 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
         valid_schema = {col: schema[col] for col in valid_names}
 
         # Build new recipes and probe the full chain.
-        new_recipe = self._casts.append(static=valid_schema)
+        new_recipe = self._casts.append(static=valid_schema, strict=strict)
         new_recipe.features.probe(self)
         self._casts = new_recipe
         self.clear_cache()
