@@ -4,13 +4,27 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import Callable, ClassVar
+from typing import Callable, ClassVar, NamedTuple
 
 import polars as pl
 
 # ---------------------------------------------------------------------------
 # Primitives
 # ---------------------------------------------------------------------------
+
+
+class CastStep(NamedTuple):
+    """A single dtype-cast step with its strict flag.
+
+    Args:
+        dtype: Target Polars data type.
+        strict: When ``True`` (default), non-convertible values raise a
+            ``ComputeError``.  When ``False``, non-convertible values
+            silently become ``null``.
+    """
+
+    dtype: pl.DataType
+    strict: bool = True
 
 
 def apply_cast_exprs(
@@ -37,32 +51,34 @@ def build_caster(recipe: list[pl.DataType]) -> Callable[[pl.Expr], pl.Expr]:
 
 def probe_cast_recipe(
     lf: pl.LazyFrame,
-    recipes: dict[str, list[pl.DataType]],
+    recipes: dict[str, list[CastStep]],
     n_rows: int = 10,
 ) -> None:
     """Validate multi-step cast recipes on a small sample of *lf*.
 
     Each column is cast through its recipe in order (``T0 → T1 → … → Tn``).
-    Absent columns are silently skipped.
+    Absent columns are silently skipped.  Steps with ``strict=False`` do not
+    raise on incompatible values; they only verify structural type acceptance.
 
     Raises:
-        TypeError: If any step fails, with column name and full chain in the message.
+        TypeError: If any strict step fails, with column name and full chain
+            in the message.
     """
     existing = set(lf.collect_schema().names())
-    to_check = {c: dtypes for c, dtypes in recipes.items() if c in existing and dtypes}
+    to_check = {c: steps for c, steps in recipes.items() if c in existing and steps}
     if not to_check:
         return
     non_null_filter = pl.any_horizontal(pl.col(c).is_not_null() for c in to_check)
     sample = lf.filter(non_null_filter).limit(n_rows)
     exprs = []
-    for col, dtypes in to_check.items():
+    for col, steps in to_check.items():
         expr = pl.col(col)
-        for dtype in dtypes:
-            expr = expr.cast(dtype)
+        for step in steps:
+            expr = expr.cast(step.dtype, strict=step.strict)
         exprs.append(expr)
     cols_desc = ", ".join(
-        f"'{c}' → {' → '.join(str(d) for d in dtypes)}"
-        for c, dtypes in to_check.items()
+        f"'{c}' → {' → '.join(str(s.dtype) for s in steps)}"
+        for c, steps in to_check.items()
     )
     try:
         sample.with_columns(exprs).collect()
@@ -106,17 +122,27 @@ class ScalarCast:
 class ColumnMapCast:
     """Ordered cast recipes for a named set of columns."""
 
-    recipes: dict[str, list[pl.DataType]] = field(default_factory=dict)
+    recipes: dict[str, list[CastStep]] = field(default_factory=dict)
 
     def is_empty(self) -> bool:
         """Return ``True`` when no column has a registered cast recipe."""
         return not self.recipes
 
-    def append(self, schema: dict[str, pl.DataType]) -> ColumnMapCast:
-        """Return a new map with each ``col → dtype`` of *schema* appended."""
+    def append(
+        self, schema: dict[str, pl.DataType], strict: bool = True
+    ) -> ColumnMapCast:
+        """Return a new map with each ``col → dtype`` of *schema* appended.
+
+        Args:
+            schema: Mapping of column names to target dtypes.
+            strict: When ``True`` (default), non-convertible values raise.
+                When ``False``, they become ``null``.  The flag is stored
+                per step so successive calls on the same column are
+                independent.
+        """
         recipes = {col: list(recipe) for col, recipe in self.recipes.items()}
         for col, dtype in schema.items():
-            recipes[col] = [*recipes.get(col, []), dtype]
+            recipes[col] = [*recipes.get(col, []), CastStep(dtype, strict)]
         return replace(self, recipes=recipes)
 
     def copy(self) -> ColumnMapCast:
@@ -127,16 +153,26 @@ class ColumnMapCast:
 
     def caster(self, col: str) -> Callable[[pl.Expr], pl.Expr] | None:
         """Return the compiled caster for *col*, or ``None`` when unset."""
-        recipe = self.recipes.get(col)
-        if not recipe:
+        steps = self.recipes.get(col)
+        if not steps:
             return None
-        return build_caster(recipe)
+
+        def _cast(expr: pl.Expr) -> pl.Expr:
+            for step in steps:
+                expr = expr.cast(step.dtype, strict=step.strict)
+            return expr
+
+        return _cast
 
     def exprs(self) -> list[pl.Expr]:
         """Return one ``with_columns`` expression per registered column."""
-        return [
-            build_caster(recipe)(pl.col(col)) for col, recipe in self.recipes.items()
-        ]
+        result = []
+        for col, steps in self.recipes.items():
+            expr = pl.col(col)
+            for step in steps:
+                expr = expr.cast(step.dtype, strict=step.strict)
+            result.append(expr)
+        return result
 
     def apply(self, lf: pl.LazyFrame) -> pl.LazyFrame:
         """Apply all registered column casts to *lf* (no-op when empty)."""
@@ -246,7 +282,10 @@ class StructuralCasts:
         if self.id.is_empty():
             return
         id_col = store.main_id_col
-        probe_cast_recipe(store.main_index.select(id_col), {id_col: self.id.recipe})
+        probe_cast_recipe(
+            store.main_index.select(id_col),
+            {id_col: [CastStep(d) for d in self.id.recipe]},
+        )
 
     def _probe_time_index(self, store) -> None:
         """Validate the time-index cast recipe on sequence time-index data."""
@@ -255,7 +294,10 @@ class StructuralCasts:
         time_store = self._resolve_time_index_store(store)
         lf = time_store.time_index()
         columns = lf.collect_schema().names()
-        probe_cast_recipe(lf, {col: self.time_index.recipe for col in columns})
+        probe_cast_recipe(
+            lf,
+            {col: [CastStep(d) for d in self.time_index.recipe] for col in columns},
+        )
 
     @staticmethod
     def _resolve_time_index_store(store):
