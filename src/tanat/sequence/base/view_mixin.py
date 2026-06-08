@@ -48,8 +48,8 @@ class SequenceFrameAssembler:
             id_col=view.settings.id_column,
             time_cols=view.settings.get_time_columns(),
         )
-        lf = view._apply_scopes(lf, is_static=False)
         lf = view._casts.features.apply(lf, is_static=False)
+        lf = view._apply_scopes(lf, is_static=False)
         return lf.select(self._projection(valid_features, with_store_index))
 
     def temporal_for_store(
@@ -67,8 +67,8 @@ class SequenceFrameAssembler:
             id_col=view.settings.id_column,
             time_cols=view.settings.get_time_columns(),
         )
-        lf = view._apply_scopes(lf, is_static=False)
         lf = view._casts.features.apply(lf, is_static=False)
+        lf = view._apply_scopes(lf, is_static=False)
         lf = self._to_store(lf, is_static=False)
         structural_cols = view._store.structural_columns(
             is_static=False, virtual_id=view._virtual_id
@@ -112,8 +112,8 @@ class SequenceFrameAssembler:
             return None
         lf = self._rename(lf, is_static=True)
         lf = view._casts.structural.apply(lf, id_col=view.settings.id_column)
-        lf = view._apply_scopes(lf, is_static=True)
         lf = view._casts.features.apply(lf, is_static=True)
+        lf = view._apply_scopes(lf, is_static=True)
         id_col = view.settings.id_column
         return lf.select([id_col] + valid_features)
 
@@ -132,8 +132,8 @@ class SequenceFrameAssembler:
             return None
         lf = self._rename(lf, is_static=True)
         lf = view._casts.structural.apply(lf, id_col=view.settings.id_column)
-        lf = view._apply_scopes(lf, is_static=True)
         lf = view._casts.features.apply(lf, is_static=True)
+        lf = view._apply_scopes(lf, is_static=True)
         lf = self._to_store(lf, is_static=True)
         structural_cols = view._store.structural_columns(
             is_static=True, virtual_id=view._virtual_id
@@ -495,6 +495,7 @@ class SequenceViewMixin:
             lf = self._casts.structural.apply(
                 lf, id_col=id_col, time_cols=self.settings.get_time_columns()
             )
+            lf = self._casts.features.apply(lf, is_static=False)
             lf = self._apply_scopes(lf)
             return lf.select([id_col, SCH.STORE_INDEX]).collect()
 
