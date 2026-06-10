@@ -63,6 +63,49 @@ class TestCastFeaturesLenient:
             40,
         ]
 
+    def test_strict_enum_on_filtered_pool_downgrades_to_lenient(
+        self, cast_pools_dict: dict, pool_type: str
+    ) -> None:
+        """A strict Enum cast on a filtered pool is auto-downgraded to lenient."""
+        if pool_type == "state":
+            pytest.skip("State pools have no entity features to filter or cast.")
+        pool = cast_pools_dict[pool_type].copy()
+        filtered = pool.filter_entities(
+            EntityCriterion(query=pl.col("age_str").is_in(["10", "20"]))
+        )
+        enum_values = ["10", "20"]
+        with pytest.warns(
+            UserWarning,
+            match="Scoped view forced strict=False",
+        ):
+            filtered.cast_features({"age_str": pl.Enum(enum_values)})
+
+        assert filtered.temporal_data(fmt="polars")["age_str"].to_list() == enum_values
+
+    def test_strict_enum_on_masked_static_features_downgrades_to_lenient(
+        self, cast_pools_dict: dict, pool_type: str
+    ) -> None:
+        """A strict Enum cast on static features of a masked sequence pool is lenient."""
+        pool = cast_pools_dict[pool_type].copy()
+        pool.add_static_features(
+            pl.DataFrame(
+                {
+                    "id": [1, 2, 3],
+                    "score_str": ["1.5", "bad", "3.5"],
+                }
+            )
+        )
+        masked = pool.subset([1, 3])
+        enum_values = ["1.5", "3.5"]
+
+        with pytest.warns(
+            UserWarning,
+            match="Scoped view forced strict=False",
+        ):
+            masked.cast_features({"score_str": pl.Enum(enum_values)}, is_static=True)
+
+        assert masked.static_data(fmt="polars")["score_str"].to_list() == enum_values
+
     def test_which_identifies_null_producing_ids(
         self, cast_pools_dict: dict, pool_type: str
     ) -> None:
