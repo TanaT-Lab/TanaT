@@ -55,16 +55,33 @@ class SequenceFeatureCasts:
         (self.static if is_static else self.entity).probe_lf(lf)
 
     def probe(self, view, *, is_static: bool) -> None:
-        """Probe this candidate recipe on top of the current sequence view."""
+        """Probe this candidate recipe on pre-scope raw data.
+
+        Feature casts run **before** entity scopes in the view pipeline.
+        The probe must therefore use the same pre-scope data the cast will
+        see at runtime.
+        """
         bucket = self.static if is_static else self.entity
         if bucket.is_empty():
             return
+        # pylint: disable=protected-access
+        frames = view._frames
         if is_static:
-            lf = view._frames.static()  # pylint: disable=protected-access
+            lf = frames._fetch(is_static=True)
+            if lf is None:
+                return
+            lf = frames._rename(lf, is_static=True)
+            lf = view._casts.structural.apply(lf, id_col=view.settings.id_column)
+            lf = view._casts.features.apply(lf, is_static=True)
         else:
-            lf = view._frames.temporal()  # pylint: disable=protected-access
-        if lf is None:
-            return
+            lf = frames._fetch(is_static=False)
+            lf = frames._rename(lf, is_static=False)
+            lf = view._casts.structural.apply(
+                lf,
+                id_col=view.settings.id_column,
+                time_cols=view.settings.get_time_columns(),
+            )
+            lf = view._casts.features.apply(lf, is_static=False)
         bucket.probe_lf(lf)
 
 
