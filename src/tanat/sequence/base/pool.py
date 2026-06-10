@@ -1358,6 +1358,23 @@ class SequencePool(
         )
         valid_schema = {col: schema[col] for col in valid_names}
 
+        # Guard: a strict pl.Enum cast would crash on the full store even when an
+        # entity filter is active, because feature casts run before the scope.
+        # Auto-downgrade to strict=False and warn so the user understands why.
+        if strict and not is_static and self.has_entity_filter_expr:
+            enum_cols = [
+                col for col, dtype in valid_schema.items() if isinstance(dtype, pl.Enum)
+            ]
+            if enum_cols:
+                warnings.warn(
+                    f"Active entity filter forced strict=False for pl.Enum cast on {enum_cols} "
+                    f"(out-of-vocabulary values → null). "
+                    f"Pass strict=False explicitly to silence, or save() before casting.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                strict = False
+
         # Build new recipes (existing + new step) and probe the full chain.
         new_recipe = self._casts.append(
             **({"static": valid_schema} if is_static else {"entity": valid_schema}),
