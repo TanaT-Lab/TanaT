@@ -26,7 +26,7 @@ This page contains the complete changelog for TanaT, documenting all notable cha
 
 ### Migration
 - **Repository moved to GitHub**: TanaT is now hosted at [Github](https://github.com/tanat/tanat).
-  The [Inria GitLab repository](gitlab.inria.fr/tanat/core/tanat) remains archived for historical versions up to v0.9.0.
+  The [Inria GitLab repository](https://gitlab.inrclaudeia.fr/tanat/core/tanat) remains archived for historical versions up to v0.9.0.
 
 ### Added
 - **Polars-based data engine**: all internal data frames are now `polars.LazyFrame`, enabling lazy evaluation, predicate pushdown, and significant memory savings on large datasets
