@@ -37,11 +37,10 @@ class TimeIndexInfo:
         Factory: builds a ``TimeIndexInfo`` by inspecting **all**
         columns of the time index LazyFrame.
 
-        Validates that:
-        - Every column is a supported type (``pl.Datetime``, ``pl.Date``,
-          or a numeric type, integer or float for discrete timesteps).
-        - All columns share the **same** base type (no mix of
-          ``Datetime`` start with ``Date`` end, for example).
+        Validates that every column is a supported type
+        (``pl.Datetime``, ``pl.Date``, or a numeric type, integer or float for
+        discrete timesteps) and that all columns share the **same** base type
+        (no mix of ``Datetime`` start with ``Date`` end, for example).
 
         Also computes the **global min/max** across all time index columns.
 
