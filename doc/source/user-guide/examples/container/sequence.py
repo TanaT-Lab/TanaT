@@ -306,9 +306,9 @@ print("temporal span :", state_entity.temporal_extent)  # (start, end)
 print("feature value :", state_entity["value"])
 
 # %% [markdown]
-# -------------------------
+# --------------------------
 # 4. Side-by-side comparison
-# -------------------------
+# --------------------------
 #
 # To summarise the differences, we build all three pools from the
 # *same* underlying dataset (states data, which contains both ``start``

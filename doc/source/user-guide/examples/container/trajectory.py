@@ -117,7 +117,7 @@ print(f"First IDs    : {tpool.unique_ids[:5]}")
 
 # %% [markdown]
 # Access one of the sequence pool
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # The underlying sequence pools are accessible as a read-only mapping `tpool.sequence_pools`.
 
 # %%
@@ -126,7 +126,7 @@ print(tpool.sequence_pools["states"])
 
 # %% [markdown]
 # Access a trajectory of the trajectory pool
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
 # ``tpool[id]`` returns a :class:`~tanat.trajectory.Trajectory`, a
 # lightweight view over all sub-sequences for that individual.
@@ -137,7 +137,7 @@ print(traj)
 
 # %% [markdown]
 # Sequences of a trajectory
-# ~~~~~~~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~~~~~~~~~~~~
 #
 # Use the alias as the key to retrieve the sequence of an individual trajectory.
 

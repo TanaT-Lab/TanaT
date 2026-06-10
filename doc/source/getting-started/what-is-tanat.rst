@@ -10,7 +10,7 @@ This application guides the choices of the first features to be implemented.
 Nonetheless, our core data model fits the needs of multiple different contexts.
 
 What Makes *TanaT* Different?
-----------------------------
+-----------------------------
 
 Unlike traditional time series libraries (more especially `aeon <https://www.aeon-toolkit.org>`_ or `sktime <https://www.sktime.net>`_ ), *TanaT* is 
 designed for **irregularly sampled, symbolic event-based temporal data**.
@@ -29,7 +29,7 @@ time. This makes our representation lighter for most cases. The second core diff
 
 
 Core Framework Functionalities
--------------------------------
+------------------------------
 
 The *TanaT* framework provides a complete workflow for temporal sequence analysis, from data ingestion to advanced analytics and visualization.
 

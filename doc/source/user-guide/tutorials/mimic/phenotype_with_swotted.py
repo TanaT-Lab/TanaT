@@ -1,6 +1,6 @@
 """
 Learning clinical temporal patterns with SWoTTeD
-==========================================
+================================================
 
 **Scenario:** You want to discover latent *clinical temporal patterns*, i.e. recurrent
 temporal patterns of medical procedures, directly from raw MIMIC-IV data,
@@ -280,9 +280,9 @@ for r in range(R):
 
 # %% [markdown]
 # Step 7: Assign temporal patterns back to patient IDs
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
-# ``pathways`` tensor contains information about ``how much similar'' is a
+# ``pathways`` tensor contains information about ``how much similar`` is a
 # patient to each pattern, at a given time.
 # By assigning a patient to the most similar pattern, we cluster the set of patients
 # into set of patients sharing temporal patterns.
