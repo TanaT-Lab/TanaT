@@ -8,6 +8,7 @@ from .base import (
     StructuralCasts,
     probe_cast_recipe,
     apply_cast_exprs,
+    maybe_downgrade_enum_strict,
 )
 from .sequence import SequenceFeatureCasts, SequenceCastRecipe
 from .trajectory import TrajectoryFeatureCasts, TrajectoryCastRecipe
