@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass, field, replace
 from typing import Callable, ClassVar, NamedTuple
 
@@ -11,6 +12,42 @@ import polars as pl
 # ---------------------------------------------------------------------------
 # Primitives
 # ---------------------------------------------------------------------------
+
+
+def maybe_downgrade_enum_strict(
+    schema: dict[str, pl.DataType],
+    strict: bool,
+    has_scope: bool,
+    stacklevel: int = 3,
+) -> bool:
+    """Return ``strict`` downgraded to ``False`` for ``pl.Enum`` cols on a scoped view.
+
+    When *has_scope* is ``True`` (entity filter or ID mask active), a strict
+    ``pl.Enum`` cast would crash on out-of-vocabulary values still present in
+    the full store.  This helper auto-downgrades and emits a ``UserWarning``.
+
+    Args:
+        schema: Cast schema passed to ``cast_features``.
+        strict: Current strict flag.
+        has_scope: Whether the view has an active filter or ID mask.
+        stacklevel: Warning stack level (default 3 reaches the user call site).
+
+    Returns:
+        Possibly downgraded strict flag.
+    """
+    if not (strict and has_scope):
+        return strict
+    enum_cols = [col for col, dtype in schema.items() if isinstance(dtype, pl.Enum)]
+    if enum_cols:
+        warnings.warn(
+            f"Scoped view forced strict=False for pl.Enum cast on {enum_cols} "
+            f"(out-of-vocabulary values → null). "
+            f"Pass strict=False explicitly to silence, or save() before casting.",
+            UserWarning,
+            stacklevel=stacklevel,
+        )
+        return False
+    return strict
 
 
 class CastStep(NamedTuple):
