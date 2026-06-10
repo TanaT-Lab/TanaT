@@ -118,10 +118,8 @@ pool.filter_entities(
     EntityCriterion(query=pl.col("icd_code").is_in(top_codes)),
     inplace=True,
 )
-
-# pl.Enum fixes the vocabulary to exactly TOP_K codes: OHE will produce one
-# column per code, named after the code itself (e.g. "icd_code_02HV33Z").
-pool.cast_features({"icd_code": pl.Enum(top_codes)})
+# After filtering, we cast ``icd_code`` to a categorical type
+pool.cast_features({"icd_code": pl.Categorical})
 
 print(pool)
 
