@@ -231,8 +231,8 @@ class Entity(Registrable, ABC):
         Access the feature values for this entity as a dictionary.
 
         Only feature columns are returned; the sequence identifier and
-        time columns are excluded (use :pyattr:`id_value` and
-        :pyattr:`temporal_extent` instead).
+        time columns are excluded (use :attr:`id_value` and
+        :attr:`temporal_extent` instead).
 
         Args:
             features: Feature name(s) to include (``None`` → all visible

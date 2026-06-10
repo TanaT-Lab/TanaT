@@ -228,7 +228,7 @@ class Sequence(
 
         Yields one :class:`~tanat.sequence.base.entity.Entity` per row,
         from rank 0 to ``len(self) - 1``.  Each entity's
-        :pyattr:`~Entity.rank` matches its iteration index.
+        :attr:`~Entity.rank` matches its iteration index.
 
         Example::
 
