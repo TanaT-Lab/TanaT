@@ -34,7 +34,7 @@ from ...core.validation import ensure_criterion
 from ...core import registry as _registry
 from ...store.base.utils import normalise_to_lazyframe, check_no_reserved_names
 from ...store.sequence.builder.base import SequenceStoreBuilder
-from ...cast import SequenceCastRecipe
+from ...cast import SequenceCastRecipe, maybe_downgrade_enum_strict
 from .sequence import Sequence
 from ._utils import resolve_ids_to_add
 from .view_mixin import SequenceViewMixin
@@ -1358,22 +1358,10 @@ class SequencePool(
         )
         valid_schema = {col: schema[col] for col in valid_names}
 
-        # Guard: a strict pl.Enum cast would crash on the full store even when an
-        # entity filter is active, because feature casts run before the scope.
-        # Auto-downgrade to strict=False and warn so the user understands why.
-        if strict and not is_static and self.has_entity_filter_expr:
-            enum_cols = [
-                col for col, dtype in valid_schema.items() if isinstance(dtype, pl.Enum)
-            ]
-            if enum_cols:
-                warnings.warn(
-                    f"Active entity filter forced strict=False for pl.Enum cast on {enum_cols} "
-                    f"(out-of-vocabulary values → null). "
-                    f"Pass strict=False explicitly to silence, or save() before casting.",
-                    UserWarning,
-                    stacklevel=2,
-                )
-                strict = False
+        _has_scope = (not is_static and self.has_entity_filter_expr) or (
+            is_static and self._id_mask is not None
+        )
+        strict = maybe_downgrade_enum_strict(valid_schema, strict, _has_scope)
 
         # Build new recipes (existing + new step) and probe the full chain.
         new_recipe = self._casts.append(

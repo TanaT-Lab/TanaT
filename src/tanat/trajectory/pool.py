@@ -36,7 +36,7 @@ from ..sequence.base._utils import merge_optional_frames, resolve_ids_to_add
 from ..core import registry as _registry
 from ..store.base.utils import normalise_to_lazyframe
 from ..zeroing import T0Setter, T0Value, _T0, _T0_NEAREST_RANK
-from ..cast import TrajectoryCastRecipe
+from ..cast import TrajectoryCastRecipe, maybe_downgrade_enum_strict
 from .settings import TrajectorySettings
 from .trajectory import Trajectory
 from .view_mixin import TrajectoryViewMixin
@@ -1334,6 +1334,10 @@ class TrajectoryPool(TrajectoryViewMixin, CachableSettings):
 
         valid_names = self.settings.validate_features(list(schema.keys()))
         valid_schema = {col: schema[col] for col in valid_names}
+
+        strict = maybe_downgrade_enum_strict(
+            valid_schema, strict, has_scope=self._id_mask is not None
+        )
 
         # Build new recipes and probe the full chain.
         new_recipe = self._casts.append(static=valid_schema, strict=strict)
