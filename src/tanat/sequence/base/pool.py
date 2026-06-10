@@ -1105,9 +1105,9 @@ class SequencePool(
             use_arrow: Use Arrow extension arrays for polars -> pandas conversion.
 
         Returns:
-            - ``by_id=True``: DataFrame with one row per sequence ID.
-            - ``by_id=False``: Aggregated statistics (pandas ``describe()``
-              output).
+            DataFrame with one row per sequence ID when ``by_id=True``.
+            Aggregated statistics (pandas ``describe()`` output) when
+            ``by_id=False``.
 
         Examples::
 
