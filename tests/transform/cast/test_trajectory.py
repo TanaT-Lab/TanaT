@@ -49,3 +49,18 @@ class TestCastStaticFeaturesStrictDefault:
             traj.cast_static_features(
                 {"score_str": pl.Float32}
             )  # "bad" → Float32 raises
+
+    def test_strict_enum_on_masked_traj_downgrades_to_lenient(
+        self, strict_traj: TrajectoryPool
+    ) -> None:
+        """A strict Enum cast on a masked trajectory auto-downgrades to strict=False."""
+        traj = strict_traj.subset([1, 3])
+        enum_values = ["1.5", "3.5"]
+        with pytest.warns(
+            UserWarning,
+            match="Scoped view forced strict=False",
+        ):
+            traj.cast_static_features({"score_str": pl.Enum(enum_values)})
+
+        result = traj.static_data(fmt="polars")["score_str"].to_list()
+        assert result == enum_values
