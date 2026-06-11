@@ -2,6 +2,15 @@
 
 This page contains the complete changelog for TanaT, documenting all notable changes, new features, bug fixes, and improvements across versions.
 
+## [v0.10.3] - June 2026
+**Stay up to date**
+
+### Added
+- Version check on import: warns if a newer release is available on PyPI
+
+### Dependences
+- Requires `tanat-utils >= 0.1.0`
+
 ## [v0.10.2] - June 2026
 **Polars casting and filtering fixes**
 
