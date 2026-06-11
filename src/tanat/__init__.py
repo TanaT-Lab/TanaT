@@ -6,6 +6,8 @@ TanaT - Temporal Analysis of Trajectories
 import logging
 from pathlib import Path
 
+from tanat_utils import check_latest_version
+
 from .core import registry as _registry
 from .core import context
 from .store.factory import StoreFactory
@@ -47,3 +49,8 @@ def _sequence_pool_builder(path: Path) -> SequencePool:
 
 _registry.register_factory("sequence", _sequence_pool_builder)
 _registry.register_factory("trajectory", lambda path: TrajectoryPool(store=path))
+
+
+# Check for updates
+# Emit a warning if a new version is available on PyPI
+check_latest_version("tanat")
