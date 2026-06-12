@@ -60,7 +60,7 @@ from torch.utils.data import DataLoader
 
 from swotted import fastSWoTTeDDataset, fastSWoTTeDModule, fastSWoTTeDTrainer
 
-from tanat.criterion import EntityCriterion
+from tanat.criterion import EntityCriterion, LengthCriterion
 from tanat.dataset import access
 from tanat.sequence.type.event.pool import EventSequencePool
 
@@ -105,12 +105,18 @@ print(f"Retaining {TOP_K} codes out of {pool.temporal_data()['icd_code'].nunique
 print("Top codes:", top_codes[:10], "...")
 
 # %% [markdown]
-# Step 2: Restrict the pool to the top codes and fix the vocabulary
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Step 2: Restrict the pool to the top codes and drop empty sequences
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
 # :meth:`~tanat.sequence.base.pool.SequencePool.filter_entities` with an
-# :class:`~tanat.criterion.EntityCriterion` prunes every event row whose
-# ``icd_code`` is not in ``top_codes``.
+# :class:`~tanat.criterion.EntityCriterion` keeps only the most frequent
+# procedure codes.
+#
+# Because some patients may have no remaining procedure events after this
+# filtering step, we also remove every empty sequence with
+# :class:`~tanat.criterion.LengthCriterion` before we build the tensor.
+# This keeps the downstream SWoTTeD input focused on patients with at least
+# one usable pathways.
 #
 
 # %%
@@ -118,17 +124,20 @@ pool.filter_entities(
     EntityCriterion(query=pl.col("icd_code").is_in(top_codes)),
     inplace=True,
 )
-# After filtering, we cast ``icd_code`` to a categorical type
-pool.cast_features({"icd_code": pl.Categorical})
 
-print(pool)
+n_before = len(pool)
+non_empty_seq = pool.which(LengthCriterion(gt=0))
+pool = pool.subset(non_empty_seq)
+print("Pool size:", len(pool))
 
 # %% [markdown]
 # Step 3: Encode as a dense 3-D tensor
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
-# :meth:`~tanat.sequence.base.pool.SequencePool.to_tensor` projects every
-# patient's procedure history onto a shared daily time axis and returns a
+# We now have a cohort of patients with at least one retained procedure event.
+# The next step is to project these histories onto a shared daily time axis.
+#
+# :meth:`~tanat.sequence.base.pool.SequencePool.to_tensor` returns a
 # **3-tuple** ``(arr, ids, feature_names)``:
 #
 # - ``arr``: shape ``(N, M, K)``, i.e. N patients x M daily bins x K OHE codes.
@@ -146,37 +155,38 @@ print(pool)
 #
 
 # %%
-BIN_SIZE = "1D"  # one bin per calendar day
-MAX_BINS = 90  # cap at 90 days (covers > 95 % of stays)
+BIN_SIZE = "365D"  # one bin = 365 days (1 years)
 
+# Cast ``icd_code`` to a categorical type
+pool.cast_features({"icd_code": pl.Categorical})
 arr, ids, feature_names = pool.to_tensor(
     features="icd_code",
     bin_size=BIN_SIZE,
-    max_bins=MAX_BINS,
     fill_value=0,
     ohe=True,
 )
 
-print(f"Tensor shape : {arr.shape}")  # (N, MAX_BINS, K)
+print(f"Tensor shape : {arr.shape}")  # (N, M, K)
 print(f"Patients     : {len(ids)}")
 print(f"Features     : {len(feature_names)}")
 print(f"Sparsity     : {(arr == 0).mean():.4%} empty bins")
+print(f"Non-zero cells : {(arr != 0).sum()}")
+print(f"Patients with events : {(arr.sum(axis=(1, 2)) != 0).sum()} / {arr.shape[0]}")
 
 # %% [markdown]
 # Step 4: Prepare the tensor for SWoTTeD
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
 # SWoTTeD's :class:`~swotted.fastSWoTTeDModule` expects a tensor of shape
-# ``(N, K, T)``
-# ``(N, K, T)`` : patients × features × time
-# The :meth:`to_tensor` returns ``(N, T, K)``.
+# ``(N, K, M)``
+# The :meth:`to_tensor` returns ``(N, M, K)``.
 # A single ``transpose`` aligns the axes.
 
 # %%
 
-# (N, T, K)  →  (N, K, T)
+# (N, M, K)  →  (N, K, M)
 X = torch.from_numpy(arr.transpose(0, 2, 1).astype(np.float32))
-print(f"SWoTTeD input shape : {X.shape}")  # (N, K, MAX_BINS)
+print(f"SWoTTeD input shape : {X.shape}")  # (N, K, M)
 
 # %% [markdown]
 # Step 5: Train SWoTTeD
