@@ -16,42 +16,35 @@ practical examples.
 Building & Ingesting Data
 --------------------------
 
-Master the builder API and load data from multiple heterogeneous sources:
+Master the builder API and load data from heterogeneous sources.
 
-* :doc:`Building pools from multiple sources <building_pools>`:
-  combine Parquet and CSV sources into a single pool, configure builder options,
-  compose trajectory pools, and manage the workspace
+* :doc:`Building pools from multiple sources <building_pools>`: combine Parquet, CSV, and SQL sources into a single pool, configure builder options, compose trajectory pools, and manage the workspace.
 
+MIMIC-IV: Clinical Cohort Analysis
+----------------------------------
 
-Real-World Applications
-------------------------
+Real patient cohort workflows from the MIMIC-IV demo dataset.
 
-End-to-end workflows on real datasets:
+* :doc:`Exploring a patient cohort <mimic/explore_a_cohort>`: load, inspect, visualise, train/test split.
+* :doc:`Filtering and preparing a cohort <mimic/filter_and_prepare>`: criteria, T0 anchor, relative window.
+* :doc:`Analysing and clustering a cohort <mimic/analyse_and_cluster>`: distance matrix, hierarchical clustering, faceted timeline.
+* :doc:`Survival analysis by admission cluster <mimic/survival_analysis>`: mortality endpoint, survival target, per-cluster Kaplan-Meier curves.
 
-.. rubric:: MIMIC-IV: Clinical Cohort Analysis
+Education: Learning Session Analysis
+------------------------------------
 
-:doc:`mimic/index` · A series of tutorials on the MIMIC-IV demo dataset:
+Sequence analysis workflows for MOOC session data.
 
-* :doc:`Exploring a patient cohort <mimic/explore_a_cohort>`: load, inspect, visualise, train/test split
-* :doc:`Filtering and preparing a cohort <mimic/filter_and_prepare>`: criteria, T0 anchor, relative window
-* :doc:`Analysing and clustering a cohort <mimic/analyse_and_cluster>`: distance matrix, hierarchical clustering, faceted timeline
-* :doc:`Survival analysis by admission cluster <mimic/survival_analysis>`: mortality endpoint, survival target, per-cluster Kaplan-Meier curves
-* :doc:`Learning clinical phenotypes with SWoTTeD <mimic/phenotype_with_swotted>`: OHE tensor, dictionary learning, phenotype interpretation
-
-
-.. rubric:: Education: Learning Session Analysis
-
-:doc:`mooc/index` · A series of tutorials on the MOOC demo dataset:
-
-* :doc:`Exploring learner activity sequences <mooc/explore_sessions>`: load, inspect, visualise, train/test split
-* :doc:`Clustering sessions by action patterns <mooc/cluster_sessions>`: criteria, T0 anchor, relative window
-
-----
+* :doc:`Exploring learner activity sequences <mooc/explore_sessions>`: load, inspect, visualise, train/test split.
+* :doc:`Clustering sessions by action patterns <mooc/cluster_sessions>`: session clustering with criteria and temporal patterns.
 
 Time Series to Sequences
 ------------------------
 
-* :doc:`Discretizing time series into sequences <aeon/discretize>`: apply Aeon segmentation/quantization methods to raw time series and ingest the result as a TanaT sequence pool
+Convert raw time series into TanaT sequence pools with Aeon.
+
+* :doc:`Discretizing time series into sequences <aeon/discretize>`: apply segmentation and quantization methods to ingest raw time series as TanaT sequences.
+
 
 ----
 
