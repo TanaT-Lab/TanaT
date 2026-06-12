@@ -132,6 +132,9 @@ class _ExampleOrder:
         "cluster_sessions.py": 1,
         #    - AEON
         "discretize.py": 0,
+        #    - Deep learning
+        "phenotype_with_swotted.py": 0,
+        "federated_learning.py": 1,
     }
 
     def __init__(self, src_dir):
