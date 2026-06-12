@@ -12,6 +12,8 @@ practical examples.
    mimic/index
    mooc/index
    aeon/index
+   learning/index
+
 
 Building & Ingesting Data
 --------------------------
@@ -45,6 +47,13 @@ Convert raw time series into TanaT sequence pools with Aeon.
 
 * :doc:`Discretizing time series into sequences <aeon/discretize>`: apply segmentation and quantization methods to ingest raw time series as TanaT sequences.
 
+Deep Learning with TanaT
+------------------------
+
+End-to-end deep learning workflows using TanaT with PyTorch, SWoTTeD, and Fed-BioMed.
+
+* :doc:`Learning clinical phenotypes with SWoTTeD <learning/phenotype_with_swotted>`: OHE tensor, dictionary learning, phenotype interpretation.
+* :doc:`Federated learning with TanaT <learning/federated_learning>`: use Fed-BioMed from data preparation with TanaT.
 
 ----
 
