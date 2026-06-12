@@ -27,43 +27,10 @@ In-Depth Tutorials
 
 :doc:`Browse all tutorials → <auto_tutorials/index>`
 
-**Comprehensive guides** that walk you through complete analysis workflows.
-Learn how different TanaT components work together to solve real-world problems.
+**Comprehensive guides** for full workflows and real-world use cases.
+Learn how TanaT components interact across data ingestion, cohort analysis, time series
+processing, and deep learning.
 
-----
-
-**Building & Ingesting Data**
-
-   | :doc:`Building pools from multiple sources <auto_tutorials/building_pools>`
-   | *Combine Parquet and CSV sources into a single pool, compose trajectory pools, and manage the workspace*
-
-----
-
-**MIMIC-IV: Clinical Cohort Analysis**
-
-   | :doc:`Exploring a patient cohort <auto_tutorials/mimic/explore_a_cohort>`
-   | :doc:`Filtering and preparing a cohort <auto_tutorials/mimic/filter_and_prepare>`
-   | :doc:`Analysing and clustering a cohort <auto_tutorials/mimic/analyse_and_cluster>`
-   | :doc:`Survival analysis by admission cluster <auto_tutorials/mimic/survival_analysis>`   
-   | :doc:`Learning clinical phenotypes with SWoTTeD <auto_tutorials/mimic/phenotype_with_swotted>`   
-   | *End-to-end pipeline on real EHR data: load → filter → T0 anchor → cluster → survival* 
-
-----
-
-**Education: Learning Session Analysis**
-
-   | :doc:`Exploring learner activity sequences <auto_tutorials/mooc/explore_sessions>`
-   | :doc:`Clustering sessions by action patterns <auto_tutorials/mooc/cluster_sessions>`
-   | *Session detection, Optimal Matching distance, hierarchical clustering on MOOC data*
-
-----
-
-**Time Series to Sequences**
-
-   | :doc:`Discretizing time series into sequences <auto_tutorials/aeon/discretize>`
-   | *Apply Aeon segmentation/quantization to raw time series and ingest the result as a TanaT sequence pool*
-
-----
 
 Getting Help
 ------------
