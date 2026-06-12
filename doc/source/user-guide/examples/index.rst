@@ -144,6 +144,11 @@ Distance metrics for individual entities.
             <p><strong>Hamming Distance</strong><br>
             Calculate distance between categorical states.</p>
         </a>
+
+        <a href="metric_entity/custom.html" class="tanat-gallery-card">
+            <p><strong>Custom Entity Metric</strong><br>
+            Define your own distance metric for entities.</p>
+        </a>
     </div>
 
 Sequence Metrics
@@ -188,6 +193,11 @@ Distance metrics for entire temporal sequences.
             <p><strong>Chi²</strong><br>
             Chi-squared distance between distributions.</p>
         </a>
+
+        <a href="metric_sequence/custom.html" class="tanat-gallery-card">
+            <p><strong>Custom Sequence Metric</strong><br>
+            Define your own distance metric for sequences.</p>
+        </a>
     </div>
 
 Trajectory Metrics
@@ -201,6 +211,11 @@ Distance metrics for multi-sequence trajectories.
         <a href="metric_trajectory/aggregation.html" class="tanat-gallery-card">
             <p><strong>Aggregation</strong><br>
             Compare trajectories with flexible per-type metrics.</p>
+        </a>
+
+        <a href="metric_trajectory/custom.html" class="tanat-gallery-card">
+            <p><strong>Custom Trajectory Metric</strong><br>
+            Define your own distance metric for trajectories.</p>
         </a>
     </div>
 
