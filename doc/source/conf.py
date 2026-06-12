@@ -130,6 +130,8 @@ class _ExampleOrder:
         #    - MOOC: learning session analysis
         "explore_sessions.py": 0,
         "cluster_sessions.py": 1,
+        #    - AEON
+        "discretize.py": 0,
     }
 
     def __init__(self, src_dir):
