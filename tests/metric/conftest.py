@@ -34,6 +34,55 @@ SEQUENCE_METRIC_REGISTER_NAMES = SequenceMetric.list_registered()
 #: All registered trajectory metric names.
 TRAJECTORY_METRIC_REGISTER_NAMES = TrajectoryMetric.list_registered()
 
+
+# ---------------------------------------------------------------------------
+# num_pool: all pool types × both temporal variants, 'status' cast to Categorical
+# Parametrized: 6 combinations (datetime/timestep × interval/event/state)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(
+    scope="session",
+    params=[
+        pytest.param(("dt", "interval"), id="datetime-interval"),
+        pytest.param(("dt", "event"), id="datetime-event"),
+        pytest.param(("dt", "state"), id="datetime-state"),
+        pytest.param(("ts", "interval"), id="timestep-interval"),
+        pytest.param(("ts", "event"), id="timestep-event"),
+        pytest.param(("ts", "state"), id="timestep-state"),
+    ],
+)
+def num_pool(
+    request,
+    interval_pool,
+    event_pool,
+    state_pool,
+    interval_pool_ts,
+    event_pool_ts,
+    state_pool_ts,
+):
+    """Any pool type / temporal variant with 'value' cast to pl.Float32.
+
+    Runs 6× per test (datetime × timestep) × (interval × event × state).
+    """
+    variant, pool_type = request.param
+    mapping = {
+        ("dt", "interval"): interval_pool,
+        ("dt", "event"): event_pool,
+        ("dt", "state"): state_pool,
+        ("ts", "interval"): interval_pool_ts,
+        ("ts", "event"): event_pool_ts,
+        ("ts", "state"): state_pool_ts,
+    }
+    pool = mapping[(variant, pool_type)].copy()
+    # Keep a small subset of non-empty sequences (IDs 1-10) so that the
+    # O(n²) Python pairwise path stays fast.  IDs 51-60 are static-only
+    # (length-0) and must be excluded for base metric tests.
+    pool = pool.subset(list(range(1, 11)))
+    pool.cast_features({"value": pl.Float32})
+    return pool
+
+
 # ---------------------------------------------------------------------------
 # cat_pool: all pool types × both temporal variants, 'status' cast to Categorical
 # Parametrized: 6 combinations (datetime/timestep × interval/event/state)
@@ -124,7 +173,7 @@ def _build_mixed_pool(pool_cls, name, *, entity_df, time_kwargs):
         .add_dataframe(
             entity_df,
             id_column="id",
-            features=["status"],
+            features=["status", "value"],
             **time_kwargs,
         )
         .add_dataframe(
@@ -137,7 +186,7 @@ def _build_mixed_pool(pool_cls, name, *, entity_df, time_kwargs):
     )
     pool = pool_cls(store=store)
     pool.cast_features({"status": pl.Categorical})
-    pool.update_settings(entity_features=["status"])
+    pool.update_settings(entity_features=["status", "value"])
     return pool
 
 
@@ -171,6 +220,7 @@ def mixed_cat_pool(request):
                     "id": ["seq_1", "seq_1", "seq_2", "seq_2", "seq_2"],
                     "time": [0, 1, 0, 1, 2],
                     "status": ["A", "B", "A", "C", "B"],
+                    "value": [1.2, 3.6, -1.3, -2, 2.1],
                 }
             ),
             time_kwargs={"time_column": "time"},
@@ -185,6 +235,7 @@ def mixed_cat_pool(request):
                     "start": [0, 2, 0, 1, 3],
                     "end": [2, 4, 1, 3, 5],
                     "status": ["A", "B", "A", "C", "B"],
+                    "value": [1.2, 3.6, -1.3, -2, 2.1],
                 }
             ),
             time_kwargs={"start_column": "start", "end_column": "end"},
@@ -198,6 +249,7 @@ def mixed_cat_pool(request):
                 "id": ["seq_1", "seq_1", "seq_2", "seq_2", "seq_2"],
                 "start": [0, 2, 0, 1, 3],
                 "status": ["A", "B", "A", "C", "B"],
+                "value": [1.2, 3.6, -1.3, -2, 2.1],
             }
         ),
         time_kwargs={"start_column": "start"},
@@ -228,12 +280,16 @@ def empty_cat_pool(mixed_cat_pool):
     params=[pytest.param(name, id=name) for name in ENTITY_METRIC_REGISTER_NAMES],
 )
 def entity_metric(request):
-    """One EntityMetric instance per registered type, configured on 'status'.
+    """One EntityMetric instance per registered type, configured on 'status' by
+    default. For L2, it uses the 'value' attribute.
 
     Parametrized over all registered entity metrics.
     Adding a new metric automatically includes it here.
     """
-    return EntityMetric.get_registered(request.param)(entity_feature="status")
+    if request.param == "l2entity":
+        return EntityMetric.get_registered(request.param)(entity_feature="value")
+    else:
+        return EntityMetric.get_registered(request.param)(entity_feature="status")
 
 
 @pytest.fixture(
@@ -311,29 +367,42 @@ def disjoint_alias_traj_pool() -> TrajectoryPool:
     :exc:`ValueError`.
     """
     event_df = pl.DataFrame(
-        {"id": [1, 1, 6, 6], "time": [0, 1, 0, 2], "status": ["A", "B", "A", "C"]}
+        {
+            "id": [1, 1, 6, 6],
+            "time": [0, 1, 0, 2],
+            "status": ["A", "B", "A", "C"],
+            "value": [1.2, 1.3, 1.6, -0.9],
+        }
     )
-    state_df = pl.DataFrame({"id": [3, 8], "start": [0, 0], "status": ["A", "B"]})
+    state_df = pl.DataFrame(
+        {
+            "id": [3, 8],
+            "start": [0, 0],
+            "status": ["A", "B"],
+            "value": [1.3, -0.9],
+        }
+    )
     interval_df = pl.DataFrame(
         {
             "id": [6, 6, 11, 11],
             "start": [0, 2, 0, 3],
             "end": [2, 4, 3, 6],
             "status": ["A", "B", "C", "A"],
+            "value": [1.2, 1.3, 1.6, -0.9],
         }
     )
 
     events_store = (
         EventSequencePool.builder()
         .add_dataframe(
-            event_df, id_column="id", features=["status"], time_column="time"
+            event_df, id_column="id", features=["status", "value"], time_column="time"
         )
         .build("disjoint_events", exist_ok=True)
     )
     states_store = (
         StateSequencePool.builder()
         .add_dataframe(
-            state_df, id_column="id", features=["status"], start_column="start"
+            state_df, id_column="id", features=["status", "value"], start_column="start"
         )
         .build("disjoint_states", exist_ok=True)
     )
@@ -342,7 +411,7 @@ def disjoint_alias_traj_pool() -> TrajectoryPool:
         .add_dataframe(
             interval_df,
             id_column="id",
-            features=["status"],
+            features=["status", "value"],
             start_column="start",
             end_column="end",
         )
@@ -354,7 +423,7 @@ def disjoint_alias_traj_pool() -> TrajectoryPool:
     intervals = IntervalSequencePool(store=intervals_store)
     for pool in (events, states, intervals):
         pool.cast_features({"status": pl.Categorical})
-        pool.update_settings(entity_features=["status"])
+        pool.update_settings(entity_features=["status", "value"])
 
     return build_trajectories(
         pools={"events": events, "states": states, "intervals": intervals}
@@ -385,6 +454,7 @@ def mixed_traj_pool() -> TrajectoryPool:
                 "id": ["seq_1", "seq_1", "seq_2", "seq_2", "seq_2"],
                 "time": [0, 1, 0, 1, 2],
                 "status": ["A", "B", "A", "C", "B"],
+                "value": [-0.2, 23.5, 15642.36, 1, -45.3],
             }
         ),
         time_kwargs={"time_column": "time"},
@@ -398,6 +468,7 @@ def mixed_traj_pool() -> TrajectoryPool:
                 "start": [0, 2, 0, 1, 3],
                 "end": [2, 4, 1, 3, 5],
                 "status": ["A", "B", "A", "C", "B"],
+                "value": [-0.2, 23.5, 15642.36, 1, -45.3],
             }
         ),
         time_kwargs={"start_column": "start", "end_column": "end"},
@@ -410,6 +481,7 @@ def mixed_traj_pool() -> TrajectoryPool:
                 "id": ["seq_1", "seq_1", "seq_2", "seq_2", "seq_2"],
                 "start": [0, 2, 0, 1, 3],
                 "status": ["A", "B", "A", "C", "B"],
+                "value": [-0.2, 23.5, 15642.36, 1, -45.3],
             }
         ),
         time_kwargs={"start_column": "start"},
