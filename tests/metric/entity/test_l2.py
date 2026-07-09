@@ -63,7 +63,7 @@ class TestL2Compute:
 # ---------------------------------------------------------------------------
 
 
-class TestHammingValidation:
+class TestL2Validation:
     """Validation errors on wrong feature dtype or argument type."""
 
     def test_categorical_feature_raises(self, state_pool) -> None:
@@ -93,7 +93,7 @@ class TestHammingValidation:
 # ---------------------------------------------------------------------------
 
 
-class TestConfigRoundtrip:
+class TestL2ConfigRoundtrip:
     """Serialization round-trips and registry dispatch via to_config / from_config."""
 
     def test_to_config_structure(self) -> None:
