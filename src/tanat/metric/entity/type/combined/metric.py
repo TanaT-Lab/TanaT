@@ -54,7 +54,10 @@ class CombinedEntityMetricSettings(EntityMetricSettings):
     agg: str = "sum"
 
     def __post_init__(self):
-        assert self.weights is None or len(self.weights) == len(self.metrics_config)
+        if self.weights is not None and len(self.weights) != len(self.metrics_config):
+            raise ValueError(
+                "Weights must contains the same number of elements as the number of metrics."
+            )
 
 
 class CombinedEntityMetric(EntityMetric, register_name="combinedentity"):
@@ -109,10 +112,6 @@ class CombinedEntityMetric(EntityMetric, register_name="combinedentity"):
             )
         )
 
-        if weights is not None and len(weights) != len(metrics_config):
-            raise ValueError(
-                "Weights must contains the same number of elements as the number of metrics."
-            )
         if agg not in ["sum"]:
             raise ValueError(
                 f"Unknown aggregation function '{agg}' in metric configuration."
@@ -132,12 +131,16 @@ class CombinedEntityMetric(EntityMetric, register_name="combinedentity"):
         configurations in the settings"""
 
         for metric_config in self.settings.metrics_config:
-            if metric_config["type"] is None:
-                raise KeyError(
+            if (
+                not isinstance(metric_config, dict)
+                or "type" not in metric_config
+                or metric_config["type"] is None
+            ):
+                raise ValueError(
                     "Invalid metric configuration.",
                 )
             if metric_config["type"] == self.get_registration_name():
-                raise KeyError(
+                raise ValueError(
                     "Recursive usage of CombinedEntityMetric is prohibited.",
                 )
 
