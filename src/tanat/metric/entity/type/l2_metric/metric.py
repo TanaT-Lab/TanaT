@@ -12,14 +12,14 @@ import polars as pl
 from tanat_utils import settings_dataclass as dataclass
 
 from .....metadata.feature import NumericalInfo, FeatureInfo
-from ...base import EntityMetric
+from ...base import EntityMetric, EntityMetricSettings
 
 if TYPE_CHECKING:
     from .....sequence.base.entity import Entity
 
 
 @dataclass
-class L2Settings:
+class L2Settings(EntityMetricSettings):
     """Settings for :class:`L2EntityMetric`.
 
     Args:

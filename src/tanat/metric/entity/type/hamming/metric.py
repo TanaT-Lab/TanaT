@@ -15,7 +15,7 @@ from pydantic import field_validator
 from tanat_utils import settings_dataclass as dataclass
 
 from .....metadata.feature import CategoricalInfo, FeatureInfo
-from ...base import EntityMetric
+from ...base import EntityMetric, EntityMetricSettings
 from .kernels import hamming_dist_simple, hamming_dist_weighted
 
 if TYPE_CHECKING:
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class HammingSettings:
+class HammingSettings(EntityMetricSettings):
     """Settings for :class:`HammingEntityMetric`.
 
     Args:

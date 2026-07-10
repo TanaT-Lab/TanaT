@@ -7,9 +7,14 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from tanat_utils import SettingsMixin, Registrable
+from tanat_utils import SettingsMixin, Registrable, settings_dataclass
 
 from ...sequence.base.entity import Entity
+
+
+@settings_dataclass
+class EntityMetricSettings(ABC):
+    """Abstract base for settings of an entity-level metric"""
 
 
 class EntityMetric(SettingsMixin, Registrable, ABC):
