@@ -4,7 +4,14 @@ Entity metric sub-package.
 """
 
 from .base import EntityMetric
-from .type import HammingEntityMetric, HammingSettings, L2Settings, L2EntityMetric
+from .type import (
+    HammingEntityMetric,
+    HammingSettings,
+    L2Settings,
+    L2EntityMetric,
+    CombinedEntityMetric,
+    CombinedEntityMetricSettings,
+)
 
 __all__ = [
     "EntityMetric",
@@ -12,4 +19,6 @@ __all__ = [
     "HammingSettings",
     "L2EntityMetric",
     "L2Settings",
+    "CombinedEntityMetric",
+    "CombinedEntityMetricSettings",
 ]

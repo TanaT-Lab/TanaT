@@ -11,6 +11,10 @@ from .entity import (
     EntityMetric,
     HammingEntityMetric,
     HammingSettings,
+    L2EntityMetric,
+    L2Settings,
+    CombinedEntityMetric,
+    CombinedEntityMetricSettings,
 )
 
 ## -- Sequence Metrics --
