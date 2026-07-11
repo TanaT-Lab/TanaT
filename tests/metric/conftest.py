@@ -286,8 +286,18 @@ def entity_metric(request):
     Parametrized over all registered entity metrics.
     Adding a new metric automatically includes it here.
     """
+    from tanat.metric.entity import L2EntityMetric, HammingEntityMetric
+
     if request.param == "l2entity":
         return EntityMetric.get_registered(request.param)(entity_feature="value")
+    elif request.param == "combinedentity":
+        return EntityMetric.get_registered(request.param)(
+            metrics_config=[
+                L2EntityMetric(entity_feature="value").to_config(),
+                HammingEntityMetric(entity_feature="status").to_config(),
+            ],
+            weights=[0.2, 0.8],
+        )
     else:
         return EntityMetric.get_registered(request.param)(entity_feature="status")
 

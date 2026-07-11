@@ -1,4 +1,23 @@
 # serializer version: 1
+# name: TestComputeMatrix.test_matrix_values_snapshot[datetime-event-combinedentity]
+  shape: (10, 11)
+  ┌─────┬──────┬──────┬──────┬───┬──────┬──────┬──────┬──────┐
+  │ id  ┆ 1    ┆ 2    ┆ 3    ┆ … ┆ 7    ┆ 8    ┆ 9    ┆ 10   │
+  │ --- ┆ ---  ┆ ---  ┆ ---  ┆   ┆ ---  ┆ ---  ┆ ---  ┆ ---  │
+  │ i64 ┆ f32  ┆ f32  ┆ f32  ┆   ┆ f32  ┆ f32  ┆ f32  ┆ f32  │
+  ╞═════╪══════╪══════╪══════╪═══╪══════╪══════╪══════╪══════╡
+  │ 1   ┆ 0.0  ┆ 14.0 ┆ 14.0 ┆ … ┆ 11.0 ┆ 11.0 ┆ 12.0 ┆ 15.0 │
+  │ 2   ┆ 14.0 ┆ 0.0  ┆ 12.0 ┆ … ┆ 9.0  ┆ 9.0  ┆ 10.0 ┆ 13.0 │
+  │ 3   ┆ 14.0 ┆ 12.0 ┆ 0.0  ┆ … ┆ 9.0  ┆ 9.0  ┆ 10.0 ┆ 13.0 │
+  │ 4   ┆ 12.0 ┆ 10.0 ┆ 10.0 ┆ … ┆ 7.0  ┆ 7.0  ┆ 8.0  ┆ 11.0 │
+  │ 5   ┆ 12.0 ┆ 10.0 ┆ 10.0 ┆ … ┆ 7.0  ┆ 7.0  ┆ 8.0  ┆ 11.0 │
+  │ 6   ┆ 11.0 ┆ 9.0  ┆ 9.0  ┆ … ┆ 6.0  ┆ 6.0  ┆ 7.0  ┆ 10.0 │
+  │ 7   ┆ 11.0 ┆ 9.0  ┆ 9.0  ┆ … ┆ 0.0  ┆ 6.0  ┆ 7.0  ┆ 10.0 │
+  │ 8   ┆ 11.0 ┆ 9.0  ┆ 9.0  ┆ … ┆ 6.0  ┆ 0.0  ┆ 7.0  ┆ 10.0 │
+  │ 9   ┆ 12.0 ┆ 10.0 ┆ 10.0 ┆ … ┆ 7.0  ┆ 7.0  ┆ 0.0  ┆ 11.0 │
+  │ 10  ┆ 15.0 ┆ 13.0 ┆ 13.0 ┆ … ┆ 10.0 ┆ 10.0 ┆ 11.0 ┆ 0.0  │
+  └─────┴──────┴──────┴──────┴───┴──────┴──────┴──────┴──────┘
+# ---
 # name: TestComputeMatrix.test_matrix_values_snapshot[datetime-event-hamming]
   shape: (10, 11)
   ┌─────┬──────┬─────┬─────┬───┬─────┬─────┬─────┬──────┐
@@ -19,6 +38,25 @@
   └─────┴──────┴─────┴─────┴───┴─────┴─────┴─────┴──────┘
 # ---
 # name: TestComputeMatrix.test_matrix_values_snapshot[datetime-event-l2entity]
+  shape: (10, 11)
+  ┌─────┬──────┬──────┬──────┬───┬──────┬──────┬──────┬──────┐
+  │ id  ┆ 1    ┆ 2    ┆ 3    ┆ … ┆ 7    ┆ 8    ┆ 9    ┆ 10   │
+  │ --- ┆ ---  ┆ ---  ┆ ---  ┆   ┆ ---  ┆ ---  ┆ ---  ┆ ---  │
+  │ i64 ┆ f32  ┆ f32  ┆ f32  ┆   ┆ f32  ┆ f32  ┆ f32  ┆ f32  │
+  ╞═════╪══════╪══════╪══════╪═══╪══════╪══════╪══════╪══════╡
+  │ 1   ┆ 0.0  ┆ 14.0 ┆ 14.0 ┆ … ┆ 11.0 ┆ 11.0 ┆ 12.0 ┆ 15.0 │
+  │ 2   ┆ 14.0 ┆ 0.0  ┆ 12.0 ┆ … ┆ 9.0  ┆ 9.0  ┆ 10.0 ┆ 13.0 │
+  │ 3   ┆ 14.0 ┆ 12.0 ┆ 0.0  ┆ … ┆ 9.0  ┆ 9.0  ┆ 10.0 ┆ 13.0 │
+  │ 4   ┆ 12.0 ┆ 10.0 ┆ 10.0 ┆ … ┆ 7.0  ┆ 7.0  ┆ 8.0  ┆ 11.0 │
+  │ 5   ┆ 12.0 ┆ 10.0 ┆ 10.0 ┆ … ┆ 7.0  ┆ 7.0  ┆ 8.0  ┆ 11.0 │
+  │ 6   ┆ 11.0 ┆ 9.0  ┆ 9.0  ┆ … ┆ 6.0  ┆ 6.0  ┆ 7.0  ┆ 10.0 │
+  │ 7   ┆ 11.0 ┆ 9.0  ┆ 9.0  ┆ … ┆ 0.0  ┆ 6.0  ┆ 7.0  ┆ 10.0 │
+  │ 8   ┆ 11.0 ┆ 9.0  ┆ 9.0  ┆ … ┆ 6.0  ┆ 0.0  ┆ 7.0  ┆ 10.0 │
+  │ 9   ┆ 12.0 ┆ 10.0 ┆ 10.0 ┆ … ┆ 7.0  ┆ 7.0  ┆ 0.0  ┆ 11.0 │
+  │ 10  ┆ 15.0 ┆ 13.0 ┆ 13.0 ┆ … ┆ 10.0 ┆ 10.0 ┆ 11.0 ┆ 0.0  │
+  └─────┴──────┴──────┴──────┴───┴──────┴──────┴──────┴──────┘
+# ---
+# name: TestComputeMatrix.test_matrix_values_snapshot[datetime-interval-combinedentity]
   shape: (10, 11)
   ┌─────┬──────┬──────┬──────┬───┬──────┬──────┬──────┬──────┐
   │ id  ┆ 1    ┆ 2    ┆ 3    ┆ … ┆ 7    ┆ 8    ┆ 9    ┆ 10   │
@@ -75,6 +113,25 @@
   │ 10  ┆ 15.0 ┆ 13.0 ┆ 13.0 ┆ … ┆ 10.0 ┆ 10.0 ┆ 11.0 ┆ 0.0  │
   └─────┴──────┴──────┴──────┴───┴──────┴──────┴──────┴──────┘
 # ---
+# name: TestComputeMatrix.test_matrix_values_snapshot[datetime-state-combinedentity]
+  shape: (10, 11)
+  ┌─────┬──────┬──────┬──────┬───┬──────┬──────┬──────┬──────┐
+  │ id  ┆ 1    ┆ 2    ┆ 3    ┆ … ┆ 7    ┆ 8    ┆ 9    ┆ 10   │
+  │ --- ┆ ---  ┆ ---  ┆ ---  ┆   ┆ ---  ┆ ---  ┆ ---  ┆ ---  │
+  │ i64 ┆ f32  ┆ f32  ┆ f32  ┆   ┆ f32  ┆ f32  ┆ f32  ┆ f32  │
+  ╞═════╪══════╪══════╪══════╪═══╪══════╪══════╪══════╪══════╡
+  │ 1   ┆ 0.0  ┆ 14.0 ┆ 14.0 ┆ … ┆ 11.0 ┆ 11.0 ┆ 12.0 ┆ 15.0 │
+  │ 2   ┆ 14.0 ┆ 0.0  ┆ 12.0 ┆ … ┆ 9.0  ┆ 9.0  ┆ 10.0 ┆ 13.0 │
+  │ 3   ┆ 14.0 ┆ 12.0 ┆ 0.0  ┆ … ┆ 9.0  ┆ 9.0  ┆ 10.0 ┆ 13.0 │
+  │ 4   ┆ 12.0 ┆ 10.0 ┆ 10.0 ┆ … ┆ 7.0  ┆ 7.0  ┆ 8.0  ┆ 11.0 │
+  │ 5   ┆ 12.0 ┆ 10.0 ┆ 10.0 ┆ … ┆ 7.0  ┆ 7.0  ┆ 8.0  ┆ 11.0 │
+  │ 6   ┆ 11.0 ┆ 9.0  ┆ 9.0  ┆ … ┆ 6.0  ┆ 6.0  ┆ 7.0  ┆ 10.0 │
+  │ 7   ┆ 11.0 ┆ 9.0  ┆ 9.0  ┆ … ┆ 0.0  ┆ 6.0  ┆ 7.0  ┆ 10.0 │
+  │ 8   ┆ 11.0 ┆ 9.0  ┆ 9.0  ┆ … ┆ 6.0  ┆ 0.0  ┆ 7.0  ┆ 10.0 │
+  │ 9   ┆ 12.0 ┆ 10.0 ┆ 10.0 ┆ … ┆ 7.0  ┆ 7.0  ┆ 0.0  ┆ 11.0 │
+  │ 10  ┆ 15.0 ┆ 13.0 ┆ 13.0 ┆ … ┆ 10.0 ┆ 10.0 ┆ 11.0 ┆ 0.0  │
+  └─────┴──────┴──────┴──────┴───┴──────┴──────┴──────┴──────┘
+# ---
 # name: TestComputeMatrix.test_matrix_values_snapshot[datetime-state-hamming]
   shape: (10, 11)
   ┌─────┬──────┬─────┬─────┬───┬─────┬─────┬─────┬──────┐
@@ -95,6 +152,25 @@
   └─────┴──────┴─────┴─────┴───┴─────┴─────┴─────┴──────┘
 # ---
 # name: TestComputeMatrix.test_matrix_values_snapshot[datetime-state-l2entity]
+  shape: (10, 11)
+  ┌─────┬──────┬──────┬──────┬───┬──────┬──────┬──────┬──────┐
+  │ id  ┆ 1    ┆ 2    ┆ 3    ┆ … ┆ 7    ┆ 8    ┆ 9    ┆ 10   │
+  │ --- ┆ ---  ┆ ---  ┆ ---  ┆   ┆ ---  ┆ ---  ┆ ---  ┆ ---  │
+  │ i64 ┆ f32  ┆ f32  ┆ f32  ┆   ┆ f32  ┆ f32  ┆ f32  ┆ f32  │
+  ╞═════╪══════╪══════╪══════╪═══╪══════╪══════╪══════╪══════╡
+  │ 1   ┆ 0.0  ┆ 14.0 ┆ 14.0 ┆ … ┆ 11.0 ┆ 11.0 ┆ 12.0 ┆ 15.0 │
+  │ 2   ┆ 14.0 ┆ 0.0  ┆ 12.0 ┆ … ┆ 9.0  ┆ 9.0  ┆ 10.0 ┆ 13.0 │
+  │ 3   ┆ 14.0 ┆ 12.0 ┆ 0.0  ┆ … ┆ 9.0  ┆ 9.0  ┆ 10.0 ┆ 13.0 │
+  │ 4   ┆ 12.0 ┆ 10.0 ┆ 10.0 ┆ … ┆ 7.0  ┆ 7.0  ┆ 8.0  ┆ 11.0 │
+  │ 5   ┆ 12.0 ┆ 10.0 ┆ 10.0 ┆ … ┆ 7.0  ┆ 7.0  ┆ 8.0  ┆ 11.0 │
+  │ 6   ┆ 11.0 ┆ 9.0  ┆ 9.0  ┆ … ┆ 6.0  ┆ 6.0  ┆ 7.0  ┆ 10.0 │
+  │ 7   ┆ 11.0 ┆ 9.0  ┆ 9.0  ┆ … ┆ 0.0  ┆ 6.0  ┆ 7.0  ┆ 10.0 │
+  │ 8   ┆ 11.0 ┆ 9.0  ┆ 9.0  ┆ … ┆ 6.0  ┆ 0.0  ┆ 7.0  ┆ 10.0 │
+  │ 9   ┆ 12.0 ┆ 10.0 ┆ 10.0 ┆ … ┆ 7.0  ┆ 7.0  ┆ 0.0  ┆ 11.0 │
+  │ 10  ┆ 15.0 ┆ 13.0 ┆ 13.0 ┆ … ┆ 10.0 ┆ 10.0 ┆ 11.0 ┆ 0.0  │
+  └─────┴──────┴──────┴──────┴───┴──────┴──────┴──────┴──────┘
+# ---
+# name: TestComputeMatrix.test_matrix_values_snapshot[timestep-event-combinedentity]
   shape: (10, 11)
   ┌─────┬──────┬──────┬──────┬───┬──────┬──────┬──────┬──────┐
   │ id  ┆ 1    ┆ 2    ┆ 3    ┆ … ┆ 7    ┆ 8    ┆ 9    ┆ 10   │
@@ -151,6 +227,25 @@
   │ 10  ┆ 15.0 ┆ 13.0 ┆ 13.0 ┆ … ┆ 10.0 ┆ 10.0 ┆ 11.0 ┆ 0.0  │
   └─────┴──────┴──────┴──────┴───┴──────┴──────┴──────┴──────┘
 # ---
+# name: TestComputeMatrix.test_matrix_values_snapshot[timestep-interval-combinedentity]
+  shape: (10, 11)
+  ┌─────┬──────┬──────┬──────┬───┬──────┬──────┬──────┬──────┐
+  │ id  ┆ 1    ┆ 2    ┆ 3    ┆ … ┆ 7    ┆ 8    ┆ 9    ┆ 10   │
+  │ --- ┆ ---  ┆ ---  ┆ ---  ┆   ┆ ---  ┆ ---  ┆ ---  ┆ ---  │
+  │ i64 ┆ f32  ┆ f32  ┆ f32  ┆   ┆ f32  ┆ f32  ┆ f32  ┆ f32  │
+  ╞═════╪══════╪══════╪══════╪═══╪══════╪══════╪══════╪══════╡
+  │ 1   ┆ 0.0  ┆ 14.0 ┆ 14.0 ┆ … ┆ 11.0 ┆ 11.0 ┆ 12.0 ┆ 15.0 │
+  │ 2   ┆ 14.0 ┆ 0.0  ┆ 12.0 ┆ … ┆ 9.0  ┆ 9.0  ┆ 10.0 ┆ 13.0 │
+  │ 3   ┆ 14.0 ┆ 12.0 ┆ 0.0  ┆ … ┆ 9.0  ┆ 9.0  ┆ 10.0 ┆ 13.0 │
+  │ 4   ┆ 12.0 ┆ 10.0 ┆ 10.0 ┆ … ┆ 7.0  ┆ 7.0  ┆ 8.0  ┆ 11.0 │
+  │ 5   ┆ 12.0 ┆ 10.0 ┆ 10.0 ┆ … ┆ 7.0  ┆ 7.0  ┆ 8.0  ┆ 11.0 │
+  │ 6   ┆ 11.0 ┆ 9.0  ┆ 9.0  ┆ … ┆ 6.0  ┆ 6.0  ┆ 7.0  ┆ 10.0 │
+  │ 7   ┆ 11.0 ┆ 9.0  ┆ 9.0  ┆ … ┆ 0.0  ┆ 6.0  ┆ 7.0  ┆ 10.0 │
+  │ 8   ┆ 11.0 ┆ 9.0  ┆ 9.0  ┆ … ┆ 6.0  ┆ 0.0  ┆ 7.0  ┆ 10.0 │
+  │ 9   ┆ 12.0 ┆ 10.0 ┆ 10.0 ┆ … ┆ 7.0  ┆ 7.0  ┆ 0.0  ┆ 11.0 │
+  │ 10  ┆ 15.0 ┆ 13.0 ┆ 13.0 ┆ … ┆ 10.0 ┆ 10.0 ┆ 11.0 ┆ 0.0  │
+  └─────┴──────┴──────┴──────┴───┴──────┴──────┴──────┴──────┘
+# ---
 # name: TestComputeMatrix.test_matrix_values_snapshot[timestep-interval-hamming]
   shape: (10, 11)
   ┌─────┬──────┬──────┬─────┬───┬─────┬─────┬─────┬─────┐
@@ -171,6 +266,25 @@
   └─────┴──────┴──────┴─────┴───┴─────┴─────┴─────┴─────┘
 # ---
 # name: TestComputeMatrix.test_matrix_values_snapshot[timestep-interval-l2entity]
+  shape: (10, 11)
+  ┌─────┬──────┬──────┬──────┬───┬──────┬──────┬──────┬──────┐
+  │ id  ┆ 1    ┆ 2    ┆ 3    ┆ … ┆ 7    ┆ 8    ┆ 9    ┆ 10   │
+  │ --- ┆ ---  ┆ ---  ┆ ---  ┆   ┆ ---  ┆ ---  ┆ ---  ┆ ---  │
+  │ i64 ┆ f32  ┆ f32  ┆ f32  ┆   ┆ f32  ┆ f32  ┆ f32  ┆ f32  │
+  ╞═════╪══════╪══════╪══════╪═══╪══════╪══════╪══════╪══════╡
+  │ 1   ┆ 0.0  ┆ 14.0 ┆ 14.0 ┆ … ┆ 11.0 ┆ 11.0 ┆ 12.0 ┆ 15.0 │
+  │ 2   ┆ 14.0 ┆ 0.0  ┆ 12.0 ┆ … ┆ 9.0  ┆ 9.0  ┆ 10.0 ┆ 13.0 │
+  │ 3   ┆ 14.0 ┆ 12.0 ┆ 0.0  ┆ … ┆ 9.0  ┆ 9.0  ┆ 10.0 ┆ 13.0 │
+  │ 4   ┆ 12.0 ┆ 10.0 ┆ 10.0 ┆ … ┆ 7.0  ┆ 7.0  ┆ 8.0  ┆ 11.0 │
+  │ 5   ┆ 12.0 ┆ 10.0 ┆ 10.0 ┆ … ┆ 7.0  ┆ 7.0  ┆ 8.0  ┆ 11.0 │
+  │ 6   ┆ 11.0 ┆ 9.0  ┆ 9.0  ┆ … ┆ 6.0  ┆ 6.0  ┆ 7.0  ┆ 10.0 │
+  │ 7   ┆ 11.0 ┆ 9.0  ┆ 9.0  ┆ … ┆ 0.0  ┆ 6.0  ┆ 7.0  ┆ 10.0 │
+  │ 8   ┆ 11.0 ┆ 9.0  ┆ 9.0  ┆ … ┆ 6.0  ┆ 0.0  ┆ 7.0  ┆ 10.0 │
+  │ 9   ┆ 12.0 ┆ 10.0 ┆ 10.0 ┆ … ┆ 7.0  ┆ 7.0  ┆ 0.0  ┆ 11.0 │
+  │ 10  ┆ 15.0 ┆ 13.0 ┆ 13.0 ┆ … ┆ 10.0 ┆ 10.0 ┆ 11.0 ┆ 0.0  │
+  └─────┴──────┴──────┴──────┴───┴──────┴──────┴──────┴──────┘
+# ---
+# name: TestComputeMatrix.test_matrix_values_snapshot[timestep-state-combinedentity]
   shape: (10, 11)
   ┌─────┬──────┬──────┬──────┬───┬──────┬──────┬──────┬──────┐
   │ id  ┆ 1    ┆ 2    ┆ 3    ┆ … ┆ 7    ┆ 8    ┆ 9    ┆ 10   │
@@ -227,6 +341,20 @@
   │ 10  ┆ 15.0 ┆ 13.0 ┆ 13.0 ┆ … ┆ 10.0 ┆ 10.0 ┆ 11.0 ┆ 0.0  │
   └─────┴──────┴──────┴──────┴───┴──────┴──────┴──────┴──────┘
 # ---
+# name: TestComputeMatrix.test_mixed_matrix_snapshot[event-combinedentity]
+  shape: (5, 6)
+  ┌─────────┬─────────┬─────────┬─────────┬───────┬───────┐
+  │ id      ┆ empty_1 ┆ empty_2 ┆ empty_3 ┆ seq_1 ┆ seq_2 │
+  │ ---     ┆ ---     ┆ ---     ┆ ---     ┆ ---   ┆ ---   │
+  │ str     ┆ f32     ┆ f32     ┆ f32     ┆ f32   ┆ f32   │
+  ╞═════════╪═════════╪═════════╪═════════╪═══════╪═══════╡
+  │ empty_1 ┆ 0.0     ┆ 0.0     ┆ 0.0     ┆ 2.0   ┆ 3.0   │
+  │ empty_2 ┆ 0.0     ┆ 0.0     ┆ 0.0     ┆ 2.0   ┆ 3.0   │
+  │ empty_3 ┆ 0.0     ┆ 0.0     ┆ 0.0     ┆ 2.0   ┆ 3.0   │
+  │ seq_1   ┆ 2.0     ┆ 2.0     ┆ 2.0     ┆ 0.0   ┆ 5.0   │
+  │ seq_2   ┆ 3.0     ┆ 3.0     ┆ 3.0     ┆ 5.0   ┆ 0.0   │
+  └─────────┴─────────┴─────────┴─────────┴───────┴───────┘
+# ---
 # name: TestComputeMatrix.test_mixed_matrix_snapshot[event-hamming]
   shape: (5, 6)
   ┌─────────┬─────────┬─────────┬─────────┬───────┬───────┐
@@ -242,6 +370,20 @@
   └─────────┴─────────┴─────────┴─────────┴───────┴───────┘
 # ---
 # name: TestComputeMatrix.test_mixed_matrix_snapshot[event-l2entity]
+  shape: (5, 6)
+  ┌─────────┬─────────┬─────────┬─────────┬───────┬───────┐
+  │ id      ┆ empty_1 ┆ empty_2 ┆ empty_3 ┆ seq_1 ┆ seq_2 │
+  │ ---     ┆ ---     ┆ ---     ┆ ---     ┆ ---   ┆ ---   │
+  │ str     ┆ f32     ┆ f32     ┆ f32     ┆ f32   ┆ f32   │
+  ╞═════════╪═════════╪═════════╪═════════╪═══════╪═══════╡
+  │ empty_1 ┆ 0.0     ┆ 0.0     ┆ 0.0     ┆ 2.0   ┆ 3.0   │
+  │ empty_2 ┆ 0.0     ┆ 0.0     ┆ 0.0     ┆ 2.0   ┆ 3.0   │
+  │ empty_3 ┆ 0.0     ┆ 0.0     ┆ 0.0     ┆ 2.0   ┆ 3.0   │
+  │ seq_1   ┆ 2.0     ┆ 2.0     ┆ 2.0     ┆ 0.0   ┆ 5.0   │
+  │ seq_2   ┆ 3.0     ┆ 3.0     ┆ 3.0     ┆ 5.0   ┆ 0.0   │
+  └─────────┴─────────┴─────────┴─────────┴───────┴───────┘
+# ---
+# name: TestComputeMatrix.test_mixed_matrix_snapshot[interval-combinedentity]
   shape: (5, 6)
   ┌─────────┬─────────┬─────────┬─────────┬───────┬───────┐
   │ id      ┆ empty_1 ┆ empty_2 ┆ empty_3 ┆ seq_1 ┆ seq_2 │
@@ -283,6 +425,20 @@
   │ seq_2   ┆ 3.0     ┆ 3.0     ┆ 3.0     ┆ 5.0   ┆ 0.0   │
   └─────────┴─────────┴─────────┴─────────┴───────┴───────┘
 # ---
+# name: TestComputeMatrix.test_mixed_matrix_snapshot[state-combinedentity]
+  shape: (5, 6)
+  ┌─────────┬─────────┬─────────┬─────────┬───────┬───────┐
+  │ id      ┆ empty_1 ┆ empty_2 ┆ empty_3 ┆ seq_1 ┆ seq_2 │
+  │ ---     ┆ ---     ┆ ---     ┆ ---     ┆ ---   ┆ ---   │
+  │ str     ┆ f32     ┆ f32     ┆ f32     ┆ f32   ┆ f32   │
+  ╞═════════╪═════════╪═════════╪═════════╪═══════╪═══════╡
+  │ empty_1 ┆ 0.0     ┆ 0.0     ┆ 0.0     ┆ 2.0   ┆ 3.0   │
+  │ empty_2 ┆ 0.0     ┆ 0.0     ┆ 0.0     ┆ 2.0   ┆ 3.0   │
+  │ empty_3 ┆ 0.0     ┆ 0.0     ┆ 0.0     ┆ 2.0   ┆ 3.0   │
+  │ seq_1   ┆ 2.0     ┆ 2.0     ┆ 2.0     ┆ 0.0   ┆ 5.0   │
+  │ seq_2   ┆ 3.0     ┆ 3.0     ┆ 3.0     ┆ 5.0   ┆ 0.0   │
+  └─────────┴─────────┴─────────┴─────────┴───────┴───────┘
+# ---
 # name: TestComputeMatrix.test_mixed_matrix_snapshot[state-hamming]
   shape: (5, 6)
   ┌─────────┬─────────┬─────────┬─────────┬───────┬───────┐
@@ -311,10 +467,16 @@
   │ seq_2   ┆ 3.0     ┆ 3.0     ┆ 3.0     ┆ 5.0   ┆ 0.0   │
   └─────────┴─────────┴─────────┴─────────┴───────┴───────┘
 # ---
+# name: TestSinglePair.test_pair_sequence_snapshot[datetime-event-combinedentity]
+  14.0
+# ---
 # name: TestSinglePair.test_pair_sequence_snapshot[datetime-event-hamming]
   8.0
 # ---
 # name: TestSinglePair.test_pair_sequence_snapshot[datetime-event-l2entity]
+  14.0
+# ---
+# name: TestSinglePair.test_pair_sequence_snapshot[datetime-interval-combinedentity]
   14.0
 # ---
 # name: TestSinglePair.test_pair_sequence_snapshot[datetime-interval-hamming]
@@ -323,10 +485,16 @@
 # name: TestSinglePair.test_pair_sequence_snapshot[datetime-interval-l2entity]
   14.0
 # ---
+# name: TestSinglePair.test_pair_sequence_snapshot[datetime-state-combinedentity]
+  14.0
+# ---
 # name: TestSinglePair.test_pair_sequence_snapshot[datetime-state-hamming]
   8.0
 # ---
 # name: TestSinglePair.test_pair_sequence_snapshot[datetime-state-l2entity]
+  14.0
+# ---
+# name: TestSinglePair.test_pair_sequence_snapshot[timestep-event-combinedentity]
   14.0
 # ---
 # name: TestSinglePair.test_pair_sequence_snapshot[timestep-event-hamming]
@@ -335,10 +503,16 @@
 # name: TestSinglePair.test_pair_sequence_snapshot[timestep-event-l2entity]
   14.0
 # ---
+# name: TestSinglePair.test_pair_sequence_snapshot[timestep-interval-combinedentity]
+  14.0
+# ---
 # name: TestSinglePair.test_pair_sequence_snapshot[timestep-interval-hamming]
   10.0
 # ---
 # name: TestSinglePair.test_pair_sequence_snapshot[timestep-interval-l2entity]
+  14.0
+# ---
+# name: TestSinglePair.test_pair_sequence_snapshot[timestep-state-combinedentity]
   14.0
 # ---
 # name: TestSinglePair.test_pair_sequence_snapshot[timestep-state-hamming]
@@ -347,10 +521,16 @@
 # name: TestSinglePair.test_pair_sequence_snapshot[timestep-state-l2entity]
   14.0
 # ---
+# name: TestSinglePair.test_same_sequence_snapshot[datetime-event-combinedentity]
+  0.0
+# ---
 # name: TestSinglePair.test_same_sequence_snapshot[datetime-event-hamming]
   0.0
 # ---
 # name: TestSinglePair.test_same_sequence_snapshot[datetime-event-l2entity]
+  0.0
+# ---
+# name: TestSinglePair.test_same_sequence_snapshot[datetime-interval-combinedentity]
   0.0
 # ---
 # name: TestSinglePair.test_same_sequence_snapshot[datetime-interval-hamming]
@@ -359,10 +539,16 @@
 # name: TestSinglePair.test_same_sequence_snapshot[datetime-interval-l2entity]
   0.0
 # ---
+# name: TestSinglePair.test_same_sequence_snapshot[datetime-state-combinedentity]
+  0.0
+# ---
 # name: TestSinglePair.test_same_sequence_snapshot[datetime-state-hamming]
   0.0
 # ---
 # name: TestSinglePair.test_same_sequence_snapshot[datetime-state-l2entity]
+  0.0
+# ---
+# name: TestSinglePair.test_same_sequence_snapshot[timestep-event-combinedentity]
   0.0
 # ---
 # name: TestSinglePair.test_same_sequence_snapshot[timestep-event-hamming]
@@ -371,10 +557,16 @@
 # name: TestSinglePair.test_same_sequence_snapshot[timestep-event-l2entity]
   0.0
 # ---
+# name: TestSinglePair.test_same_sequence_snapshot[timestep-interval-combinedentity]
+  0.0
+# ---
 # name: TestSinglePair.test_same_sequence_snapshot[timestep-interval-hamming]
   0.0
 # ---
 # name: TestSinglePair.test_same_sequence_snapshot[timestep-interval-l2entity]
+  0.0
+# ---
+# name: TestSinglePair.test_same_sequence_snapshot[timestep-state-combinedentity]
   0.0
 # ---
 # name: TestSinglePair.test_same_sequence_snapshot[timestep-state-hamming]
