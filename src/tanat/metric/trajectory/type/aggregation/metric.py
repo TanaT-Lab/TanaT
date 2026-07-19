@@ -16,6 +16,7 @@ from ...base import TrajectoryMetric
 from ....sequence.base import SequenceMetric
 from ....matrix import DistanceMatrix
 from ...._storage import save_progress
+from ....static import StaticMetric
 
 if TYPE_CHECKING:
     from .....trajectory.trajectory import Trajectory
@@ -113,7 +114,7 @@ class AggregationTrajectoryMetric(TrajectoryMetric, register_name="aggregation")
         self,
         default_metric: SequenceMetric | str = "linearpairwise",
         sequence_metrics: dict[str, SequenceMetric | str] | None = None,
-        static_metric: Callable | None = None,
+        static_metric: StaticMetric | Callable | None = None,
         static_metric_weight: float = 1.0,
         agg_fun: str = "mean",
         weights: dict[str, float] | None = None,
@@ -143,7 +144,10 @@ class AggregationTrajectoryMetric(TrajectoryMetric, register_name="aggregation")
             storage=storage_options,
         )
 
-        self._static_metric = static_metric
+        if isinstance(static_metric, StaticMetric):
+            self._static_metric = static_metric
+        else:
+            self._static_metric = StaticMetric(static_metric)
         self._static_metric_weight = static_metric_weight
 
     def _validate_trajectories(self, traj_a: Trajectory, traj_b: Trajectory) -> None:
@@ -204,11 +208,7 @@ class AggregationTrajectoryMetric(TrajectoryMetric, register_name="aggregation")
 
         # Add distance on static data if the metric has been defined.
         if self._static_metric is not None:
-            distances.append(
-                self._static_metric(
-                    traj_a.static_data(fmt="dict"), traj_b.static_data(fmt="dict")
-                )
-            )
+            distances.append(self._static_metric(traj_a, traj_b))
             weights.append(self._static_metric_weight)
 
         return float(agg_fn(distances, weights))
@@ -313,42 +313,6 @@ class AggregationTrajectoryMetric(TrajectoryMetric, register_name="aggregation")
 
         return expanded_list, weight_list
 
-    def _compute_static_cross_matrices(
-        self,
-        pool_rows: TrajectoryPool,
-        pool_cols: TrajectoryPool,
-    ) -> np.ndarray:
-        """Compute cross distance matrix based on the static data
-        between the trajectory pools.
-
-        Args:
-            pool_rows: Trajectory pool for rows   (N trajectories).
-            pool_cols: Trajectory pool for columns (M trajectories).
-
-        Returns:
-            ``static_matrix``: (N x M) matrix containing the pairwise
-            similarities according to the static data.
-        """
-        if (
-            pool_rows.static_data(fmt="polars") is None
-            or pool_cols.static_data(fmt="polars") is None
-        ):
-            raise ValueError(
-                "Computing static metric between trajectories: No static data",
-                "in at least one of the pools.",
-            )
-
-        matrix = np.full((len(pool_rows), len(pool_cols)), np.nan, dtype=np.float32)
-
-        for row_r, id_r in enumerate(
-            pool_rows.static_data(fmt="polars").iter_rows(named=True)
-        ):
-            for row_c, id_c in enumerate(
-                pool_cols.static_data(fmt="polars").iter_rows(named=True)
-            ):
-                matrix[id_r, id_c] = self._static_metric(row_r, row_c)
-        return matrix
-
     def _compute_cross_matrix_impl(
         self,
         pool_rows: TrajectoryPool,
@@ -385,7 +349,7 @@ class AggregationTrajectoryMetric(TrajectoryMetric, register_name="aggregation")
         # step 2 -- compute distances with the static metric
         if self._static_metric is not None:
             expanded_list.append(
-                self._compute_static_cross_matrices(pool_rows, pool_cols)
+                self._static_metric.compute_matrix(pool_rows, pool_cols)
             )
             weight_list.append(self._static_metric_weight)
 
