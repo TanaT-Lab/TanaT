@@ -144,7 +144,7 @@ class AggregationTrajectoryMetric(TrajectoryMetric, register_name="aggregation")
             storage=storage_options,
         )
 
-        if isinstance(static_metric, StaticMetric):
+        if static_metric is None or isinstance(static_metric, StaticMetric):
             self._static_metric = static_metric
         else:
             self._static_metric = StaticMetric(static_metric)
