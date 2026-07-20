@@ -44,6 +44,13 @@ class TestValidation:
         with pytest.raises(TypeError, match="traj_a"):
             agg("not a trajectory", traj_b)
 
+    def test_no_settings_error(self, traj_pair) -> None:
+        """no sequence metrics leads to an error."""
+        agg = AggregationTrajectoryMetric()
+        traj_a, traj_b = traj_pair
+        with pytest.raises(ValueError, match="Undefined"):
+            agg(traj_a, traj_b)
+
 
 class TestSinglePair:
     """Single-pair distance."""
@@ -54,7 +61,11 @@ class TestSinglePair:
         In ``disjoint_alias_traj_pool``: ID 1 lives only in ``'events'``,
         ID 11 only in ``'intervals'`` → empty intersection → :exc:`ValueError`.
         """
-        agg = AggregationTrajectoryMetric()
+        agg = AggregationTrajectoryMetric(
+            sequence_metrics={
+                "events": "linearpairwise",
+            }
+        )
         with pytest.raises(ValueError, match="no common sequence aliases"):
             agg(disjoint_alias_traj_pool[1], disjoint_alias_traj_pool[11])
 
@@ -67,8 +78,11 @@ class TestSinglePair:
             pytest.skip("Need at least 2 common aliases")
 
         w = {a: float(i + 1) for i, a in enumerate(aliases)}
+        seq_metrics = {a: sequence_metric for a in aliases}
         agg = AggregationTrajectoryMetric(
-            default_metric=sequence_metric, agg_fun="sum", weights=w
+            sequence_metrics=seq_metrics,
+            agg_fun="sum",
+            weights=w,
         )
 
         # Compute expected weighted sum manually
@@ -80,7 +94,7 @@ class TestSinglePair:
 
     def test_empty_trajectories(self, empty_traj_pool, sequence_metric) -> None:
         """Two trajectories with all empty sequences → nan or 0."""
-        agg = AggregationTrajectoryMetric(default_metric=sequence_metric)
+        agg = AggregationTrajectoryMetric(sequence_metrics={"events": sequence_metric})
         ids = empty_traj_pool.unique_ids
         d = agg(empty_traj_pool[ids[0]], empty_traj_pool[ids[1]])
         assert d == 0.0 or np.isnan(d)
@@ -96,13 +110,23 @@ class TestComputeMatrix:
 
     def test_returns_distance_matrix(self, small_traj_pool, sequence_metric) -> None:
         """compute_matrix() returns a DistanceMatrix instance."""
-        agg = AggregationTrajectoryMetric(default_metric=sequence_metric)
+        agg = AggregationTrajectoryMetric(sequence_metrics={"events": sequence_metric})
+        dm = agg.compute_matrix(small_traj_pool)
+        assert isinstance(dm, DistanceMatrix)
+
+    def test_returns_distance_matrix_from_two(
+        self, small_traj_pool, sequence_metric
+    ) -> None:
+        """compute_matrix() returns a DistanceMatrix instance."""
+        agg = AggregationTrajectoryMetric(
+            sequence_metrics={"events": sequence_metric, "intervals": sequence_metric}
+        )
         dm = agg.compute_matrix(small_traj_pool)
         assert isinstance(dm, DistanceMatrix)
 
     def test_shape_and_ids_match(self, small_traj_pool, sequence_metric) -> None:
         """Returned matrix is (n × n) and ids match pool.unique_ids."""
-        agg = AggregationTrajectoryMetric(default_metric=sequence_metric)
+        agg = AggregationTrajectoryMetric(sequence_metrics={"events": sequence_metric})
         dm = agg.compute_matrix(small_traj_pool)
         n = len(small_traj_pool)
         assert dm.shape == (n, n)
@@ -111,7 +135,7 @@ class TestComputeMatrix:
     def test_single_trajectory_pool(self, small_traj_pool, sequence_metric) -> None:
         """Pool with 1 trajectory → 1×1 matrix with a zero."""
         sub = small_traj_pool.subset(small_traj_pool.unique_ids[:1])
-        agg = AggregationTrajectoryMetric(default_metric=sequence_metric)
+        agg = AggregationTrajectoryMetric(sequence_metrics={"events": sequence_metric})
         dm = agg.compute_matrix(sub)
         assert dm.shape == (1, 1)
 
@@ -119,7 +143,7 @@ class TestComputeMatrix:
         self, small_traj_pool, sequence_metric
     ) -> None:
         """dm[i,j] must equal agg(traj_i, traj_j) for a few pairs."""
-        agg = AggregationTrajectoryMetric(default_metric=sequence_metric)
+        agg = AggregationTrajectoryMetric(sequence_metrics={"events": sequence_metric})
         ids = small_traj_pool.unique_ids[:4]
         sub = small_traj_pool.subset(ids)
         dm = agg.compute_matrix(sub)
@@ -138,7 +162,7 @@ class TestComputeMatrix:
         self, small_traj_pool, sequence_metric, snapshot: SnapshotAssertion
     ) -> None:
         """Full distance matrix matches snapshot (regression guard)."""
-        agg = AggregationTrajectoryMetric(default_metric=sequence_metric)
+        agg = AggregationTrajectoryMetric(sequence_metrics={"events": sequence_metric})
         dm = agg.compute_matrix(small_traj_pool)
         assert snapshot == dm.to_frame("polars").with_columns(pl.exclude("id").round(4))
 
@@ -151,7 +175,13 @@ class TestComputeMatrix:
         intervals-only → the cell ``(id1, id11)`` must be ``nan`` (not a
         ``ValueError``).  ID 1 and ID 6 share ``"events"`` → finite.
         """
-        agg = AggregationTrajectoryMetric(default_metric=sequence_metric)
+        agg = AggregationTrajectoryMetric(
+            sequence_metrics={
+                "events": sequence_metric,
+                "states": sequence_metric,
+                "intervals": sequence_metric,
+            }
+        )
         dm = agg.compute_matrix(disjoint_alias_traj_pool)
         arr = dm.to_numpy()
         ids = list(dm.ids)
@@ -174,7 +204,7 @@ class TestComputeMatrix:
         self, mixed_traj_pool, sequence_metric, snapshot: SnapshotAssertion
     ) -> None:
         """Distance matrix on a mixed pool (empty + non-empty trajectories) matches snapshot."""
-        agg = AggregationTrajectoryMetric(default_metric=sequence_metric)
+        agg = AggregationTrajectoryMetric(sequence_metrics={"events": sequence_metric})
         dm = agg.compute_matrix(mixed_traj_pool)
         assert snapshot == dm.to_frame("polars").with_columns(pl.exclude("id").round(4))
 
@@ -187,32 +217,15 @@ class TestComputeMatrix:
 class TestRegistryResolution:
     """String → SequenceMetric auto-resolution via Pydantic + Registrable."""
 
-    def test_string_default_metric_resolved(self) -> None:
-        """default_metric='linearpairwise' → instance at construction time."""
-        agg = AggregationTrajectoryMetric(default_metric="linearpairwise")
-        assert isinstance(agg.settings.default_metric, SequenceMetric)
-
     def test_string_sequence_metrics_resolved(self) -> None:
         """sequence_metrics={'events': 'linearpairwise'} → resolved per alias."""
         agg = AggregationTrajectoryMetric(sequence_metrics={"events": "linearpairwise"})
         assert isinstance(agg.settings.sequence_metrics["events"], SequenceMetric)
 
-    def test_instance_default_metric_passthrough(self) -> None:
-        """Passing a SequenceMetric instance directly is preserved."""
-        metric = LinearPairwiseSequenceMetric()
-        agg = AggregationTrajectoryMetric(default_metric=metric)
-        assert agg.settings.default_metric is metric
-
     def test_get_registered(self) -> None:
         """TrajectoryMetric.get_registered('aggregation') → AggregationTrajectoryMetric."""
         cls = TrajectoryMetric.get_registered("aggregation")
         assert cls is AggregationTrajectoryMetric
-
-    def test_settings_default_metric_is_always_instance(self) -> None:
-        """settings.default_metric is always a SequenceMetric, never a string."""
-        agg = AggregationTrajectoryMetric()
-        assert isinstance(agg.settings.default_metric, SequenceMetric)
-        assert not isinstance(agg.settings.default_metric, str)
 
 
 # ---------------------------------------------------------------------------
@@ -230,10 +243,17 @@ class TestConfigRoundtrip:
 
     def test_from_config_roundtrip(self) -> None:
         """Settings survive a to_config / from_config round-trip."""
-        agg = AggregationTrajectoryMetric(agg_fun="sum")
+        agg = AggregationTrajectoryMetric(
+            sequence_metrics={"events": "linearpairwise"}, agg_fun="sum"
+        )
         config = agg.to_config()
         agg2 = AggregationTrajectoryMetric.from_config(config)
         assert agg2.settings.agg_fun == "sum"
+        print(agg2.settings.sequence_metrics)
+        assert (
+            agg2.settings.sequence_metrics["events"].get_registration_name()
+            == "linearpairwise"
+        )
 
     def test_from_config_via_base_registry(self) -> None:
         """TrajectoryMetric.from_config dispatches to AggregationTrajectoryMetric."""
@@ -257,8 +277,14 @@ class TestMemmapChunked:
 
     def test_memmap_matches_inmemory(self, small_traj_pool, tmp_path) -> None:
         """Memmap result matches in-memory result exactly."""
-        agg_mem = AggregationTrajectoryMetric()
-        agg_disk = AggregationTrajectoryMetric(store_path=str(tmp_path), chunk_size=3)
+        agg_mem = AggregationTrajectoryMetric(
+            sequence_metrics={"events": "linearpairwise"}
+        )
+        agg_disk = AggregationTrajectoryMetric(
+            sequence_metrics={"events": "linearpairwise"},
+            store_path=str(tmp_path),
+            chunk_size=3,
+        )
         dm_mem = agg_mem.compute_matrix(small_traj_pool)
         dm_disk = agg_disk.compute_matrix(small_traj_pool)
         np.testing.assert_array_almost_equal(
@@ -267,20 +293,30 @@ class TestMemmapChunked:
 
     def test_is_memmap(self, small_traj_pool, tmp_path) -> None:
         """Result from disk path has is_memmap=True."""
-        agg = AggregationTrajectoryMetric(store_path=str(tmp_path))
+        agg = AggregationTrajectoryMetric(
+            sequence_metrics={"events": "linearpairwise"}, store_path=str(tmp_path)
+        )
         dm = agg.compute_matrix(small_traj_pool)
         assert dm.is_memmap
 
     def test_resume_skips_computed_chunks(self, small_traj_pool, tmp_path) -> None:
         """Second call skips completed chunks and produces the same result."""
-        agg = AggregationTrajectoryMetric(store_path=str(tmp_path), chunk_size=3)
+        agg = AggregationTrajectoryMetric(
+            sequence_metrics={"events": "linearpairwise"},
+            store_path=str(tmp_path),
+            chunk_size=3,
+        )
         dm1 = agg.compute_matrix(small_traj_pool)
         dm2 = agg.compute_matrix(small_traj_pool)  # all done → resume
         np.testing.assert_array_almost_equal(dm1.to_numpy(), dm2.to_numpy(), decimal=5)
 
     def test_resume_after_partial(self, small_traj_pool, tmp_path) -> None:
         """Decrement completed_chunks → resume recomputes the missing chunk."""
-        agg = AggregationTrajectoryMetric(store_path=str(tmp_path), chunk_size=3)
+        agg = AggregationTrajectoryMetric(
+            sequence_metrics={"events": "linearpairwise"},
+            store_path=str(tmp_path),
+            chunk_size=3,
+        )
         dm1 = agg.compute_matrix(small_traj_pool)
         expected = dm1.to_numpy().copy()
 
@@ -296,10 +332,24 @@ class TestMemmapChunked:
 
     def test_settings_change_forces_recompute(self, small_traj_pool, tmp_path) -> None:
         """Changing agg_fun wipes the old matrix and recomputes."""
-        agg1 = AggregationTrajectoryMetric(agg_fun="mean", store_path=str(tmp_path))
+        agg1 = AggregationTrajectoryMetric(
+            sequence_metrics={
+                "events": "linearpairwise",
+                "intervals": "linearpairwise",
+            },
+            agg_fun="mean",
+            store_path=str(tmp_path),
+        )
         dm1 = agg1.compute_matrix(small_traj_pool)
 
-        agg2 = AggregationTrajectoryMetric(agg_fun="sum", store_path=str(tmp_path))
+        agg2 = AggregationTrajectoryMetric(
+            sequence_metrics={
+                "events": "linearpairwise",
+                "intervals": "linearpairwise",
+            },
+            agg_fun="sum",
+            store_path=str(tmp_path),
+        )
         dm2 = agg2.compute_matrix(small_traj_pool)
 
         if np.any(dm1.to_numpy() > 0):
@@ -307,7 +357,12 @@ class TestMemmapChunked:
 
     def test_metadata_and_progress_written(self, small_traj_pool, tmp_path) -> None:
         """metadata.json and progress.json are present and well-formed."""
-        agg = AggregationTrajectoryMetric(store_path=str(tmp_path))
+        agg = AggregationTrajectoryMetric(
+            sequence_metrics={
+                "events": "linearpairwise",
+            },
+            store_path=str(tmp_path),
+        )
         agg.compute_matrix(small_traj_pool)
 
         meta = json.loads((tmp_path / "metadata.json").read_text())
@@ -322,7 +377,14 @@ class TestMemmapChunked:
     def test_single_trajectory_memmap(self, small_traj_pool, tmp_path) -> None:
         """Pool with 1 trajectory + memmap → 1×1 matrix with a zero, is_memmap=True."""
         sub = small_traj_pool.subset(small_traj_pool.unique_ids[:1])
-        agg = AggregationTrajectoryMetric(store_path=str(tmp_path), chunk_size=10)
+        agg = AggregationTrajectoryMetric(
+            sequence_metrics={
+                "events": "linearpairwise",
+                "intervals": "linearpairwise",
+            },
+            store_path=str(tmp_path),
+            chunk_size=10,
+        )
         dm = agg.compute_matrix(sub)
         assert dm.shape == (1, 1)
         assert dm.to_numpy()[0, 0] == 0.0
@@ -330,9 +392,19 @@ class TestMemmapChunked:
 
     def test_chunk_size_larger_than_pool(self, small_traj_pool, tmp_path) -> None:
         """chunk_size > n → single chunk, same result as in-memory."""
-        agg_mem = AggregationTrajectoryMetric()
+        agg_mem = AggregationTrajectoryMetric(
+            sequence_metrics={
+                "events": "linearpairwise",
+                "intervals": "linearpairwise",
+            }
+        )
         agg_disk = AggregationTrajectoryMetric(
-            store_path=str(tmp_path), chunk_size=9999
+            sequence_metrics={
+                "events": "linearpairwise",
+                "intervals": "linearpairwise",
+            },
+            store_path=str(tmp_path),
+            chunk_size=9999,
         )
         dm_mem = agg_mem.compute_matrix(small_traj_pool)
         dm_disk = agg_disk.compute_matrix(small_traj_pool)
@@ -342,7 +414,12 @@ class TestMemmapChunked:
 
     def test_callsite_store_path_override(self, small_traj_pool, tmp_path) -> None:
         """store_path kwarg on compute_matrix() overrides instance default (no storage)."""
-        agg = AggregationTrajectoryMetric()  # no storage
+        agg = AggregationTrajectoryMetric(
+            sequence_metrics={
+                "events": "linearpairwise",
+                "intervals": "linearpairwise",
+            }
+        )  # no storage
         dm = agg.compute_matrix(small_traj_pool, store_path=str(tmp_path))
         assert dm.is_memmap
         assert (tmp_path / "metadata.json").exists()
