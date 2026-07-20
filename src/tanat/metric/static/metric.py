@@ -47,6 +47,8 @@ class StaticMetric:
             data (must have two dictionaries as parameters).
         """
 
+        if cmp_fnct is not None and not isinstance(cmp_fnct, Callable):
+            raise TypeError("Expected a function for defining the static metric.")
         self._cmp_fnct = cmp_fnct
 
     # ------------------------------------------------------------------
