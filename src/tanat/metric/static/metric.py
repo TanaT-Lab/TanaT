@@ -18,8 +18,8 @@ from ...sequence.base.pool import SequencePool
 class StaticMetric:
     """Class for comparing static attributes between sequences or trajectories.
 
-    The comparison function between static information is to be provided by the
-    user while creating the :class:`~tanat.metric.static.metric.StaticMetric`
+    The comparison function between static information is *to be provided by the
+    user* while creating the :class:`~tanat.metric.static.metric.StaticMetric`
     object.
     If not defined this class implements a binary similarity function that returns
     0 if all attributes values are similars and 1 otherwise. It is based on the
@@ -31,12 +31,64 @@ class StaticMetric:
 
     Warning::
 
-    The comparison function must have two parameters that are dictionaries.
+        The comparison function must have two parameters that are dictionaries.
+        Use brackets with attribute names to access the value of a static
+        feature.
 
+    Static metric are objects that made to compute metrics between pairs of
+    trajectories or sequences. It can be defined as it.
 
     Example::
 
-    TODO
+        # Comparison between two dictionaries representing
+        # the static attributes of two trajectories/sequences.
+        # Values of the attributes of static features are accessed
+        # using named brackets only.
+
+        # This function must have two parameters and return a
+        # float.
+
+        # In this exemple, it compares the ages of the individuals
+        def static_metric(static1, static2) -> float:
+            return abs(float(static1["age"]) - float(static2["age"]))
+
+
+        # Definition of a metric based on static features
+        csmet = StaticMetric(smet)
+
+        # Evaluate the metrics between two trajectories
+        val = csmet(traj1, traj2)
+
+
+    Static metric are more useful while hidden in the
+    :class:`~tanat.metric.trajectory.AggregationTrajectoryMetric`.
+    A static object comparison function or a StaticMetric can be
+    defined to take into account static features in the aggregated
+    metric.
+
+    Example::
+
+        # Same function to compare the `age` static attribute
+        def static_metric(static1, static2) -> float:
+            return abs(float(static1["age"]) - float(static2["age"]))
+
+        # When an aggregation trajectory metric is defined, the user can
+        # add an additional component based on the static features by
+        # providing the function used to compare static features and also
+        # a weight in the weighted sum of metrics.
+        metric = AggregationTrajectoryMetric(static_metric=static_metric, static_metric_weight=0.5)
+        value = metric(traj1, traj2)
+
+
+    Information ::
+
+        StaticMetric can evaluate cross-distance matrix from a pool of trajectories
+        or sequences. Nonetheless, their computation is not optimized for large
+        datasets.
+
+    Warning ::
+        Contrary to the other functions that compute cross-distance matrix it does not
+        provide a DistanceMatrix
 
     """
 
