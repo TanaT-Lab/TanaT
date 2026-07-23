@@ -16,6 +16,7 @@ from ...base import TrajectoryMetric
 from ....sequence.base import SequenceMetric
 from ....matrix import DistanceMatrix
 from ...._storage import save_progress
+from ....static import StaticMetric
 
 if TYPE_CHECKING:
     from .....trajectory.trajectory import Trajectory
@@ -113,6 +114,8 @@ class AggregationTrajectoryMetric(TrajectoryMetric, register_name="aggregation")
         self,
         default_metric: SequenceMetric | str = "linearpairwise",
         sequence_metrics: dict[str, SequenceMetric | str] | None = None,
+        static_metric: StaticMetric | Callable | None = None,
+        static_metric_weight: float = 1.0,
         agg_fun: str = "mean",
         weights: dict[str, float] | None = None,
         *,
@@ -140,6 +143,30 @@ class AggregationTrajectoryMetric(TrajectoryMetric, register_name="aggregation")
             ),
             storage=storage_options,
         )
+
+        if static_metric is None or isinstance(static_metric, StaticMetric):
+            self._static_metric = static_metric
+        else:
+            self._static_metric = StaticMetric(static_metric)
+        self._static_metric_weight = static_metric_weight
+
+    def _validate_trajectories(self, traj_a: Trajectory, traj_b: Trajectory) -> None:
+        """Type-check both trajectory arguments. Overload the parent function to
+        handle static data."""
+        super()._validate_trajectories(traj_a, traj_b)
+        if self._static_metric is not None:
+            if traj_a.static_data is None:
+                raise ValueError(
+                    "The first trajectory has no static data but the metric requires",
+                    " some. Remove the `static_metric` from the metrics settings or",
+                    "add compatible static values to the trajectory.",
+                )
+            if traj_b.static_data is None:
+                raise ValueError(
+                    "The second trajectory has no static data but the metric requires",
+                    " some. Remove the `static_metric` from the metrics settings or",
+                    "add compatible static values to the trajectory.",
+                )
 
     # ------------------------------------------------------------------
     # Core computation
@@ -179,6 +206,11 @@ class AggregationTrajectoryMetric(TrajectoryMetric, register_name="aggregation")
             distances.append(metric(traj_a[alias], traj_b[alias]))
             weights.append(weights_map.get(alias, 1.0))
 
+        # Add distance on static data if the metric has been defined.
+        if self._static_metric is not None:
+            distances.append(self._static_metric(traj_a, traj_b))
+            weights.append(self._static_metric_weight)
+
         return float(agg_fn(distances, weights))
 
     # ------------------------------------------------------------------
@@ -188,17 +220,21 @@ class AggregationTrajectoryMetric(TrajectoryMetric, register_name="aggregation")
     def _compute_per_alias_matrices(
         self, pool: TrajectoryPool
     ) -> tuple[list[np.ndarray], list[float]]:
-        """Compute per-alias distance matrices expanded to the full ID space.
+        """Compute per-alias (per type of sequence) distance matrices expanded to
+        the full ID space.
 
         For each alias, delegates to the configured
         :class:`~tanat.metric.sequence.base.SequenceMetric`, then expands
-        the result to an ``(N, N)`` array (``nan`` for missing IDs).
+        the result into a collection of ``(N, N)`` array (``nan`` for missing IDs) where `N`
+        is the number of trajectories.
 
         Args:
             pool: Trajectory pool.
 
         Returns:
-            ``(expanded_list, weight_list)`` aligned with ``pool.sequence_pools``.
+            ``(expanded_list, weight_list)`` aligned with ``pool.sequence_pools``. The size of
+            the returned lists are the same and correspond to the number of aliases (sequence
+            types)
         """
         all_ids = pool.unique_ids
         N = len(all_ids)
@@ -282,26 +318,42 @@ class AggregationTrajectoryMetric(TrajectoryMetric, register_name="aggregation")
         pool_rows: TrajectoryPool,
         pool_cols: TrajectoryPool,
     ) -> np.ndarray:
-        """Two-step optimised cross (n × k) matrix computation.
+        """Three-step optimised cross (N × M) matrix computation with the same
+        K aliases (types of sequences).
+
 
         **Step 1**: per-alias cross sub-matrices: for each alias, delegates
         to the configured :class:`~tanat.metric.sequence.base.SequenceMetric`
         via :meth:`compute_cross_matrix` (which uses Numba when available),
-        then expands to the full ``(N, K)`` trajectory ID space.
+        then expands to the full ``(N, M)`` trajectory ID space.
 
-        **Step 2**: weighted aggregation: stack the per-alias matrices and
+        **Step 2**: static metric sub-matrices: evaluate the pairwise
+        static metric between trajectories.
+
+        **Step 3**: weighted aggregation: stack the per-alias matrices and
         apply :meth:`_aggregate_matrices` (numpy, vectorised).
 
         Args:
-            pool_rows: Trajectory pool for rows   (n trajectories).
-            pool_cols: Trajectory pool for columns (k trajectories).
+            pool_rows: Trajectory pool for rows   (N trajectories, K sequences-types).
+            pool_cols: Trajectory pool for columns (M trajectories, K sequence-types).
 
         Returns:
-            float32 numpy array of shape ``(n, k)``.
+            float32 numpy array of shape ``(N, M)``.
         """
+
+        # step 1 -- construct per-alias sub-matrices
         expanded_list, weight_list = self._compute_per_alias_cross_matrices(
             pool_rows, pool_cols
         )
+
+        # step 2 -- compute distances with the static metric
+        if self._static_metric is not None:
+            expanded_list.append(
+                self._static_metric.compute_matrix(pool_rows, pool_cols)
+            )
+            weight_list.append(self._static_metric_weight)
+
+        # step 3 -- aggregate the distances
         stack = np.stack(expanded_list)  # (K_aliases, N, K)
         w = np.array(weight_list, dtype=np.float64)
         return self._aggregate_matrices(stack, w).astype(np.float32)
@@ -425,8 +477,3 @@ class AggregationTrajectoryMetric(TrajectoryMetric, register_name="aggregation")
                 f"Supported: {list(_AGG_REGISTRY.keys())}"
             )
         return entry["matrix" if matrix else "scalar"]
-
-    def _aggregate(self, distances: list[float], aliases: list[str]) -> float:
-        """Aggregate per-alias scalar distances using weights and ``agg_fun``."""
-        weights = [self._get_weight_for(a) for a in aliases]
-        return self._get_agg_fn()(distances, weights)

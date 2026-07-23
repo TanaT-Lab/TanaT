@@ -43,6 +43,9 @@ from .trajectory import (
     AggregationSettings,
 )
 
+## -- Static Metrics --
+from .static import StaticMetric
+
 __all__ = [
     "DistanceMatrix",
     "StorageOptions",
@@ -70,4 +73,6 @@ __all__ = [
     "TrajectoryMetric",
     "AggregationTrajectoryMetric",
     "AggregationSettings",
+    ## -- Static Metrics --
+    "StaticMetric",
 ]

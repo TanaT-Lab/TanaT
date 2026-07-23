@@ -478,7 +478,7 @@ class Sequence(
     def static_data(
         self,
         features: list[str] | str | None = None,
-        fmt: Literal["pandas", "polars"] = "pandas",
+        fmt: Literal["pandas", "polars", "dict"] = "pandas",
         use_arrow: bool = True,
     ) -> pl.DataFrame | pd.DataFrame | None:
         """
@@ -486,25 +486,29 @@ class Sequence(
 
         Args:
             features: Feature name(s) to include (``None`` -> all).
-            fmt: ``"pandas"`` (default) or ``"polars"``.
+            fmt: ``"pandas"`` (default), "dict" or ``"polars"``.
             use_arrow: Use Arrow extension arrays for polars -> pandas conversion.
 
         Returns:
-            Single-row DataFrame with columns ``[id, feature…]``.
-            ``None`` when no static features are exposed by this pool.
+            Single-row DataFrame with columns ``[id, feature…]``;
+            A python dictionary with named attribute-value pairs or
+            ``None`` when no static features are exposed by this sequence.
 
         Examples::
 
             seq = pool[42]
             row = seq.static_data()               # pandas, all static features
-            row = seq.static_data("age", "sex")   # subset
+            row = seq.static_data("age", "sex")   # subset of features
+            row = seq.static_data(fmt="dict")     # returns a dictionary
         """
-        fmt = resolve_fmt(fmt, allowed=("pandas", "polars"), default="pandas")
+        fmt = resolve_fmt(fmt, allowed=("pandas", "polars", "dict"), default="pandas")
         df = self._static_data_df(features)
-        if df is None:
+        if df is None or len(df) == 0:
             return None
         if fmt == "polars":
             return df
+        elif fmt == "dict":
+            return df.row(0, named=True)
         return to_pandas(df, use_arrow=use_arrow)
 
     def apply(

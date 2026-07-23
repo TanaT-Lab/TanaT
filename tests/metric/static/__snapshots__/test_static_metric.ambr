@@ -1,0 +1,61 @@
+# serializer version: 1
+# name: TestStatic.test_sequence_default_snapshot
+  1.0
+# ---
+# name: TestStatic.test_sequence_function_snapshot
+  30.0
+# ---
+# name: TestStatic.test_trajectory_default_snapshot[datetime]
+  1.0
+# ---
+# name: TestStatic.test_trajectory_default_snapshot[timestep]
+  1.0
+# ---
+# name: TestStatic.test_trajectory_function_snapshot[datetime]
+  30.0
+# ---
+# name: TestStatic.test_trajectory_function_snapshot[timestep]
+  30.0
+# ---
+# name: TestStatic.test_trajectory_within_agg_default_snapshot[datetime]
+  10.5
+# ---
+# name: TestStatic.test_trajectory_within_agg_default_snapshot[timestep]
+  10.5
+# ---
+# name: TestStatic.test_trajectory_within_agg_function_snapshot[datetime]
+  10.5
+# ---
+# name: TestStatic.test_trajectory_within_agg_function_snapshot[timestep]
+  10.5
+# ---
+# name: TestStatic.test_trajectory_within_agg_weight_snapshot[datetime]
+  7.7143
+# ---
+# name: TestStatic.test_trajectory_within_agg_weight_snapshot[timestep]
+  7.7143
+# ---
+# name: TestStaticPool.test_agg_static_matrix_snapshot[datetime]
+  'DistanceMatrix(shape=(5, 5), n=5)'
+# ---
+# name: TestStaticPool.test_agg_static_matrix_snapshot[timestep]
+  'DistanceMatrix(shape=(5, 5), n=5)'
+# ---
+# name: TestStaticPool.test_static_matrix_snapshot[datetime]
+  '''
+  [[ 0. 13. 43.  8. 19.]
+   [13.  0. 30.  5.  6.]
+   [43. 30.  0. 35. 24.]
+   [ 8.  5. 35.  0. 11.]
+   [19.  6. 24. 11.  0.]]
+  '''
+# ---
+# name: TestStaticPool.test_static_matrix_snapshot[timestep]
+  '''
+  [[ 0. 13. 43.  8. 19.]
+   [13.  0. 30.  5.  6.]
+   [43. 30.  0. 35. 24.]
+   [ 8.  5. 35.  0. 11.]
+   [19.  6. 24. 11.  0.]]
+  '''
+# ---

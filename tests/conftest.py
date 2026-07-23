@@ -203,6 +203,41 @@ def state_pool(state_store: Path) -> StateSequencePool:
 
 
 # ---------------------------------------------------------------------------
+# Sequence pool without static data
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def event_no_static_store(data_dir: Path) -> Path:
+    """Store path for the datetime StateSequencePool (contiguous non-overlapping states)."""
+    seq = data_dir / "datetime"
+    return (
+        EventSequencePool.builder()
+        .add_parquet(
+            seq / "sequence_main.parquet",
+            id_column="id",
+            time_column="start",
+            features=[
+                "value",
+                "status",
+                "flag_valid",
+                "token_emb",
+                "observed_at",
+                "duration",
+            ],
+        )
+        .build("event_pool_no_static")
+    )
+
+
+@pytest.fixture(scope="session")
+def event_pool_no_static(event_no_static_store: Path) -> EventSequencePool:
+    """EventSequencePool built without static data."""
+
+    return EventSequencePool(store=event_no_static_store)
+
+
+# ---------------------------------------------------------------------------
 # Sequence pools: timestep variant (float day-offset T_START / T_END)
 # ---------------------------------------------------------------------------
 

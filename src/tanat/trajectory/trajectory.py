@@ -388,7 +388,7 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
     def static_data(
         self,
         features: list[str] | str | None = None,
-        fmt: Literal["pandas", "polars"] = "pandas",
+        fmt: Literal["pandas", "polars", "dict"] = "pandas",
         use_arrow: bool = True,
     ) -> pl.DataFrame | pd.DataFrame | None:
         """Return trajectory-level static data for this trajectory only.
@@ -400,15 +400,18 @@ class Trajectory(TrajectoryViewMixin, CachableSettings):
             use_arrow: Use Arrow extension arrays for polars -> pandas conversion.
 
         Returns:
-            One-row DataFrame with ``[id, feature...]`` or ``None`` when no
-            static features are available in the current view.
+            One-row DataFrame with ``[id, feature...]``;
+            a python dictionary with named attribute-value pairs or
+            ``None`` when no static features are available in the current view.
         """
-        fmt = resolve_fmt(fmt, allowed=("pandas", "polars"), default="pandas")
+        fmt = resolve_fmt(fmt, allowed=("pandas", "polars", "dict"), default="pandas")
         df = self._static_data_df(features)
-        if df is None:
+        if df is None or len(df) == 0:
             return None
         if fmt == "polars":
             return df
+        elif fmt == "dict":
+            return df.row(0, named=True)
         return to_pandas(df, use_arrow=use_arrow)
 
     # ------------------------------------------------------------------

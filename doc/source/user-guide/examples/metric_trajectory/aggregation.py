@@ -16,13 +16,14 @@ import polars as pl
 import matplotlib.pyplot as plt
 
 from tanat import build_states, build_events, build_trajectories
-from tanat.dataset import simulate_trajectories
+from tanat.dataset import simulate_trajectories, simulate_static
 from tanat.metric.entity import HammingEntityMetric
 from tanat.metric.sequence import (
     EditSequenceMetric,
     LCSSequenceMetric,
 )
 from tanat.metric import AggregationTrajectoryMetric
+from tanat.metric.static import StaticMetric
 
 # %%
 # Generate synthetic trajectory data
@@ -127,3 +128,48 @@ cbar = plt.colorbar(im, ax=ax)
 cbar.set_label("Distance")
 plt.tight_layout()
 plt.show()
+
+
+# %%
+# Use static metric in AggregationMetric
+# ----------------------------------------
+# A :class:`~tanat.metric.static.StaticMetric` can also be used in
+# an :class:`~tanat.metric.trajectory.AggregationMetric`. This trajectory
+# metric defines a distance as an aggregate of sequence metrics.
+# In addition, it is possible to define a static metric as an additional
+# metric to aggregate (with it own weight).
+
+# first add simulated static data to the trajectory pool
+static_data = simulate_static(n_ids=N_TRAJ, features=["age", "group"])
+traj_pool.add_static_features(static_data, id_column="id")
+
+
+# define a static metric based on `age` feature
+def age_cmp(s1, s2):
+    """Comparison of age static features"""
+    return abs(s1["age"] - s2["age"])
+
+
+custom_static_metric = StaticMetric(cmp_fnct=age_cmp)
+
+# The trajectory metric is defined by the sequence metric required
+# for the `events` type, and we add a `static_metric` with a very small weight
+# (the comparison of ages leads to values between 0 and 120).
+
+traj_metric = AggregationTrajectoryMetric(
+    default_metric=EditSequenceMetric(entity_metric=hamming, normalize=True),
+    sequence_metrics={
+        "events": LCSSequenceMetric(entity_metric=hamming, mode="normalized")
+    },
+    static_metric=custom_static_metric,
+    static_metric_weight=0.01,
+)
+
+traj_ids = traj_pool.unique_ids
+traj_a = traj_pool[traj_ids[0]]
+traj_b = traj_pool[traj_ids[1]]
+
+dist = traj_metric(traj_a, traj_b)
+print(f"\nDistance between {traj_ids[0]} and {traj_ids[1]}: {dist:.1f}")
+
+# %%
