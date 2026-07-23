@@ -72,7 +72,6 @@ class AggregationSettings:
     Aliases absent from ``weights`` default to ``1.0``.
     """
 
-    default_metric: SequenceMetric = "linearpairwise"
     sequence_metrics: dict[str, SequenceMetric] | None = None
     agg_fun: str = "mean"
     weights: dict[str, float] | None = None
@@ -94,11 +93,10 @@ class AggregationTrajectoryMetric(TrajectoryMetric, register_name="aggregation")
 
     Example::
 
-        hamming = HammingEntityMetric(entity_feature="status")
         lp = LinearPairwiseSequenceMetric(entity_metric=hamming)
 
         agg = AggregationTrajectoryMetric(
-            default_metric=lp,
+            sequence_metric={"event": lp; "states": lp},
             agg_fun="mean",
             weights={"events": 1.0, "states": 0.5},
         )
@@ -112,7 +110,6 @@ class AggregationTrajectoryMetric(TrajectoryMetric, register_name="aggregation")
 
     def __init__(
         self,
-        default_metric: SequenceMetric | str = "linearpairwise",
         sequence_metrics: dict[str, SequenceMetric | str] | None = None,
         static_metric: StaticMetric | Callable | None = None,
         static_metric_weight: float = 1.0,
@@ -136,7 +133,6 @@ class AggregationTrajectoryMetric(TrajectoryMetric, register_name="aggregation")
 
         super().__init__(
             settings=AggregationSettings(
-                default_metric=default_metric,
                 sequence_metrics=sequence_metrics,
                 agg_fun=agg_fun,
                 weights=weights,
@@ -187,6 +183,9 @@ class AggregationTrajectoryMetric(TrajectoryMetric, register_name="aggregation")
         Raises:
             ValueError: If the trajectories share no common sequence aliases.
         """
+        if self.settings.sequence_metrics is None:
+            raise ValueError("Undefined sequence metrics.")
+
         common = sorted(set(traj_a) & set(traj_b))
         if not common:
             raise ValueError(
@@ -195,14 +194,20 @@ class AggregationTrajectoryMetric(TrajectoryMetric, register_name="aggregation")
                 f"traj_a: {sorted(traj_a)}, traj_b: {sorted(traj_b)}"
             )
 
+        if len(set(self.settings.sequence_metrics.keys()).difference(common)) > 0:
+            raise ValueError(
+                f"Trajectories {traj_a.id_value!r} or {traj_b.id_value!r} "
+                "misses some sequence aliases required by the metrics. "
+            )
+
         seq_metrics = self.settings.sequence_metrics or {}
         weights_map = self.settings.weights or {}
         agg_fn = self._get_agg_fn()
 
         distances = []
         weights = []
-        for alias in common:
-            metric = seq_metrics.get(alias, self.settings.default_metric)
+        for alias in seq_metrics.keys():
+            metric = seq_metrics[alias]
             distances.append(metric(traj_a[alias], traj_b[alias]))
             weights.append(weights_map.get(alias, 1.0))
 
@@ -245,6 +250,9 @@ class AggregationTrajectoryMetric(TrajectoryMetric, register_name="aggregation")
 
         for alias, sub_pool in pool.sequence_pools.items():
             metric = self._metric_for(alias)
+            if metric is None:
+                # no metric defined for this alias
+                continue
 
             with self._nested_display():
                 dm = metric.compute_matrix(sub_pool)
@@ -278,7 +286,7 @@ class AggregationTrajectoryMetric(TrajectoryMetric, register_name="aggregation")
 
         Returns:
             ``(expanded_list, weight_list)``: one entry per alias present in
-            at least one of the two pools.
+            the ``sequence_metrics`` definition.
         """
         ids_r = pool_rows.unique_ids
         ids_c = pool_cols.unique_ids
@@ -286,14 +294,10 @@ class AggregationTrajectoryMetric(TrajectoryMetric, register_name="aggregation")
         id_to_row = {tid: i for i, tid in enumerate(ids_r)}
         id_to_col = {tid: i for i, tid in enumerate(ids_c)}
 
-        all_aliases = sorted(
-            set(pool_rows.sequence_pools) | set(pool_cols.sequence_pools)
-        )
-
         expanded_list: list[np.ndarray] = []
         weight_list: list[float] = []
 
-        for alias in all_aliases:
+        for alias in self.settings.sequence_metrics.keys():
             sub_r = pool_rows.sequence_pools.get(alias)
             sub_c = pool_cols.sequence_pools.get(alias)
 
@@ -445,10 +449,11 @@ class AggregationTrajectoryMetric(TrajectoryMetric, register_name="aggregation")
     # Helpers
     # ------------------------------------------------------------------
 
-    def _metric_for(self, alias: str) -> SequenceMetric:
-        """Return the SequenceMetric for *alias* (per-alias override or default)."""
+    def _metric_for(self, alias: str) -> SequenceMetric | None:
+        """Return the SequenceMetric for *alias* (per-alias override or default)
+        or None if the metric is not defined for this `alias`."""
         mapping = self.settings.sequence_metrics or {}
-        return mapping.get(alias, self.settings.default_metric)
+        return mapping.get(alias, None)
 
     def _get_weight_for(self, alias: str) -> float:
         """Return weight for *alias* (from ``settings.weights``, default ``1.0``)."""

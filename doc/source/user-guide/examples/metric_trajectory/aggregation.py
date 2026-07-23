@@ -83,9 +83,9 @@ hamming = HammingEntityMetric(entity_feature="status")
 
 # Use different metrics per alias (sequence type)
 agg = AggregationTrajectoryMetric(
-    default_metric=EditSequenceMetric(entity_metric=hamming, normalize=True),
     sequence_metrics={
         "events": LCSSequenceMetric(entity_metric=hamming, mode="normalized"),
+        "states": EditSequenceMetric(entity_metric=hamming, normalize=True),
     },
     agg_fun="mean",
 )
