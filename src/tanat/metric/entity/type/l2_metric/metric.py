@@ -93,6 +93,7 @@ class L2EntityMetric(EntityMetric, register_name="l2entity"):
             if self._check_numerical(ent_a.metadata.get(ent_a.feature_names[fid])):
                 feature = ent_a.feature_names[fid]
                 break
+            fid += 1
 
         if feature is None:
             raise TypeError(
