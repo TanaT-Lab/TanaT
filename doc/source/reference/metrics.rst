@@ -29,7 +29,8 @@ Entity metrics compare individual states or events on categorical features.
 Sequence Metrics
 ----------------
 
-Sequence metrics operate on entire sequences, leveraging an EntityMetric as a foundation.
+Sequence metrics operate on entire sequences, leveraging an 
+:class:`~tanat.metric.entity.EntityMetric` as a foundation.
 
 .. list-table::
    :header-rows: 1
@@ -67,8 +68,10 @@ sequence-level distances.
    * - :class:`~tanat.metric.AggregationTrajectoryMetric`
      - Compute per-alias SequenceMetric, then aggregate via mean/min/max/sum
 
-**Key feature:** Use different SequenceMetrics for different sequence types (aliases).
-For example, use EditSequenceMetric for states and LCSSequenceMetric for events,
+**Key feature:** Use different :class:`~tanat.metric.sequence.SequenceMetrics` for 
+different sequence types (aliases).
+For example, use :class:`~tanat.metric.EditSequenceMetric` for states and 
+:class:`~tanat.metric.LCSSequenceMetric` for events,
 then aggregate the results.
 
 Distance Matrix

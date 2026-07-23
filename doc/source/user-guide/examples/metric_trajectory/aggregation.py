@@ -157,7 +157,6 @@ custom_static_metric = StaticMetric(cmp_fnct=age_cmp)
 # (the comparison of ages leads to values between 0 and 120).
 
 traj_metric = AggregationTrajectoryMetric(
-    default_metric=EditSequenceMetric(entity_metric=hamming, normalize=True),
     sequence_metrics={
         "events": LCSSequenceMetric(entity_metric=hamming, mode="normalized")
     },
