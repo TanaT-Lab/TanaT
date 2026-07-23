@@ -100,3 +100,26 @@ for i in range(5):
     d = hamming(e1, e2)
 
     print(f"Pair {i+1}: {e1['status']!r:10} vs {e2['status']!r:10} → {d:.1f}")
+
+
+# %%
+# Create Hamming entity metric without entity feature
+# -----------------------------------------------------
+#
+# In case no entity feature is provided while an `EntityMetric` is defined,
+# then the first time there is an attempt to compute a metric, the metric
+# self-define the entity feature as the "first" categorical feature that
+# is found.
+# An error is raised if no categorical feature is found.
+
+
+# no entity feature defined
+hamming = HammingEntityMetric()
+print(hamming)
+
+# Compute Hamming distance between two entity features
+dist = hamming(ent_a, ent_b)
+
+# the "status" feature has been identified as a categorical feature
+# compatible with the hamming metric
+print(hamming)

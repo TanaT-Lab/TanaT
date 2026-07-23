@@ -29,7 +29,8 @@ class HammingSettings(EntityMetricSettings):
 
     Args:
         entity_feature: Name of the categorical feature to compare.
-            ``None`` - first entity feature from the pool/entity metadata.
+            ``None`` - first categorical entity feature from the
+            pool/entity metadata.
         cost: Pairwise cost lookup. Keys are ``(val_a, val_b)`` tuples;
             order does not matter (both ``(A, B)`` and ``(B, A)`` are
             checked). Conflicting entries are rejected at construction.
@@ -103,10 +104,38 @@ class HammingEntityMetric(EntityMetric, register_name="hamming"):
     def validate_entity(self, ent_a: Entity, ent_b: Entity | None = None) -> None:
         """Verify the configured feature exists and is categorical."""
         self._validate_entity_instance(ent_a, ent_b)
-        feature = self.settings.entity_feature or ent_a.feature_names[0]
-        self._validate_categorical(ent_a.metadata.get(feature), feature)
+
+        feature = self.settings.entity_feature
+        fid = 0
+        while feature is None and fid < len(ent_a.feature_names):
+            if self._check_categorical(ent_a.metadata.get(ent_a.feature_names[fid])):
+                feature = ent_a.feature_names[fid]
+                break
+            fid += 1
+
+        if feature is None:
+            raise TypeError(
+                "HammingEntityMetric requires at least one categorical feature, "
+                "none has been found. "
+                "Provide at least one attribute of type pl.Categorical or pl.Enum."
+            )
+        elif self.settings.entity_feature is not None:
+            # when en entity has been defined, it must be validated
+            self._validate_categorical(ent_a.metadata.get(feature), feature)
+
         if ent_b is not None:
             self._validate_categorical(ent_b.metadata.get(feature), feature)
+
+        if self.settings.entity_feature is None:
+            # the setting is not complete and we validate its consistency with
+            # an entity, then, we use this setting for future usage of the metric
+            self.update_settings(entity_feature=feature)
+
+    def _check_categorical(self, info: FeatureInfo | None) -> None:
+        """Return True if `feature` exists and is categorical and False otherwise."""
+        if info is None or not isinstance(info, CategoricalInfo):
+            return False
+        return True
 
     def _validate_categorical(self, info: FeatureInfo | None, feature: str) -> None:
         """Assert that *feature* metadata is categorical."""
@@ -125,8 +154,22 @@ class HammingEntityMetric(EntityMetric, register_name="hamming"):
 
     def _resolve_feature(self, pool: SequencePool) -> str:
         """Resolve and validate the categorical feature name for *pool*."""
-        feature = self.settings.entity_feature or pool.metadata.entity_features[0].name
-        self._validate_categorical(pool.metadata.feature_info(feature), feature)
+        feature = self.settings.entity_feature
+        fid = 0
+        while feature is None and fid < len(pool.metadata.entity_features):
+            if self._check_categorical(pool.metadata.entity_features[fid]):
+                feature = pool.metadata.entity_features[fid].name
+                break
+
+        if feature is None:
+            raise TypeError(
+                "HammingEntityMetric requires at least one categorical feature, "
+                "none has been found. "
+                "Provide at least one attribute of type pl.Categorical or pl.Enum."
+            )
+        elif self.settings.entity_feature is not None:
+            # when en entity has been defined, it must be validated
+            self._validate_categorical(pool.metadata.feature_info(feature), feature)
         return feature
 
     @staticmethod
