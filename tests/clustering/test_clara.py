@@ -108,10 +108,10 @@ class TestCLARAFitSequence:
 class TestCLARAFitTrajectory:
     """CLARAClusterer.fit() on trajectory pools."""
 
-    def test_n_clusters_respected(self, small_traj_pool, traj_metric_name) -> None:
+    def test_n_clusters_respected(self, small_traj_pool, traj_metric) -> None:
         """fit() on a TrajectoryPool produces exactly n_clusters cluster objects."""
         clara = CLARAClusterer(
-            metric=traj_metric_name,
+            metric=traj_metric,
             n_clusters=2,
             sampling_ratio=0.8,
             nb_pam_instances=2,
@@ -120,10 +120,10 @@ class TestCLARAFitTrajectory:
         clara.fit(small_traj_pool)
         assert len(clara.clusters) == 2
 
-    def test_medoids_count(self, small_traj_pool, traj_metric_name) -> None:
+    def test_medoids_count(self, small_traj_pool, traj_metric) -> None:
         """After fit on a TrajectoryPool, medoids list length equals n_clusters."""
         clara = CLARAClusterer(
-            metric=traj_metric_name,
+            metric=traj_metric,
             n_clusters=2,
             sampling_ratio=0.8,
             nb_pam_instances=2,

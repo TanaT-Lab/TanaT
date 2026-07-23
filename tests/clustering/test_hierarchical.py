@@ -58,23 +58,23 @@ class TestHierarchicalFitSequence:
 class TestHierarchicalFitTrajectory:
     """fit() on trajectory pools (small_traj_pool × traj_metric_name)."""
 
-    def test_n_clusters_respected(self, small_traj_pool, traj_metric_name) -> None:
+    def test_n_clusters_respected(self, small_traj_pool, traj_metric) -> None:
         """fit() on a TrajectoryPool produces exactly n_clusters cluster objects."""
-        c = HierarchicalClusterer(metric=traj_metric_name, n_clusters=2)
+        c = HierarchicalClusterer(metric=traj_metric, n_clusters=2)
         c.fit(small_traj_pool)
         assert len(c.clusters) == 2
 
-    def test_all_items_assigned(self, small_traj_pool, traj_metric_name) -> None:
+    def test_all_items_assigned(self, small_traj_pool, traj_metric) -> None:
         """Every pool ID appears in exactly one cluster."""
-        c = HierarchicalClusterer(metric=traj_metric_name, n_clusters=2)
+        c = HierarchicalClusterer(metric=traj_metric, n_clusters=2)
         c.fit(small_traj_pool)
         assigned = {item for cluster in c.clusters for item in cluster.items}
         assert assigned == set(small_traj_pool.unique_ids)
 
-    def test_static_feature_injected(self, small_traj_pool, traj_metric_name) -> None:
+    def test_static_feature_injected(self, small_traj_pool, traj_metric) -> None:
         """cluster_column is present in the pool's static data after fit."""
         c = HierarchicalClusterer(
-            metric=traj_metric_name,
+            metric=traj_metric,
             n_clusters=2,
             cluster_column="__TEST_H_TRAJ__",
         )

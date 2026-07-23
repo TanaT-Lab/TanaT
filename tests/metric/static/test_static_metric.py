@@ -91,7 +91,12 @@ class TestStatic:
         )
 
         metric = AggregationTrajectoryMetric(
-            default_metric=seq_metric, static_metric=smet
+            sequence_metrics={
+                "events": seq_metric,
+                "intervals": seq_metric,
+                "states": seq_metric,
+            },
+            static_metric=smet,
         )
         traj1 = traj_pool[traj_pool.unique_ids[11]]
         traj2 = traj_pool[traj_pool.unique_ids[12]]
@@ -115,7 +120,13 @@ class TestStatic:
         )
 
         metric = AggregationTrajectoryMetric(
-            default_metric=seq_metric, static_metric=smet, static_metric_weight=0.5
+            sequence_metrics={
+                "events": seq_metric,
+                "intervals": seq_metric,
+                "states": seq_metric,
+            },
+            static_metric=smet,
+            static_metric_weight=0.5,
         )
         traj1 = traj_pool[traj_pool.unique_ids[11]]
         traj2 = traj_pool[traj_pool.unique_ids[12]]
@@ -140,7 +151,12 @@ class TestStatic:
 
         csmet = StaticMetric(cmp_fnct=smet)
         metric = AggregationTrajectoryMetric(
-            default_metric=seq_metric, static_metric=csmet
+            sequence_metrics={
+                "events": seq_metric,
+                "intervals": seq_metric,
+                "states": seq_metric,
+            },
+            static_metric=csmet,
         )
         traj1 = traj_pool[traj_pool.unique_ids[11]]
         traj2 = traj_pool[traj_pool.unique_ids[12]]
@@ -192,7 +208,12 @@ class TestStaticPool:
 
         csmet = StaticMetric(cmp_fnct=smet)
         metric = AggregationTrajectoryMetric(
-            default_metric=seq_metric, static_metric=csmet
+            sequence_metrics={
+                "events": seq_metric,
+                "intervals": seq_metric,
+                "states": seq_metric,
+            },
+            static_metric=csmet,
         )
 
         subpool = traj_pool.subset([11, 12, 13, 14, 15])
@@ -233,7 +254,13 @@ class TestStaticValidation:
         )
 
         # another metric is callable ... so it works
-        metric = AggregationTrajectoryMetric(static_metric=seq_metric)
+        metric = AggregationTrajectoryMetric(
+            sequence_metrics={
+                "events": seq_metric,
+                "intervals": seq_metric,
+                "states": seq_metric,
+            }
+        )
 
         # until, evaluate a metric
         with pytest.raises(TypeError):

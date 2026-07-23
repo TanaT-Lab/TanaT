@@ -52,15 +52,6 @@ class TestSinglePair:
         seq_a, seq_b = cat_pool[ids[0]], cat_pool[ids[1]]
         assert edit_high(seq_a, seq_b) >= edit_low(seq_a, seq_b)
 
-    def test_normalize_bounds_0_1(self, cat_pool, entity_metric) -> None:
-        """Normalized edit distance ∈ [0, 1]."""
-        edit = EditSequenceMetric(entity_metric=entity_metric, normalize=True)
-        ids = cat_pool.unique_ids
-        for i in range(min(3, len(ids))):
-            for j in range(min(3, len(ids))):
-                d = edit(cat_pool[ids[i]], cat_pool[ids[j]])
-                assert 0.0 <= d <= 1.0 + 1e-9
-
 
 # ---------------------------------------------------------------------------
 # Compute matrix

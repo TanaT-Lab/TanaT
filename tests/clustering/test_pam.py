@@ -88,15 +88,15 @@ class TestPAMFitSequence:
 class TestPAMFitTrajectory:
     """PAMClusterer.fit() on trajectory pools."""
 
-    def test_n_clusters_respected(self, small_traj_pool, traj_metric_name) -> None:
+    def test_n_clusters_respected(self, small_traj_pool, traj_metric) -> None:
         """fit() on a TrajectoryPool produces exactly n_clusters cluster objects."""
-        pam = PAMClusterer(metric=traj_metric_name, n_clusters=2)
+        pam = PAMClusterer(metric=traj_metric, n_clusters=2)
         pam.fit(small_traj_pool)
         assert len(pam.clusters) == 2
 
-    def test_medoids_count(self, small_traj_pool, traj_metric_name) -> None:
+    def test_medoids_count(self, small_traj_pool, traj_metric) -> None:
         """After fit on a TrajectoryPool, medoids list length equals n_clusters."""
-        pam = PAMClusterer(metric=traj_metric_name, n_clusters=2)
+        pam = PAMClusterer(metric=traj_metric, n_clusters=2)
         pam.fit(small_traj_pool)
         assert pam.medoids is not None
         assert len(pam.medoids) == 2

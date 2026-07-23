@@ -12,6 +12,9 @@ from tanat.metric.sequence.base import SequenceMetric
 from tanat.metric.trajectory.base import TrajectoryMetric
 from tanat import build_trajectories
 from tanat.trajectory.pool import TrajectoryPool
+from tanat.metric.trajectory import AggregationTrajectoryMetric
+from tanat.metric.sequence import LinearPairwiseSequenceMetric
+from tanat.metric.entity import HammingEntityMetric
 
 # ---------------------------------------------------------------------------
 # Registry names
@@ -36,6 +39,19 @@ def seq_metric_name(request) -> str:
 def traj_metric_name(request) -> str:
     """One registered trajectory metric name per parametrised run."""
     return request.param
+
+
+@pytest.fixture
+def traj_metric() -> str:
+    """AggregateTrajectoryMetric for ."""
+
+    return AggregationTrajectoryMetric(
+        sequence_metrics={
+            "events": LinearPairwiseSequenceMetric(
+                entity_metric=HammingEntityMetric(entity_feature="status")
+            )
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
