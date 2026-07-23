@@ -223,6 +223,24 @@ Distance metrics for multi-sequence trajectories.
 
     </div>
 
+Static Metrics
+~~~~~~~~~~~~~~~~~~
+
+Static metrics for sequences or trajectories.
+
+.. raw:: html
+
+    <div class="tanat-gallery">
+        <a href="metric_static/static.html" class="tanat-gallery-card">
+            <p><strong>Static metric</strong><br>
+            Compare sequences or trajectories with static metric.</p>
+        </a>
+    </div>
+
+.. raw:: html
+
+    </div>
+
 Clustering
 ----------
 
