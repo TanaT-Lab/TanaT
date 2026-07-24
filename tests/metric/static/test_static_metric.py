@@ -259,7 +259,8 @@ class TestStaticValidation:
                 "events": seq_metric,
                 "intervals": seq_metric,
                 "states": seq_metric,
-            }
+            },
+            static_metric=seq_metric,
         )
 
         # until, evaluate a metric

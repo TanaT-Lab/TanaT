@@ -75,13 +75,20 @@ class TestCombineCompute:
             ],
             agg="sum",
         )
+        h = CombinedEntityMetric(
+            metrics_config=[
+                L2EntityMetric(entity_feature="value").to_config(),
+                HammingEntityMetric(entity_feature="status").to_config(),
+            ],
+            agg="mean",
+        )
         with pytest.raises(ValueError, match="aggregation"):
             h = CombinedEntityMetric(
                 metrics_config=[
                     L2EntityMetric(entity_feature="value").to_config(),
                     HammingEntityMetric(entity_feature="status").to_config(),
                 ],
-                agg="mean",
+                agg="other",
             )
 
     def test_wrong_setting_type_error(self) -> None:
