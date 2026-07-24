@@ -159,3 +159,13 @@ print(f"LinearPairwise distance: {dist:.4f}")
 # %%
 dm = lp.compute_matrix(pool)
 dm.to_frame().head()
+
+
+# .. note::
+#
+#       Such an custom metric is not optimized for large datasets. TanaT has mechanisms
+#       based on the Numba framework.
+#       For implementing an
+#       computationaly efficient metric, we invite the developers to contact the core
+#       developer team or to look at the code of the implemented entity metrics (especially
+#       hamming).

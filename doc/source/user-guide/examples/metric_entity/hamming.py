@@ -85,6 +85,48 @@ print("  Same categories → 0.0")
 print("  Different categories → 1.0 (default mismatch_cost)")
 
 # %%
+# Use a cost matrix
+# ---------------------------------------------
+#
+# We first define manually a cost matrix. We know that the `status` feature takes values
+# in {A,B,C,D,E}, then we have to evaluate how close are each pair of these elements
+# according to our problem (it depends on your data!).
+#
+# Hamming distance assume a symmetric cost, and is definite (distance between similar objects
+# is null), thus, it is only necessary to compute the upper-triangle cost matrix.
+#
+# In addition, it is not mandatory to define a value for all pairs as a
+# defaut value can be defined.
+
+cost_matrix = {
+    ("A", "B"): 0.1,
+    ("A", "C"): 0.3,
+    ("A", "D"): 0.1,
+    ("A", "E"): 0.3,
+    ("B", "C"): 0.3,
+    ("B", "D"): 0.1,
+    ("B", "E"): 0.3,
+    ("C", "D"): 0.1,
+    ("C", "E"): 0.1,
+    ("D", "E"): 0.5,
+}
+
+# %%
+# and now, the Hamming metric definition becomes;
+
+hamming_cost = HammingEntityMetric(entity_feature="status", cost=cost_matrix)
+
+# Compute Hamming distance
+dist = hamming_cost(ent_a, ent_b)
+print(f"\nHamming distance (with costs): {dist}")
+
+# .. note ::
+#
+#       Be careful when defining a non-standard metrics, its mathematiccal properties
+#       may not be suitable for ensuring the quality of the output of clustering algorithms.
+
+
+# %%
 # Try multiple pairs
 # ------------------
 
@@ -98,8 +140,9 @@ for i in range(5):
     # Compare first entities from each sequence
     e1, e2 = seq_1[0], seq_2[0]
     d = hamming(e1, e2)
+    dc = hamming_cost(e1, e2)
 
-    print(f"Pair {i+1}: {e1['status']!r:10} vs {e2['status']!r:10} → {d:.1f}")
+    print(f"Pair {i+1}: {e1['status']!r:5} vs {e2['status']!r:5} → {d:.1f} / {dc:.1f}")
 
 
 # %%

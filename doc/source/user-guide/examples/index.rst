@@ -144,6 +144,14 @@ Distance metrics for individual entities.
             <p><strong>Hamming Distance</strong><br>
             Calculate distance between categorical states.</p>
         </a>
+        <a href="metric_entity/l2metric.html" class="tanat-gallery-card">
+            <p><strong>L2 Distance</strong><br>
+            Calculate distance between numerical entities.</p>
+        </a>
+        <a href="metric_entity/combined_metric.html" class="tanat-gallery-card">
+            <p><strong>Combined metric</strong><br>
+            Calculate distance combining categorical and numerical features.</p>
+        </a>
 
         <a href="metric_entity/custom.html" class="tanat-gallery-card">
             <p><strong>Custom Entity Metric</strong><br>
