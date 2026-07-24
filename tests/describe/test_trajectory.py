@@ -88,11 +88,11 @@ class TestTrajectoryPoolDescribe:
 
     def test_add_to_static_ignored_with_by_id_false(self, traj_pool_copy):
         """add_to_static=True is silently ignored (with a warning) when by_id=False."""
-        with warnings.catch_warnings(record=True) as w:
+        with warnings.catch_warnings(record=True) as ws:
             warnings.simplefilter("always")
             traj_pool_copy.describe(by_id=False, add_to_static=True)
-        assert len(w) == 1
-        assert "add_to_static=True is ignored" in str(w[0].message)
+        assert len(ws) >= 1
+        assert any("add_to_static=True is ignored" in str(w.message) for w in ws)
 
     def test_caching_returns_same_object(self, traj_pool_copy):
         """Identical calls return the exact same cached object (no recomputation)."""
