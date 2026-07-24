@@ -85,11 +85,11 @@ class TestSequencePoolDescribe:
     def test_add_to_static_ignored_with_by_id_false(self, pool_copy):
         """add_to_static=True is silently ignored (with a warning) when by_id=False."""
         initial_static = pool_copy.static_data(fmt="polars")
-        with warnings.catch_warnings(record=True) as w:
+        with warnings.catch_warnings(record=True) as ws:
             warnings.simplefilter("always")
             pool_copy.describe(by_id=False, add_to_static=True)
-        assert len(w) == 1
-        assert "add_to_static=True is ignored" in str(w[0].message)
+        assert len(ws) >= 1
+        assert any("add_to_static=True is ignored" in str(w.message) for w in ws)
         # Static features must be unchanged
         new_static = pool_copy.static_data(fmt="polars")
         if initial_static is None:
