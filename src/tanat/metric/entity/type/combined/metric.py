@@ -5,6 +5,8 @@ CombinedEntityMetric: a metric that combines several other metrics.
 
 from __future__ import annotations
 
+import numpy as np
+
 from typing import TYPE_CHECKING, Any
 from dataclasses import field
 
@@ -112,7 +114,7 @@ class CombinedEntityMetric(EntityMetric, register_name="combinedentity"):
             )
         )
 
-        if agg not in ["sum"]:
+        if agg not in ["sum", "mean"]:
             raise ValueError(
                 f"Unknown aggregation function '{agg}' in metric configuration."
             )
@@ -170,6 +172,10 @@ class CombinedEntityMetric(EntityMetric, register_name="combinedentity"):
         if self.settings.agg == "sum":
             if self.settings.weights is None:
                 return sum(values)
-            return sum([v * w for v, w in zip(values, self.settings.weights)])
+            return sum(v * w for v, w in zip(values, self.settings.weights))
+        elif self.settings.agg == "mean":
+            if self.settings.weights is None:
+                return np.mean(values)
+            return np.mean([v * w for v, w in zip(values, self.settings.weights)])
 
         return 0
