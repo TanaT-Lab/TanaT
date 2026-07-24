@@ -2,6 +2,16 @@
 
 This page contains the complete changelog for TanaT, documenting all notable changes, new features, bug fixes, and improvements across versions.
 
+## [v0.10.4] - July 2026
+**Metrics enhancement**
+
+### Added
+- entity metrics: L2Metric for numerical features, and CombinedMetric to used both numerical and categorical features
+- static metrics: add the concept of static metric, and its usage in AggregationTrajectoryMetric
+
+### Fixed
+- HammingEntityMetrics: Discovers the categorical feature (if it exists) but not take the first one by default
+
 ## [v0.10.3] - June 2026
 **Stay up to date**
 
