@@ -227,10 +227,6 @@ Distance metrics for multi-sequence trajectories.
         </a>
     </div>
 
-.. raw:: html
-
-    </div>
-
 Static Metrics
 ~~~~~~~~~~~~~~~~~~
 
@@ -247,7 +243,7 @@ Static metrics for sequences or trajectories.
 
 .. raw:: html
 
-    </div>
+    </div> 
 
 Clustering
 ----------
